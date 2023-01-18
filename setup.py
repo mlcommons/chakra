@@ -12,7 +12,8 @@ def main():
     package_dir_map = {
         f"{package_base}": ".",
         f"{package_base}.third_party.utils": "third_party/utils",
-        f"{package_base}.eg_def": "eg_def"
+        f"{package_base}.eg_def": "eg_def",
+        f"{package_base}.eg_converter": "eg_converter"
     }
 
     packages = list(package_dir_map)
