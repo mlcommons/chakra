@@ -7,6 +7,7 @@ import sys
 from logging import FileHandler
 from eg_converter.text2chakra_converter import Text2ChakraConverter
 from eg_converter.flexflow2chakra_converter import FlexFlow2ChakraConverter
+from eg_converter.pytorch2chakra_converter import PyTorch2ChakraConverter
 
 def get_logger(log_filename: str) -> logging.Logger:
     formatter = logging.Formatter(
@@ -82,6 +83,13 @@ def main() -> None:
             help="NPU frequency in MHz"
     )
     parser.add_argument(
+            "--default_simulated_run_time",
+            type=int,
+            default=None,
+            required="PyTorch" in sys.argv,
+            help="Default simulated_run_time if the duration field is not available"
+    )
+    parser.add_argument(
             "--log_filename",
             type=str,
             default="debug.log",
@@ -108,6 +116,14 @@ def main() -> None:
                     args.output_filename,
                     args.num_dims,
                     args.npu_frequency,
+                    logger)
+            converter.convert()
+        elif args.input_type == "PyTorch":
+            converter = PyTorch2ChakraConverter(
+                    args.input_filename,
+                    args.output_filename,
+                    args.default_simulated_run_time,
+                    args.num_dims,
                     logger)
             converter.convert()
         else:
