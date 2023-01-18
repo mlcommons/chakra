@@ -6,6 +6,7 @@ import sys
 
 from logging import FileHandler
 from eg_converter.text2chakra_converter import Text2ChakraConverter
+from eg_converter.flexflow2chakra_converter import FlexFlow2ChakraConverter
 
 def get_logger(log_filename: str) -> logging.Logger:
     formatter = logging.Formatter(
@@ -74,6 +75,13 @@ def main() -> None:
             help="Number of training passes"
     )
     parser.add_argument(
+            "--npu_frequency",
+            type=int,
+            default=None,
+            required="FlexFlow" in sys.argv,
+            help="NPU frequency in MHz"
+    )
+    parser.add_argument(
             "--log_filename",
             type=str,
             default="debug.log",
@@ -92,6 +100,14 @@ def main() -> None:
                     args.num_dims,
                     args.num_npus,
                     args.num_passes,
+                    logger)
+            converter.convert()
+        elif args.input_type == "FlexFlow":
+            converter = FlexFlow2ChakraConverter(
+                    args.input_filename,
+                    args.output_filename,
+                    args.num_dims,
+                    args.npu_frequency,
                     logger)
             converter.convert()
         else:
