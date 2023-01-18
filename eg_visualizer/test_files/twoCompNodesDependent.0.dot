@@ -1,0 +1,19 @@
+digraph {
+	graph [bb="0,0,106,110"];
+	node [label="\N"];
+	0	 [height=0.51389,
+		id=0,
+		label=COMP_NODE,
+		pos="53,91.5",
+		rects="0,73.5,106,109.5",
+		shape=record,
+		width=1.4722];
+	1	 [height=0.51389,
+		id=1,
+		label=COMP_NODE,
+		pos="53,18.5",
+		rects="0,0.5,106,36.5",
+		shape=record,
+		width=1.4722];
+	0 -> 1	 [pos="e,53,36.59 53,73.455 53,65.383 53,55.676 53,46.682"];
+}

@@ -56,3 +56,14 @@ $ cd eg_generator/
 $ cmake CMakeLists.txt && make -j$(nproc)
 $ ./eg_generator  --num_npus <num_npus> --num_dims <num_dims>
 ```
+
+## Execution Graph Visualizer (eg_visualizer)
+This tool visualizes a given execution graph (EG) by converting the EG to a graphviz EG.
+A user has to feed the output graphviz file to a graphviz visualizer such as https://dreampuf.github.io/GraphvizOnline/.
+
+You can run this tool with the following command.
+```shell
+$ python -m eg_visualizer.eg_visualizer\
+    --input_filename <input_filename>\
+    --output_filename <output_filename>
+```
