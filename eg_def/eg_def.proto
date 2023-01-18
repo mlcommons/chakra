@@ -1,0 +1,53 @@
+syntax = "proto2";
+
+package ChakraProtoMsg;
+
+enum NodeType
+{
+  INVALID_NODE = 0;
+  MEM_LOAD_NODE = 1;
+  MEM_STORE_NODE = 2;
+  COMP_NODE = 3;
+  COMM_SEND_NODE = 4;
+  COMM_RECV_NODE = 5;
+  COMM_COLL_NODE = 6;
+}
+
+enum MemoryType
+{
+  INVALID_MEMORY = 0;
+  LOCAL_MEMORY = 1;
+  REMOTE_MEMORY = 2;
+}
+
+enum CollectiveCommType
+{
+  INVALID_COMM = 0;
+  ALL_REDUCE = 1;
+  ALL_TO_ALL = 2;
+  ALL_GATHER = 3;
+  REDUCE_SCATTER = 4;
+}
+
+message Node {
+  required uint64 id = 1;
+  required string name = 2;
+  optional NodeType node_type = 3 [default = INVALID_NODE];
+  repeated uint64 parent = 4;
+  optional MemoryType tensor_loc = 5 [default = INVALID_MEMORY];
+  optional uint64 tensor_size = 6;
+  optional uint64 simulated_run_time = 7;
+  optional MemoryType input_tensor_loc = 8 [default = INVALID_MEMORY];
+  optional uint64 input_tensor_size = 9;
+  optional MemoryType output_tensor_loc = 10 [default = INVALID_MEMORY];
+  optional uint64 output_tensor_size = 11;
+  optional uint64 num_ops = 12;
+  optional CollectiveCommType comm_type = 13 [default = INVALID_COMM];
+  repeated bool involved_dim  = 14;
+  optional uint32 communicator_id = 15;
+  optional uint32 comm_src = 16;
+  optional uint32 comm_dst = 17;
+  optional uint32 comm_size = 18;
+  optional uint32 comm_tag = 19;
+  optional uint32 comm_priority = 20;
+}

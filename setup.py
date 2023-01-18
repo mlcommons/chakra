@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+import os
+
 from setuptools import setup
 
 def main():
@@ -9,10 +11,13 @@ def main():
     # "install_destination_package_path": "source_dir_path"
     package_dir_map = {
         f"{package_base}": ".",
-        f"{package_base}.third_party.utils": "third_party/utils"
+        f"{package_base}.third_party.utils": "third_party/utils",
+        f"{package_base}.eg_def": "eg_def"
     }
 
     packages = list(package_dir_map)
+
+    os.system("protoc eg_def.proto --proto_path eg_def --python_out eg_def")
 
     setup(
         name="chakra",
