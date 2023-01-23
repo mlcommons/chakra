@@ -14,7 +14,8 @@ def main():
         f"{package_base}.third_party.utils": "third_party/utils",
         f"{package_base}.eg_def": "eg_def",
         f"{package_base}.eg_converter": "eg_converter",
-        f"{package_base}.eg_visualizer": "eg_visualizer"
+        f"{package_base}.eg_visualizer": "eg_visualizer",
+        f"{package_base}.timeline_visualizer": "timeline_visualizer"
     }
 
     packages = list(package_dir_map)
