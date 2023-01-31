@@ -1,0 +1,32 @@
+name: Build test
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: make gcc g++ libprotobuf-dev protobuf-compiler
+          version: 1.0
+      - uses: lukka/get-cmake@latest
+      - run: protoc eg_def.proto --proto_path eg_def --cpp_out eg_def
+      - run: |
+          cd eg_generator
+          cmake CMakeLists.txt
+          make -j$(nproc)
+      - uses: actions/setup-python@v2
+        with:
+          python-version: 3.7
+      - uses: s-weigand/setup-conda@v1
+        with:
+          activate-conda: true
+          python-version: 3.7
+      - run: conda install protobuf==3.6.1 setuptools pydot pytorch python-graphviz
+      - run: pip install fbgemm-gpu-cpu
+      - run: protoc eg_def.proto --proto_path eg_def --python_out eg_def
+      - run: python3 setup.py install
+      - run: python3 -m eg_visualizer.eg_visualizer --help
+      - run: python3 -m timeline_visualizer.timeline_visualizer --help
+      - run: python3 -m eg_converter.eg_converter --help
