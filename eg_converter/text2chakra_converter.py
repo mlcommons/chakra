@@ -223,6 +223,9 @@ class Text2ChakraConverter:
                             layer.bwd_ig_comp_node = bwd_ig_comp_node
                             encode_message(g, bwd_ig_comp_node)
 
+                for layer in layers:
+                    layer.bwd_wg_comm_node = None
+
     def convert_model_parallel(
         self,
         f: TextIOWrapper,
@@ -290,6 +293,9 @@ class Text2ChakraConverter:
                         self.add_parent(bwd_wg_comp_node, bwd_ig_comp_node)
                         layer.bwd_wg_comp_node = bwd_wg_comp_node
                         encode_message(g, bwd_wg_comp_node)
+
+                for layer in layers:
+                    layer.bwd_wg_comp_node = None
 
     def convert_hybrid_data_model(
         self,
@@ -371,6 +377,9 @@ class Text2ChakraConverter:
                         layer.bwd_wg_comm_node = bwd_wg_comm_node
                         encode_message(g, bwd_wg_comm_node)
 
+                for layer in layers:
+                    layer.bwd_wg_comm_node = None
+
     def convert_hybrid_model_data(
         self,
         f: TextIOWrapper,
@@ -448,6 +457,9 @@ class Text2ChakraConverter:
                         self.add_parent(bwd_wg_comm_node, bwd_wg_comp_node)
                         layer.bwd_wg_comm_node = bwd_wg_comm_node
                         encode_message(g, bwd_wg_comm_node)
+
+                for layer in layers:
+                    layer.bwd_wg_comm_node = None
 
     def convert_hybrid_dlrm(
         self,
@@ -540,3 +552,9 @@ class Text2ChakraConverter:
                             self.add_parent(bwd_ig_comm_node, bwd_ig_comp_node)
                             layers[0].bwd_ig_comm_node = bwd_ig_comm_node
                             encode_message(g, bwd_ig_comm_node)
+
+                for layer in layers:
+                    layer.bwd_wg_comm_node = None
+                    layer.bwd_wg_comp_node = None
+                    layer.bwd_ig_comm_node = None
+                    layer.bwd_ig_comp_node = None
