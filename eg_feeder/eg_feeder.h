@@ -3,6 +3,7 @@
 #include <memory>
 #include <queue>
 #include <unordered_map>
+#include <unordered_set>
 
 #include "third_party/utils/protoio.hh"
 #include "eg_feeder/eg_feeder_node.h"
@@ -25,13 +26,16 @@ class EGFeeder {
  private:
   std::shared_ptr<EGFeederNode> readNode();
   void readNextWindow();
+  void resolveDep();
 
   ProtoInputStream trace_;
   const uint32_t window_size_;
   bool eg_complete_;
 
   std::unordered_map<uint64_t, std::shared_ptr<EGFeederNode>> dep_graph_{};
-  std::queue<std::shared_ptr<EGFeederNode>> dep_free_queue_{};
+  std::unordered_set<uint64_t> dep_free_node_id_set_{};
+  std::queue<std::shared_ptr<EGFeederNode>> dep_free_node_queue_{};
+  std::unordered_set<std::shared_ptr<EGFeederNode>> dep_unresolved_node_set_{};
 };
 
 } // namespace Chakra

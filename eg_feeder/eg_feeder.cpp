@@ -19,19 +19,20 @@ void EGFeeder::removeNode(uint64_t node_id) {
   dep_graph_.erase(node_id);
 
   if (!eg_complete_
-      && (dep_free_queue_.size() < window_size_)) {
+      && (dep_free_node_queue_.size() < window_size_)) {
     readNextWindow();
   }
 }
 
 bool EGFeeder::hasNodesToIssue() {
-  return !(dep_graph_.empty() && dep_free_queue_.empty());
+  return !(dep_graph_.empty() && dep_free_node_queue_.empty());
 }
 
 shared_ptr<EGFeederNode> EGFeeder::getNextIssuableNode() {
-  if (dep_free_queue_.size() != 0) {
-    shared_ptr<EGFeederNode> node = dep_free_queue_.front();
-    dep_free_queue_.pop();
+  if (dep_free_node_queue_.size() != 0) {
+    shared_ptr<EGFeederNode> node = dep_free_node_queue_.front();
+    dep_free_node_id_set_.erase(node->getChakraNode()->id());
+    dep_free_node_queue_.pop();
     return node;
   } else {
     return nullptr;
@@ -40,7 +41,8 @@ shared_ptr<EGFeederNode> EGFeeder::getNextIssuableNode() {
 
 void EGFeeder::pushBackIssuableNode(uint64_t node_id) {
   shared_ptr<EGFeederNode> node = dep_graph_[node_id];
-  dep_free_queue_.push(node);
+  dep_free_node_id_set_.emplace(node_id);
+  dep_free_node_queue_.emplace(node);
 }
 
 shared_ptr<EGFeederNode> EGFeeder::lookupNode(uint64_t node_id) {
@@ -60,7 +62,8 @@ void EGFeeder::freeChildrenNodes(uint64_t node_id) {
       }
     }
     if (child_chakra->parent().size() == 0) {
-      dep_free_queue_.push(child);
+      dep_free_node_id_set_.emplace(child_chakra->id());
+      dep_free_node_queue_.emplace(child);
     }
   }
 }
@@ -74,31 +77,71 @@ shared_ptr<EGFeederNode> EGFeeder::readNode() {
   }
   node->setChakraNode(pkt_msg);
 
+  bool dep_unresolved = false;
   for (int i = 0; i < pkt_msg->parent_size(); ++i) {
     auto parent_node = dep_graph_.find(pkt_msg->parent(i));
     if (parent_node != dep_graph_.end()) {
       parent_node->second->addChild(node);
+    } else {
+      dep_unresolved = true;
+      node->addDepUnresolvedParentID(pkt_msg->parent(i));
     }
+  }
+
+  if (dep_unresolved) {
+    dep_unresolved_node_set_.emplace(node);
   }
 
   return node;
 }
 
+void EGFeeder::resolveDep() {
+  for (auto it = dep_unresolved_node_set_.begin();
+      it != dep_unresolved_node_set_.end();) {
+    shared_ptr<EGFeederNode> node = *it;
+    vector<uint64_t> dep_unresolved_parent_ids = node->getDepUnresolvedParentIDs();
+    for (auto inner_it = dep_unresolved_parent_ids.begin();
+        inner_it != dep_unresolved_parent_ids.end();) {
+      auto parent_node = dep_graph_.find(*inner_it);
+      if (parent_node != dep_graph_.end()) {
+        parent_node->second->addChild(node);
+        inner_it = dep_unresolved_parent_ids.erase(inner_it);
+      } else {
+        ++inner_it;
+      }
+    }
+    if (dep_unresolved_parent_ids.size() == 0) {
+      it = dep_unresolved_node_set_.erase(it);
+    } else {
+      node->setDepUnresolvedParentIDs(dep_unresolved_parent_ids);
+      ++it;
+    }
+  }
+}
+
 void EGFeeder::readNextWindow() {
   uint32_t num_read = 0;
-  while (num_read != window_size_) {
+  do {
     shared_ptr<EGFeederNode> new_node = readNode();
     if (new_node == nullptr) {
       eg_complete_ = true;
-      return;
+      break;
     }
 
     addNode(new_node);
+    ++num_read;
 
-    if (new_node->getChakraNode()->parent().size() == 0) {
-      dep_free_queue_.push(new_node);
+    resolveDep();
+  } while ((num_read < window_size_)
+      || (dep_unresolved_node_set_.size() != 0));
+
+  for (auto node_id_node: dep_graph_) {
+    uint64_t node_id = node_id_node.first;
+    shared_ptr<EGFeederNode> node = node_id_node.second;
+    if ((dep_free_node_id_set_.count(node_id) == 0)
+        && (node->getChakraNode()->parent().size() == 0)) {
+      dep_free_node_id_set_.emplace(node_id);
+      dep_free_node_queue_.emplace(node);
     }
-
-    num_read++;
   }
 }
