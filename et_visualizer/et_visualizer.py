@@ -18,7 +18,7 @@ def main() -> None:
             type=str,
             default=None,
             required=True,
-            help="Input Chakra execution graph filename"
+            help="Input Chakra execution trace filename"
     )
     parser.add_argument(
             "--output_filename",
