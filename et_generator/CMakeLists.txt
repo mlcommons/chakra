@@ -1,4 +1,4 @@
-project(eg_generator C CXX)
+project(et_generator C CXX)
 
 cmake_minimum_required(VERSION 3.10 FATAL_ERROR)
 set(CMAKE_CXX_STANDARD 14)
@@ -9,9 +9,9 @@ include_directories(
   ${Protobuf_INCLUDE_DIRS}
   ../)
 
-set(TARGET eg_generator)
+set(TARGET et_generator)
 set(SRCS
-  eg_generator.cpp
+  et_generator.cpp
   dependency_graph.cpp
   ../et_def/et_def.pb.cc
   ../third_party/utils/protoio.cc)

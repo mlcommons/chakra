@@ -3,7 +3,7 @@
 
 #include "third_party/utils/cxxopts.hpp"
 #include "third_party/utils/protoio.hh"
-#include "eg_generator/dependency_graph.h"
+#include "et_generator/dependency_graph.h"
 
 using namespace std;
 using namespace Chakra;

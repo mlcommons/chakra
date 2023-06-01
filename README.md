@@ -46,15 +46,15 @@ $ python -m et_converter.et_converter\
     --num_dims <num_dims>
 ```
 
-## Execution Graph Generator (eg_generator)
-This is an execution graph generator that generates synthetic execution graphs.
-A user can define a new function in the generator to generate new synthetic execution graphs.
+## Execution Trace Generator (et_generator)
+This is an execution trace generator that generates synthetic execution traces.
+A user can define a new function in the generator to generate new synthetic execution traces.
 You can follow the commands below to run the generator.
 ```shell
 $ protoc et_def.proto --proto_path et_def --cpp_out et_def
-$ cd eg_generator/
+$ cd et_generator/
 $ cmake CMakeLists.txt && make -j$(nproc)
-$ ./eg_generator  --num_npus <num_npus> --num_dims <num_dims>
+$ ./et_generator  --num_npus <num_npus> --num_dims <num_dims>
 ```
 
 ## Execution Graph Visualizer (eg_visualizer)
