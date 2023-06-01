@@ -7,7 +7,7 @@ from third_party.utils.protolib import (
     openFileRd as open_file_rd,
     decodeMessage as decode_message
 )
-from eg_def.eg_def_pb2 import Node
+from et_def.et_def_pb2 import Node
 
 def main() -> None:
     parser = argparse.ArgumentParser(

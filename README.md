@@ -51,7 +51,7 @@ This is an execution graph generator that generates synthetic execution graphs.
 A user can define a new function in the generator to generate new synthetic execution graphs.
 You can follow the commands below to run the generator.
 ```shell
-$ protoc eg_def.proto --proto_path eg_def --cpp_out eg_def
+$ protoc et_def.proto --proto_path et_def --cpp_out et_def
 $ cd eg_generator/
 $ cmake CMakeLists.txt && make -j$(nproc)
 $ ./eg_generator  --num_npus <num_npus> --num_dims <num_dims>

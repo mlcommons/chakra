@@ -5,7 +5,7 @@ import logging
 from io import TextIOWrapper
 from typing import Any, List
 from third_party.utils.protolib import encodeMessage as encode_message
-from eg_def.eg_def_pb2 import *
+from et_def.et_def_pb2 import *
 
 class Layer:
     def __init__(

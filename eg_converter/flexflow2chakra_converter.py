@@ -6,8 +6,8 @@ import pydot
 
 from typing import Any
 from third_party.utils.protolib import encodeMessage as encode_message
-from eg_def.eg_def_pb2 import Node as ChakraNode
-from eg_def.eg_def_pb2 import (
+from et_def.et_def_pb2 import Node as ChakraNode
+from et_def.et_def_pb2 import (
     COMP_NODE,
     COMM_SEND_NODE,
     COMM_RECV_NODE

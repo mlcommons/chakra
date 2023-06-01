@@ -13,7 +13,7 @@ set(TARGET eg_generator)
 set(SRCS
   eg_generator.cpp
   dependency_graph.cpp
-  ../eg_def/eg_def.pb.cc
+  ../et_def/et_def.pb.cc
   ../third_party/utils/protoio.cc)
 add_executable(${TARGET} ${SRCS})
 

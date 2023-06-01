@@ -15,8 +15,8 @@ from third_party.utils.execution_graph import (
         Node as PyTorchNode,
         NodeType as PyTorchNodeType
 )
-from eg_def.eg_def_pb2 import Node as ChakraNode
-from eg_def.eg_def_pb2 import (
+from et_def.et_def_pb2 import Node as ChakraNode
+from et_def.et_def_pb2 import (
         INVALID_NODE,
         COMP_NODE,
         COMM_COLL_NODE,

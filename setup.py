@@ -12,7 +12,7 @@ def main():
     package_dir_map = {
         f"{package_base}": ".",
         f"{package_base}.third_party.utils": "third_party/utils",
-        f"{package_base}.eg_def": "eg_def",
+        f"{package_base}.et_def": "et_def",
         f"{package_base}.eg_converter": "eg_converter",
         f"{package_base}.eg_visualizer": "eg_visualizer",
         f"{package_base}.timeline_visualizer": "timeline_visualizer"
@@ -20,7 +20,7 @@ def main():
 
     packages = list(package_dir_map)
 
-    os.system("protoc eg_def.proto --proto_path eg_def --python_out eg_def")
+    os.system("protoc et_def.proto --proto_path et_def --python_out et_def")
 
     setup(
         name="chakra",

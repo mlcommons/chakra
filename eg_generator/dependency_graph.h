@@ -42,7 +42,7 @@
 #include <vector>
 
 #include "third_party/utils/protoio.hh"
-#include "eg_def/eg_def.pb.h"
+#include "et_def/et_def.pb.h"
 
 typedef ChakraProtoMsg::NodeType NodeType;
 typedef ChakraProtoMsg::Node Node;

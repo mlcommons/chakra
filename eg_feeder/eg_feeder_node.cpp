@@ -29,7 +29,7 @@ void EGFeederNode::addDepUnresolvedParentID(uint64_t node_id) {
   dep_unresolved_parent_ids_.emplace_back(node_id);
 }
 
-vector<uint64_t> EGFeederNode::getDepUnresolvedParentIDs() {
+vector<uint64_t> EGFeederNode::getDepUnresolvedParentids_() {
   return dep_unresolved_parent_ids_;
 }
 
