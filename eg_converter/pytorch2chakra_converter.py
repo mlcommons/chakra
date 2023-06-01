@@ -143,6 +143,8 @@ class PyTorch2ChakraConverter:
             return ALL_GATHER
         elif nccl_node.name == "nccl:reduce_scatter":
             return REDUCE_SCATTER
+        elif nccl_node.name == "nccl:_reduce_scatter_base":
+            return REDUCE_SCATTER
         else:
             raise ValueError(f"{nccl_node.name} is not supported")
         return INVALID_COMM
