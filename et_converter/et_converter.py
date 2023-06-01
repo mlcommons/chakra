@@ -5,9 +5,9 @@ import logging
 import sys
 
 from logging import FileHandler
-from eg_converter.text2chakra_converter import Text2ChakraConverter
-from eg_converter.flexflow2chakra_converter import FlexFlow2ChakraConverter
-from eg_converter.pytorch2chakra_converter import PyTorch2ChakraConverter
+from et_converter.text2chakra_converter import Text2ChakraConverter
+from et_converter.flexflow2chakra_converter import FlexFlow2ChakraConverter
+from et_converter.pytorch2chakra_converter import PyTorch2ChakraConverter
 
 def get_logger(log_filename: str) -> logging.Logger:
     formatter = logging.Formatter(
@@ -31,28 +31,28 @@ def get_logger(log_filename: str) -> logging.Logger:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-            description="Execution Graph Converter"
+            description="Execution Trace Converter"
     )
     parser.add_argument(
             "--input_type",
             type=str,
             default=None,
             required=True,
-            help="Input execution graph type"
+            help="Input execution trace type"
     )
     parser.add_argument(
             "--input_filename",
             type=str,
             default=None,
             required=True,
-            help="Input execution graph filename"
+            help="Input execution trace filename"
     )
     parser.add_argument(
             "--output_filename",
             type=str,
             default=None,
             required=True,
-            help="Output Chakra execution graph filename"
+            help="Output Chakra execution trace filename"
     )
     parser.add_argument(
             "--num_dims",

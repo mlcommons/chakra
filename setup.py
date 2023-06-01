@@ -13,7 +13,7 @@ def main():
         f"{package_base}": ".",
         f"{package_base}.third_party.utils": "third_party/utils",
         f"{package_base}.et_def": "et_def",
-        f"{package_base}.eg_converter": "eg_converter",
+        f"{package_base}.et_converter": "et_converter",
         f"{package_base}.eg_visualizer": "eg_visualizer",
         f"{package_base}.timeline_visualizer": "timeline_visualizer"
     }

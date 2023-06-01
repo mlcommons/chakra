@@ -9,15 +9,15 @@ $ python setup.py install
 $ python -m pip uninstall chakra
 ```
 
-## Execution Graph Converter (eg_converter)
-This tool converts execution graphs into the Chakra format.
+## Execution Trace Converter (et_converter)
+This tool converts execution traces into the Chakra format.
 This converter supports three types of formats: ASTRA-sim text files, FlexFlow, and PyTorch.
 
 You can use the following commands for each input type.
 
 ### ASTRA-sim Text Files
 ```shell
-$ python -m eg_converter.eg_converter\
+$ python -m et_converter.et_converter\
     --input_type Text\
     --input_filename <input_filename>\
     --output_filename <output_filename>\
@@ -28,7 +28,7 @@ $ python -m eg_converter.eg_converter\
 
 ### FlexFlow Execution Graphs
 ```shell
-$ python -m eg_converter.eg_converter\
+$ python -m et_converter.et_converter\
     --input_type FlexFlow\
     --input_filename <input_filename>\
     --output_filename <output_filename>\
@@ -38,7 +38,7 @@ $ python -m eg_converter.eg_converter\
 
 ### PyTorch Execution Graphs
 ```shell
-$ python -m eg_converter.eg_converter\
+$ python -m et_converter.et_converter\
     --input_type PyTorch\
     --input_filename <input_filename>\
     --output_filename <output_filename>\
