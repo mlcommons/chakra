@@ -1,36 +1,36 @@
-#include "eg_feeder/eg_feeder.h"
+#include "et_feeder/et_feeder.h"
 
 using namespace std;
 using namespace Chakra;
 
-EGFeeder::EGFeeder(string filename)
-  : trace_(filename), window_size_(4096), eg_complete_(false) {
+ETFeeder::ETFeeder(string filename)
+  : trace_(filename), window_size_(4096), et_complete_(false) {
   readNextWindow();
 }
 
-EGFeeder::~EGFeeder() {
+ETFeeder::~ETFeeder() {
 }
 
-void EGFeeder::addNode(shared_ptr<EGFeederNode> node) {
+void ETFeeder::addNode(shared_ptr<ETFeederNode> node) {
   dep_graph_[node->getChakraNode()->id()] = node;
 }
 
-void EGFeeder::removeNode(uint64_t node_id) {
+void ETFeeder::removeNode(uint64_t node_id) {
   dep_graph_.erase(node_id);
 
-  if (!eg_complete_
+  if (!et_complete_
       && (dep_free_node_queue_.size() < window_size_)) {
     readNextWindow();
   }
 }
 
-bool EGFeeder::hasNodesToIssue() {
+bool ETFeeder::hasNodesToIssue() {
   return !(dep_graph_.empty() && dep_free_node_queue_.empty());
 }
 
-shared_ptr<EGFeederNode> EGFeeder::getNextIssuableNode() {
+shared_ptr<ETFeederNode> ETFeeder::getNextIssuableNode() {
   if (dep_free_node_queue_.size() != 0) {
-    shared_ptr<EGFeederNode> node = dep_free_node_queue_.front();
+    shared_ptr<ETFeederNode> node = dep_free_node_queue_.front();
     dep_free_node_id_set_.erase(node->getChakraNode()->id());
     dep_free_node_queue_.pop();
     return node;
@@ -39,18 +39,18 @@ shared_ptr<EGFeederNode> EGFeeder::getNextIssuableNode() {
   }
 }
 
-void EGFeeder::pushBackIssuableNode(uint64_t node_id) {
-  shared_ptr<EGFeederNode> node = dep_graph_[node_id];
+void ETFeeder::pushBackIssuableNode(uint64_t node_id) {
+  shared_ptr<ETFeederNode> node = dep_graph_[node_id];
   dep_free_node_id_set_.emplace(node_id);
   dep_free_node_queue_.emplace(node);
 }
 
-shared_ptr<EGFeederNode> EGFeeder::lookupNode(uint64_t node_id) {
+shared_ptr<ETFeederNode> ETFeeder::lookupNode(uint64_t node_id) {
   return dep_graph_[node_id];
 }
 
-void EGFeeder::freeChildrenNodes(uint64_t node_id) {
-  shared_ptr<EGFeederNode> node = dep_graph_[node_id];
+void ETFeeder::freeChildrenNodes(uint64_t node_id) {
+  shared_ptr<ETFeederNode> node = dep_graph_[node_id];
   for (auto child: node->getChildren()) {
     auto child_chakra = child->getChakraNode();
     for (auto it = child_chakra->mutable_parent()->begin();
@@ -68,8 +68,8 @@ void EGFeeder::freeChildrenNodes(uint64_t node_id) {
   }
 }
 
-shared_ptr<EGFeederNode> EGFeeder::readNode() {
-  shared_ptr<EGFeederNode> node = make_shared<EGFeederNode>();
+shared_ptr<ETFeederNode> ETFeeder::readNode() {
+  shared_ptr<ETFeederNode> node = make_shared<ETFeederNode>();
   shared_ptr<ChakraProtoMsg::Node> pkt_msg = make_shared<ChakraProtoMsg::Node>();
 
   if (!trace_.read(*pkt_msg)) {
@@ -95,10 +95,10 @@ shared_ptr<EGFeederNode> EGFeeder::readNode() {
   return node;
 }
 
-void EGFeeder::resolveDep() {
+void ETFeeder::resolveDep() {
   for (auto it = dep_unresolved_node_set_.begin();
       it != dep_unresolved_node_set_.end();) {
-    shared_ptr<EGFeederNode> node = *it;
+    shared_ptr<ETFeederNode> node = *it;
     vector<uint64_t> dep_unresolved_parent_ids = node->getDepUnresolvedParentIDs();
     for (auto inner_it = dep_unresolved_parent_ids.begin();
         inner_it != dep_unresolved_parent_ids.end();) {
@@ -119,12 +119,12 @@ void EGFeeder::resolveDep() {
   }
 }
 
-void EGFeeder::readNextWindow() {
+void ETFeeder::readNextWindow() {
   uint32_t num_read = 0;
   do {
-    shared_ptr<EGFeederNode> new_node = readNode();
+    shared_ptr<ETFeederNode> new_node = readNode();
     if (new_node == nullptr) {
-      eg_complete_ = true;
+      et_complete_ = true;
       break;
     }
 
@@ -137,7 +137,7 @@ void EGFeeder::readNextWindow() {
 
   for (auto node_id_node: dep_graph_) {
     uint64_t node_id = node_id_node.first;
-    shared_ptr<EGFeederNode> node = node_id_node.second;
+    shared_ptr<ETFeederNode> node = node_id_node.second;
     if ((dep_free_node_id_set_.count(node_id) == 0)
         && (node->getChakraNode()->parent().size() == 0)) {
       dep_free_node_id_set_.emplace(node_id);
