@@ -13,41 +13,46 @@ enum NodeType
   COMM_COLL_NODE = 6;
 }
 
-enum MemoryType
+enum AttributeType
 {
-  INVALID_MEMORY = 0;
-  LOCAL_MEMORY = 1;
-  REMOTE_MEMORY = 2;
+  FLOAT = 0;
+  INT = 1;
+  STRING = 2;
+  FLOATS = 3;
+  INTS = 4;
+  STRINGS = 5;
 }
 
 enum CollectiveCommType
 {
-  INVALID_COMM = 0;
-  ALL_REDUCE = 1;
-  ALL_TO_ALL = 2;
-  ALL_GATHER = 3;
-  REDUCE_SCATTER = 4;
+  ALL_REDUCE = 0;
+  ALL_TO_ALL = 1;
+  ALL_GATHER = 2;
+  REDUCE_SCATTER = 3;
+}
+
+message AttributeProto {
+  required string name = 1;
+  required AttributeType type = 2;
+  optional string doc_string = 3;
+  optional float f = 4;
+  optional int64 i = 5;
+  optional string s = 6;
+  repeated float floats = 7;
+  repeated int64 ints = 8;
+  repeated bytes strings = 9;
 }
 
 message Node {
   required uint64 id = 1;
   required string name = 2;
-  optional NodeType node_type = 3 [default = INVALID_NODE];
+  required NodeType type = 3 [default = INVALID_NODE];
   repeated uint64 parent = 4;
-  optional MemoryType tensor_loc = 5 [default = INVALID_MEMORY];
-  optional uint64 tensor_size = 6;
-  optional uint64 simulated_run_time = 7;
-  optional MemoryType input_tensor_loc = 8 [default = INVALID_MEMORY];
-  optional uint64 input_tensor_size = 9;
-  optional MemoryType output_tensor_loc = 10 [default = INVALID_MEMORY];
-  optional uint64 output_tensor_size = 11;
-  optional uint64 num_ops = 12;
-  optional CollectiveCommType comm_type = 13 [default = INVALID_COMM];
-  repeated bool involved_dim  = 14;
-  optional uint32 communicator_id = 15;
-  optional uint32 comm_src = 16;
-  optional uint32 comm_dst = 17;
-  optional uint32 comm_size = 18;
-  optional uint32 comm_tag = 19;
-  optional uint32 comm_priority = 20;
+  optional string inputs = 5;
+  optional string input_shapes = 6;
+  optional string input_types = 7;
+  optional string outputs = 8;
+  optional string output_shapes = 9;
+  optional string output_types = 10;
+  repeated AttributeProto attribute = 11;
 }

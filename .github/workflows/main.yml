@@ -12,10 +12,6 @@ jobs:
           version: 1.0
       - uses: lukka/get-cmake@latest
       - run: protoc et_def.proto --proto_path et_def --cpp_out et_def
-      - run: |
-          cd et_generator
-          cmake CMakeLists.txt
-          make -j$(nproc)
       - uses: actions/setup-python@v2
         with:
           python-version: 3.7
@@ -29,4 +25,3 @@ jobs:
       - run: python3 setup.py install
       - run: python3 -m et_visualizer.et_visualizer --help
       - run: python3 -m timeline_visualizer.timeline_visualizer --help
-      - run: python3 -m et_converter.et_converter --help
