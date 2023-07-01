@@ -3,14 +3,16 @@
 import copy
 import logging
 import pydot
-
 from typing import Any
+
 from third_party.utils.protolib import encodeMessage as encode_message
-from et_def.et_def_pb2 import Node as ChakraNode
 from et_def.et_def_pb2 import (
+    Node as ChakraNode,
+    AttributeProto as ChakraAttr,
     COMP_NODE,
     COMM_SEND_NODE,
-    COMM_RECV_NODE
+    COMM_RECV_NODE,
+    INT,
 )
 
 class FlexFlow2ChakraConverter:
@@ -29,6 +31,7 @@ class FlexFlow2ChakraConverter:
         self.logger = logger
         self.node_id_npu_id_dict = {}
         self.node_id_node_dict = {}
+        self.node_id_comm_info_dict = {}
 
     def get_label(self, ff_node: Any) -> str:
         try:
@@ -71,13 +74,13 @@ class FlexFlow2ChakraConverter:
         except:
             raise ValueError(f"Cannot retrieve node_type from \"{label}\"")
 
-    def get_simulated_run_time(self, ff_node: Any) -> int:
+    def get_runtime(self, ff_node: Any) -> int:
         label = self.get_label(ff_node)
         try:
             wall_clock_time = float(label.split("|")[4].strip().split("=")[1])
             return int(round(wall_clock_time * self.num_cycles_per_sec))
         except:
-            raise ValueError(f"Cannot retrieve simulated_run_time from \"{label}\"")
+            raise ValueError(f"Cannot retrieve runtime from \"{label}\"")
 
     def get_comm_src(self, ff_node: Any) -> int:
         label = self.get_label(ff_node)
@@ -104,13 +107,16 @@ class FlexFlow2ChakraConverter:
         ck_node = ChakraNode()
         ck_node.id = self.get_id(ff_node)
         ck_node.name = self.get_name(ff_node)
-        ck_node.node_type = self.get_node_type(ff_node)
-        if ck_node.node_type == COMP_NODE:
-            ck_node.simulated_run_time = self.get_simulated_run_time(ff_node)
-        elif ck_node.node_type == COMM_SEND_NODE:
-            ck_node.comm_src = self.get_comm_src(ff_node)
-            ck_node.comm_dst = self.get_comm_dst(ff_node)
-            ck_node.comm_size = self.get_comm_size(ff_node)
+        ck_node.type = self.get_node_type(ff_node)
+        if ck_node.type == COMP_NODE:
+            attr = ChakraAttr(name="runtime", type=INT)
+            attr.i = self.get_runtime(ff_node)
+            ck_node.attribute.append(attr)
+        elif ck_node.type == COMM_SEND_NODE:
+            self.node_id_comm_info_dict[ck_node.id] = {}
+            self.node_id_comm_info_dict[ck_node.id]["comm_src"] = self.get_comm_src(ff_node)
+            self.node_id_comm_info_dict[ck_node.id]["comm_dst"] = self.get_comm_dst(ff_node)
+            self.node_id_comm_info_dict[ck_node.id]["comm_size"] = self.get_comm_size(ff_node)
         self.node_id_npu_id_dict.update({ck_node.id: self.get_npu_id(ff_node)})
         return ck_node
 
@@ -127,7 +133,7 @@ class FlexFlow2ChakraConverter:
         for ff_node in ff_graph.get_nodes():
             ck_node = self.convert_FF_node_to_CK_node(ff_node)
             self.node_id_node_dict.update({ck_node.id: ck_node})
-            if ck_node.node_type == COMP_NODE:
+            if ck_node.type == COMP_NODE:
                 npu_ids.add(self.node_id_npu_id_dict[ck_node.id])
             num_ff_nodes += 1
         for edge in ff_graph.get_edges():
@@ -152,7 +158,7 @@ class FlexFlow2ChakraConverter:
                 ck_node = copy.deepcopy(self.node_id_node_dict[node_id])
 
                 # compute nodes
-                if ck_node.node_type == COMP_NODE:
+                if ck_node.type == COMP_NODE:
                     ck_node.name = f"COMP_NODE_{ck_node.name}"
                     if self.node_id_npu_id_dict[ck_node.id] == npu_id:
                         npu_id_node_id_node_dict[npu_id].update({node_id: ck_node})
@@ -160,9 +166,12 @@ class FlexFlow2ChakraConverter:
                         total_comp_nodes += 1
 
                 # communication nodes
-                elif (ck_node.node_type == COMM_SEND_NODE):
-                    if (ck_node.comm_src == npu_id) or (ck_node.comm_dst == npu_id):
-                        comm_key = f"{ck_node.id}_{ck_node.comm_src}_{ck_node.comm_dst}"
+                elif (ck_node.type == COMM_SEND_NODE):
+                    if (self.node_id_comm_info_dict[ck_node.id]["comm_src"] == npu_id)\
+                    or (self.node_id_comm_info_dict[ck_node.id]["comm_dst"] == npu_id):
+                        comm_src = self.node_id_comm_info_dict[ck_node.id]["comm_src"]
+                        comm_dst = self.node_id_comm_info_dict[ck_node.id]["comm_dst"]
+                        comm_key = f"{ck_node.id}_{comm_src}_{comm_dst}"
                         if comm_key not in comm_key_comm_tag_dict.keys():
                             comm_tag = next_comm_tag
                             comm_key_comm_tag_dict.update({comm_key: comm_tag})
@@ -173,17 +182,30 @@ class FlexFlow2ChakraConverter:
                         # create a new communication node
                         ck_comm_node = ChakraNode()
                         ck_comm_node.id = ck_node.id
-                        if ck_node.comm_src == npu_id:
+                        if self.node_id_comm_info_dict[ck_node.id]["comm_src"] == npu_id:
                             ck_comm_node.name = "COMM_SEND_NODE"
-                            ck_comm_node.node_type = COMM_SEND_NODE
-                        elif ck_node.comm_dst == npu_id:
+                            ck_comm_node.type = COMM_SEND_NODE
+                        elif self.node_id_comm_info_dict[ck_node.id]["comm_dst"] == npu_id:
                             ck_comm_node.name = "COMM_RECV_NODE"
-                            ck_comm_node.node_type = COMM_RECV_NODE
+                            ck_comm_node.type = COMM_RECV_NODE
                         ck_comm_node.name += f"_{ck_node.name}"
-                        ck_comm_node.comm_src = ck_node.comm_src
-                        ck_comm_node.comm_dst = ck_node.comm_dst
-                        ck_comm_node.comm_size = ck_node.comm_size
-                        ck_comm_node.comm_tag = comm_tag
+
+                        attr = ChakraAttr(name="comm_src", type=INT)
+                        attr.i = self.node_id_comm_info_dict[ck_node.id]["comm_src"]
+                        ck_comm_node.attribute.append(attr)
+
+                        attr = ChakraAttr(name="comm_dst", type=INT)
+                        attr.i = self.node_id_comm_info_dict[ck_node.id]["comm_dst"]
+                        ck_comm_node.attribute.append(attr)
+
+                        attr = ChakraAttr(name="comm_size", type=INT)
+                        attr.i = self.node_id_comm_info_dict[ck_node.id]["comm_size"]
+                        ck_comm_node.attribute.append(attr)
+
+                        attr = ChakraAttr(name="comm_tag", type=INT)
+                        attr.i = comm_tag
+                        ck_comm_node.attribute.append(attr)
+
                         per_npu_comm_nodes += 1
                         total_comm_nodes += 1
 
