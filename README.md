@@ -51,10 +51,9 @@ This is an execution trace generator that generates synthetic execution traces.
 A user can define a new function in the generator to generate new synthetic execution traces.
 You can follow the commands below to run the generator.
 ```shell
-$ protoc et_def.proto --proto_path et_def --cpp_out et_def
-$ cd et_generator/
-$ cmake CMakeLists.txt && make -j$(nproc)
-$ ./et_generator  --num_npus <num_npus> --num_dims <num_dims>
+$ python -m et_generator.et_generator\
+    --num_npus <num_npus>\
+    --num_dims <num_dims>
 ```
 
 ## Execution Trace Visualizer (et_visualizer)

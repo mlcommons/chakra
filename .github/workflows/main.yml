@@ -23,5 +23,6 @@ jobs:
       - run: pip install fbgemm-gpu-cpu
       - run: protoc et_def.proto --proto_path et_def --python_out et_def
       - run: python3 setup.py install
+      - run: python3 -m et_generator.et_generator --help
       - run: python3 -m et_visualizer.et_visualizer --help
       - run: python3 -m timeline_visualizer.timeline_visualizer --help
