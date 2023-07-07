@@ -11,9 +11,11 @@ from et_def.et_def_pb2 import (
     INVALID_NODE,
     COMP_NODE,
     COMM_COLL_NODE,
+    BOOL,
     FLOAT,
     INT,
     STRING,
+    BOOLS,
     FLOATS,
     INTS,
     STRINGS,
@@ -54,12 +56,16 @@ class PyTorch2ChakraConverter:
         attr = ChakraAttr(name=attr_name, type=attr_type)
 
         if attr_name in pt_node.keys():
-            if attr_type == FLOAT:
+            if attr_type == BOOL:
+                attr.b = pt_node[attr_name]
+            elif attr_type == FLOAT:
                 attr.f = pt_node[attr_name]
             elif attr_type == INT:
                 attr.i = pt_node[attr_name]
             elif attr_type == STRING:
                 attr.s = pt_node[attr_name]
+            elif attr_type == BOOLS:
+                attr.bools = pt_node[attr_name]
             elif attr_type == FLOATS:
                 attr.floats = pt_node[attr_name]
             elif attr_type == INTS:
@@ -226,9 +232,9 @@ class PyTorch2ChakraConverter:
                     attr.i = self.get_comm_size(nccl_pt_node)
                     ck_node.attribute.append(attr)
 
-                    attr = ChakraAttr(name="involved_dim", type=INTS)
+                    attr = ChakraAttr(name="involved_dim", type=BOOLS)
                     for _ in range(self.num_dims):
-                        attr.ints.append(1)
+                        attr.bools.append(True)
                     ck_node.attribute.append(attr)
 
                 ck_node_dict[ck_node.id] = ck_node
