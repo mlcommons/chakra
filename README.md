@@ -68,7 +68,7 @@ $ python -m et_visualizer.et_visualizer\
 ```
 
 ## Timeline Visualizer (timeline_visualizer)
-This tool visualizes the execution timeline of a given execution graph (EG).
+This tool visualizes the execution timeline of a given execution trace (ET).
 
 You can run this timeline visualizer with the following command.
 ```shell
@@ -90,7 +90,7 @@ callback,<dummy_str>=npu_id,<dummy_str>=curr_cycle,<dummy_str>=node_id,<dummy_st
 callback,<dummy_str>=npu_id,<dummy_str>=curr_cycle,<dummy_str>=node_id,<dummy_str>=node_name
 ...
 ```
-As this tool requires an execution trace of an EG, a simulator has to print out execution traces.
+As this tool requires an execution trace of an ET, a simulator has to print out execution traces.
 The output json file is chrome-tracing-compatible.
 When you open the file with `chrome://tracing`, you will see an execution timeline like the one below.
 ![](doc/timeline_visualizer.png)
