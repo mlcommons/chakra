@@ -5,22 +5,25 @@ package ChakraProtoMsg;
 enum NodeType
 {
   INVALID_NODE = 0;
-  MEM_LOAD_NODE = 1;
-  MEM_STORE_NODE = 2;
-  COMP_NODE = 3;
-  COMM_SEND_NODE = 4;
-  COMM_RECV_NODE = 5;
-  COMM_COLL_NODE = 6;
+  METADATA_NODE = 1;
+  MEM_LOAD_NODE = 2;
+  MEM_STORE_NODE = 3;
+  COMP_NODE = 4;
+  COMM_SEND_NODE = 5;
+  COMM_RECV_NODE = 6;
+  COMM_COLL_NODE = 7;
 }
 
 enum AttributeType
 {
-  FLOAT = 0;
-  INT = 1;
-  STRING = 2;
-  FLOATS = 3;
-  INTS = 4;
-  STRINGS = 5;
+  BOOL = 0;
+  FLOAT = 1;
+  INT = 2;
+  STRING = 3;
+  BOOLS = 4;
+  FLOATS = 5;
+  INTS = 6;
+  STRINGS = 7;
 }
 
 enum CollectiveCommType
@@ -35,12 +38,14 @@ message AttributeProto {
   required string name = 1;
   required AttributeType type = 2;
   optional string doc_string = 3;
-  optional float f = 4;
-  optional int64 i = 5;
-  optional string s = 6;
-  repeated float floats = 7;
-  repeated int64 ints = 8;
-  repeated bytes strings = 9;
+  optional bool b = 4;
+  optional float f = 5;
+  optional int64 i = 6;
+  optional string s = 7;
+  repeated bool bools = 8;
+  repeated float floats = 9;
+  repeated int64 ints = 10;
+  repeated bytes strings = 11;
 }
 
 message Node {
