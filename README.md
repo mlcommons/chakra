@@ -14,7 +14,7 @@ Check out [`INSTALL`](INSTALL.md) for details.
 
 ## License
 
-Chakra is released under the MIT license. Please see the [`LICENSE`](LICENSE) file for more information.
+Chakra is released under the MIT license. Please see the [`LICENSE.md`](LICENSE.md) file for more information.
 
 ## Contributing
 
