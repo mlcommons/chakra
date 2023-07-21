@@ -2,6 +2,7 @@
 
 import argparse
 import graphviz
+import networkx as nx
 
 from third_party.utils.protolib import (
     openFileRd as open_file_rd,
@@ -9,48 +10,57 @@ from third_party.utils.protolib import (
 )
 from et_def.et_def_pb2 import Node
 
+
 def main() -> None:
     parser = argparse.ArgumentParser(
-            description="Execution Graph Visualizer"
+        description="Execution Graph Visualizer"
     )
     parser.add_argument(
-            "--input_filename",
-            type=str,
-            default=None,
-            required=True,
-            help="Input Chakra execution trace filename"
+        "--input_filename",
+        type=str,
+        default=None,
+        required=True,
+        help="Input Chakra execution trace filename"
     )
     parser.add_argument(
-            "--output_filename",
-            type=str,
-            default=None,
-            required=True,
-            help="Output Graphviz graph filename"
+        "--output_filename",
+        type=str,
+        default=None,
+        required=True,
+        help="Output graph filename"
     )
     args = parser.parse_args()
 
     eg = open_file_rd(args.input_filename)
-    f = graphviz.Digraph()
     node = Node()
-    while decode_message(eg, node):
-        f.node(name=f"{node.id}",
-               label=f"{node.name}",
-               id=str(node.id),
-               shape="record")
-        for parent_id in node.parent:
-            f.edge(str(parent_id), str(node.id))
 
-    if args.output_filename.endswith(".pdf"):
-        f.render(args.output_filename.replace(".pdf", ""),
-                 format="pdf", cleanup=True)
-    elif args.output_filename.endswith(".dot"):
-        f.render(args.output_filename.replace(".dot", ""),
-                 format="dot", cleanup=True)
-    else:
-        f.render(args.output_filename,
-                 format="dot", cleanup=True)
+    # Determine the file type to be created based on the output filename
+    if args.output_filename.endswith((".pdf", ".dot")):
+        f = graphviz.Digraph()
+        while decode_message(eg, node):
+            f.node(name=f"{node.id}",
+                   label=f"{node.name}",
+                   id=str(node.id),
+                   shape="record")
+            for parent_id in node.parent:
+                f.edge(str(parent_id), str(node.id))
+
+        if args.output_filename.endswith(".pdf"):
+            f.render(args.output_filename.replace(".pdf", ""),
+                     format="pdf", cleanup=True)
+        else:  # ends with ".dot"
+            f.render(args.output_filename.replace(".dot", ""),
+                     format="dot", cleanup=True)
+    elif args.output_filename.endswith(".graphml"):
+        G = nx.DiGraph()
+        while decode_message(eg, node):
+            G.add_node(node.id, label=node.name)
+            for parent_id in node.parent:
+                G.add_edge(parent_id, node.id)
+        nx.write_graphml(G, args.output_filename)
 
     eg.close()
+
 
 if __name__ == "__main__":
     main()

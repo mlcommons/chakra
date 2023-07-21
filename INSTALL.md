@@ -67,6 +67,25 @@ $ python -m et_visualizer.et_visualizer\
     --output_filename <output_filename>
 ```
 
+## Execution Trace Visualizer (et_visualizer)
+This tool visualizes a given execution trace (ET) by converting the ET to a graph in various supported formats: PDF, Graphviz (dot), or GraphML.
+The output format is determined by the file extension (postfix) of the output filename.
+For PDF and Graphviz formats, use ".pdf" and ".dot" extensions respectively.
+For GraphML, suitable for visualizing large-scale graphs, use the ".graphml" extension. 
+The PDF and Graphviz formats are generated using the Graphviz library, while the GraphML format is generated using the NetworkX library. 
+Graphviz files can be visualized with a Graphviz viewer such as https://dreampuf.github.io/GraphvizOnline/.
+For visualizing GraphML files, you can use Gephi (https://gephi.org/).
+
+Run the tool with the following command:
+```shell
+$ python -m et_visualizer.et_visualizer\
+    --input_filename <input_filename>\
+    --output_filename <output_filename>
+```
+
+The input_filename is the path to the execution trace you want to visualize, and the output_filename is the name of the output file you want to create.
+Remember to specify the correct extension in the output_filename to select the desired output format.
+
 ## Timeline Visualizer (timeline_visualizer)
 This tool visualizes the execution timeline of a given execution trace (ET).
 
