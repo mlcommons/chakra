@@ -201,8 +201,8 @@ class PyTorch2ChakraConverter:
                 ck_node.output_shapes = str(pt_node["output_shapes"])
                 ck_node.output_types = str(pt_node["output_types"])
 
-                attr_names = ["rf_id", "fw_parent", "seq_id", "scope", "tid", "fw_tid", "op_schema"]
-                attr_types = [INT, INT, INT, INT, INT, INT, STRING]
+                attr_names = ["fw_parent", "fw_tid", "op_schema", "parent", "seq_id", "rf_id", "scope", "tid"]
+                attr_types = [INT, INT, STRING, INT, INT, INT, INT, INT]
                 for attr_name, attr_type in zip(attr_names, attr_types):
                     attr = self.get_attr(pt_node, attr_name, attr_type)
                     ck_node.attribute.append(attr)
