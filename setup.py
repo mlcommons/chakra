@@ -26,9 +26,9 @@ def main():
     setup(
         name="chakra",
         python_requires=">=3.8",
-        author="Taekyung Heo",
-        author_email="taekyungheo@meta.com",
-        url="https://github.com/chakra-eg/chakra",
+        author="MLCommons",
+        author_email="chakra-chairs@mlcommons.org",
+        url="https://github.com/mlcommons/chakra",
         packages=packages,
         package_dir=package_dir_map
     )
