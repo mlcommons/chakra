@@ -221,7 +221,7 @@ class FlexFlow2ChakraConverter:
 
         # write per-NPU Chakra graphs
         for npu_id in sorted(npu_id_node_id_node_dict.keys()):
-            filename = self.output_filename + f".{npu_id}.eg"
+            filename = self.output_filename + f".{npu_id}.et"
             with open(filename, "wb") as f:
                 for node_id in sorted(npu_id_node_id_node_dict[npu_id].keys()):
                     ck_node = npu_id_node_id_node_dict[npu_id][node_id]
