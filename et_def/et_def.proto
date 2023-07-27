@@ -45,7 +45,7 @@ message AttributeProto {
   repeated bool bools = 8;
   repeated float floats = 9;
   repeated int64 ints = 10;
-  repeated bytes strings = 11;
+  repeated string strings = 11;
 }
 
 message Node {
