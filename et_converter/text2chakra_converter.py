@@ -170,7 +170,7 @@ class Text2ChakraConverter:
     ) -> None:
         layers = self.get_layers(f, num_layers)
         for npu_id in range(self.num_npus):
-            output_filename = "%s.%d.eg" % (self.output_filename, npu_id)
+            output_filename = "%s.%d.et" % (self.output_filename, npu_id)
             with open(output_filename, "wb") as g:
                 for i in range(self.num_passes):
                     for layer in layers:
@@ -193,7 +193,7 @@ class Text2ChakraConverter:
     ) -> None:
         layers = self.get_layers(f, num_layers)
         for npu_id in range(self.num_npus):
-            output_filename = "%s.%d.eg" % (self.output_filename, npu_id)
+            output_filename = "%s.%d.et" % (self.output_filename, npu_id)
             with open(output_filename, "wb") as g:
                 for i in range(self.num_passes):
                     fwd_comp_node = None
@@ -255,7 +255,7 @@ class Text2ChakraConverter:
     ) -> None:
         layers = self.get_layers(f, num_layers)
         for npu_id in range(self.num_npus):
-            output_filename = "%s.%d.eg" % (self.output_filename, npu_id)
+            output_filename = "%s.%d.et" % (self.output_filename, npu_id)
             with open(output_filename, "wb") as g:
                 for i in range(self.num_passes):
                     fwd_comm_node = None
@@ -330,7 +330,7 @@ class Text2ChakraConverter:
     ) -> None:
         layers = self.get_layers(f, num_layers)
         for npu_id in range(self.num_npus):
-            output_filename = "%s.%d.eg" % (self.output_filename, npu_id)
+            output_filename = "%s.%d.et" % (self.output_filename, npu_id)
             with open(output_filename, "wb") as g:
                 for i in range(self.num_passes):
                     fwd_comm_node = None
@@ -419,7 +419,7 @@ class Text2ChakraConverter:
     ) -> None:
         layers = self.get_layers(f, num_layers)
         for npu_id in range(self.num_npus):
-            output_filename = "%s.%d.eg" % (self.output_filename, npu_id)
+            output_filename = "%s.%d.et" % (self.output_filename, npu_id)
             with open(output_filename, "wb") as g:
                 for i in range(self.num_passes):
                     fwd_comm_node = None
@@ -507,7 +507,7 @@ class Text2ChakraConverter:
     ) -> None:
         layers = self.get_layers(f, num_layers)
         for npu_id in range(self.num_npus):
-            output_filename = "%s.%d.eg" % (self.output_filename, npu_id)
+            output_filename = "%s.%d.et" % (self.output_filename, npu_id)
             with open(output_filename, "wb") as g:
                 for i in range(self.num_passes):
                     fwd_comp_node = None

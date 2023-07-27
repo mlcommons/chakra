@@ -13,7 +13,7 @@ from et_def.et_def_pb2 import Node
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Execution Graph Visualizer"
+        description="Execution Trace Visualizer"
     )
     parser.add_argument(
         "--input_filename",
@@ -31,13 +31,13 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    eg = open_file_rd(args.input_filename)
+    et = open_file_rd(args.input_filename)
     node = Node()
 
     # Determine the file type to be created based on the output filename
     if args.output_filename.endswith((".pdf", ".dot")):
         f = graphviz.Digraph()
-        while decode_message(eg, node):
+        while decode_message(et, node):
             f.node(name=f"{node.id}",
                    label=f"{node.name}",
                    id=str(node.id),
@@ -53,13 +53,13 @@ def main() -> None:
                      format="dot", cleanup=True)
     elif args.output_filename.endswith(".graphml"):
         G = nx.DiGraph()
-        while decode_message(eg, node):
+        while decode_message(et, node):
             G.add_node(node.id, label=node.name)
             for parent_id in node.parent:
                 G.add_edge(parent_id, node.id)
         nx.write_graphml(G, args.output_filename)
 
-    eg.close()
+    et.close()
 
 
 if __name__ == "__main__":
