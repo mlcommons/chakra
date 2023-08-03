@@ -48,6 +48,10 @@ message AttributeProto {
   repeated string strings = 11;
 }
 
+message GlobalMetadata {
+  repeated AttributeProto attribute = 1;
+}
+
 message Node {
   required uint64 id = 1;
   required string name = 2;
