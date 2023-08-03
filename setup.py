@@ -27,7 +27,7 @@ def main():
         name="chakra",
         python_requires=">=3.8",
         author="MLCommons",
-        author_email="chakra-chairs@mlcommons.org",
+        author_email="chakra@mlcommons.org",
         url="https://github.com/mlcommons/chakra",
         packages=packages,
         package_dir=package_dir_map
