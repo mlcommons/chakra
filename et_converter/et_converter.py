@@ -83,13 +83,6 @@ def main() -> None:
             help="NPU frequency in MHz"
     )
     parser.add_argument(
-            "--default_simulated_run_time",
-            type=int,
-            default=None,
-            required="PyTorch" in sys.argv,
-            help="Default simulated_run_time if the duration field is not available"
-    )
-    parser.add_argument(
             "--log_filename",
             type=str,
             default="debug.log",
@@ -122,7 +115,6 @@ def main() -> None:
             converter = PyTorch2ChakraConverter(
                     args.input_filename,
                     args.output_filename,
-                    args.default_simulated_run_time,
                     args.num_dims,
                     logger)
             converter.convert()
