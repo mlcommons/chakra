@@ -3,6 +3,7 @@
 import argparse
 import logging
 import sys
+import traceback
 
 from logging import FileHandler
 from et_converter.text2chakra_converter import Text2ChakraConverter
@@ -122,7 +123,8 @@ def main() -> None:
             logger.error(f"{args.input_type} unsupported")
             sys.exit(1)
     except Exception as e:
-        logger.error(str(e))
+        traceback.print_exc()
+        logger.debug(traceback.format_exc())
         sys.exit(1)
 
 if __name__ == "__main__":
