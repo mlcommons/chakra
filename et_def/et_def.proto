@@ -18,12 +18,14 @@ enum AttributeType
 {
   BOOL = 0;
   FLOAT = 1;
-  INT = 2;
-  STRING = 3;
-  BOOLS = 4;
-  FLOATS = 5;
-  INTS = 6;
-  STRINGS = 7;
+  UINT = 2;
+  INT = 3;
+  STRING = 4;
+  BOOLS = 5;
+  FLOATS = 6;
+  UINTS = 7;
+  INTS = 8;
+  STRINGS = 9;
 }
 
 enum CollectiveCommType
@@ -40,12 +42,14 @@ message AttributeProto {
   optional string doc_string = 3;
   optional bool b = 4;
   optional float f = 5;
-  optional int64 i = 6;
-  optional string s = 7;
-  repeated bool bools = 8;
-  repeated float floats = 9;
-  repeated int64 ints = 10;
-  repeated string strings = 11;
+  optional uint64 u = 6;
+  optional int64 i = 7;
+  optional string s = 8;
+  repeated bool bools = 9;
+  repeated float floats = 10;
+  repeated uint64 uints = 11;
+  repeated int64 ints = 12;
+  repeated string strings = 13;
 }
 
 message GlobalMetadata {
