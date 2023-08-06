@@ -10,6 +10,7 @@ from et_def.et_def_pb2 import (
     COMP_NODE,
     COMM_COLL_NODE,
     INT,
+    BOOLS,
     INTS,
     ALL_REDUCE,
     ALL_TO_ALL,
@@ -49,9 +50,9 @@ def get_comm_size_attr(comm_size: int) -> ChakraAttr:
 
 
 def get_involved_dim_attr(num_dims: int) -> ChakraAttr:
-    attr = ChakraAttr(name="involved_dim", type=INTS)
+    attr = ChakraAttr(name="involved_dim", type=BOOLS)
     for i in range(num_dims):
-        attr.ints.append(1)
+        attr.bools.append(True)
     return attr
 
 
