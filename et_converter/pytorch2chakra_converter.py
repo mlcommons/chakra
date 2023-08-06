@@ -120,6 +120,7 @@ class PyTorch2ChakraConverter:
                 "Tensor(long)": 8,
                 "Tensor(c10::Half)": 2,
                 "Tensor(unsigned char)": 1,
+                "Tensor(long int)": 8,
         }
         try:
             data_type_size = data_type_size_dict[data_type]
