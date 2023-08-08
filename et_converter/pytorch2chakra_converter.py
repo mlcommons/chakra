@@ -6,6 +6,7 @@ from typing import Any, Dict
 
 from third_party.utils.protolib import encodeMessage as encode_message
 from et_def.et_def_pb2 import (
+    GlobalMetadata,
     Node as ChakraNode,
     AttributeProto as ChakraAttr,
     INVALID_NODE,
@@ -172,6 +173,18 @@ class PyTorch2ChakraConverter:
         with open(self.input_filename, "r") as pytorch_et, \
                 open(self.output_filename, "wb") as chakra_et:
             pytorch_et_data = json.load(pytorch_et)
+
+            md = GlobalMetadata(
+              attribute=[
+                ChakraAttr(name="schema", type=STRING, s=pytorch_et_data["schema"]),
+                ChakraAttr(name="pid", type=UINT, u=pytorch_et_data["pid"]),
+                ChakraAttr(name="time", type=STRING, s=pytorch_et_data["time"]),
+                ChakraAttr(name="start_ts", type=UINT, u=pytorch_et_data["start_ts"]),
+                ChakraAttr(name="finish_ts", type=UINT, u=pytorch_et_data["finish_ts"])
+              ]
+            )
+            encode_message(chakra_et, md)
+
             self.dfs(pytorch_et_data["nodes"][0], pytorch_et_data, pt_node_dict)
 
             self.logger.info("Identify communication nodes")
