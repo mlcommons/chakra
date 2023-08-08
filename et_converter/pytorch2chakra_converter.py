@@ -23,6 +23,7 @@ from et_def.et_def_pb2 import (
     ALL_TO_ALL,
     ALL_GATHER,
     REDUCE_SCATTER,
+    BROADCAST,
 )
 
 
@@ -92,6 +93,8 @@ class PyTorch2ChakraConverter:
         elif (node["name"] == "nccl:reduce_scatter")\
             or (node["name"] == "nccl:_reduce_scatter_base"):
             return REDUCE_SCATTER
+        elif node["name"] == "nccl:broadcast":
+            return BROADCAST
         else:
             node_name = node["name"]
             raise ValueError(f"{node_name} is not supported")

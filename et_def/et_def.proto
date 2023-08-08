@@ -34,6 +34,7 @@ enum CollectiveCommType
   ALL_TO_ALL = 1;
   ALL_GATHER = 2;
   REDUCE_SCATTER = 3;
+  BROADCAST = 4;
 }
 
 message AttributeProto {
