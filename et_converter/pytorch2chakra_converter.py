@@ -13,10 +13,12 @@ from et_def.et_def_pb2 import (
     COMM_COLL_NODE,
     BOOL,
     FLOAT,
+    UINT,
     INT,
     STRING,
     BOOLS,
     FLOATS,
+    UINTS,
     INTS,
     STRINGS,
     ALL_REDUCE,
@@ -61,6 +63,8 @@ class PyTorch2ChakraConverter:
                 attr.b = pt_node[attr_name]
             elif attr_type == FLOAT:
                 attr.f = pt_node[attr_name]
+            elif attr_type == UINT:
+                attr.u = pt_node[attr_name]
             elif attr_type == INT:
                 attr.i = pt_node[attr_name]
             elif attr_type == STRING:
@@ -69,6 +73,8 @@ class PyTorch2ChakraConverter:
                 attr.bools = pt_node[attr_name]
             elif attr_type == FLOATS:
                 attr.floats = pt_node[attr_name]
+            elif attr_type == UINTS:
+                attr.uints = pt_node[attr_name]
             elif attr_type == INTS:
                 attr.ints = pt_node[attr_name]
             elif attr_type == STRINGS:
@@ -205,9 +211,9 @@ class PyTorch2ChakraConverter:
                 ck_node.output_shapes = str(pt_node["output_shapes"])
                 ck_node.output_types = str(pt_node["output_types"])
 
-                attr_names = ["fw_parent", "fw_tid", "op_schema", "parent", "seq_id", "rf_id", "scope", "tid"]
-                attr_types = [INT, INT, STRING, INT, INT, INT, INT, INT]
-                for attr_name, attr_type in zip(attr_names, attr_types):
+                attrs = [("fw_parent", UINT), ("fw_tid", UINT), ("op_schema", STRING),
+                        ("parent", UINT), ("seq_id", INT), ("rf_id", UINT), ("scope", UINT), ("tid", UINT)]
+                for attr_name, attr_type in attrs:
                     attr = self.get_attr(pt_node, attr_name, attr_type)
                     ck_node.attribute.append(attr)
 
