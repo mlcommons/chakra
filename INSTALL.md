@@ -3,6 +3,7 @@
 We use `setuptools` to install/uninstall the `chakra` package:
 ```shell
 # Install package
+$ pip install -r requirements.txt
 $ python setup.py install
 
 # Uninstall package
