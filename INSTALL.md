@@ -52,7 +52,7 @@ This is an execution trace generator that generates synthetic execution traces.
 A user can define a new function in the generator to generate new synthetic execution traces.
 You can follow the commands below to run the generator.
 ```shell
-$ python -m et_generator.et_generator\
+$ python -m utils.et_generator.et_generator\
     --num_npus <num_npus>\
     --num_dims <num_dims>
 ```
@@ -130,9 +130,10 @@ $ git checkout main
 $ cd -
 $ ./build/astra_analytical/build.sh -c
 
-$ cd extern/graph_frontend/chakra/et_generator
-$ cmake CMakeLists.txt && make -j$(nproc)
-$ ./et_generator
+$ cd extern/graph_frontend/chakra/
+$ python -m utils.et_generator.et_generator\
+    --num_npus <num_npus>\
+    --num_dims <num_dims>
 
 $ cd -
 $ ./run.sh
