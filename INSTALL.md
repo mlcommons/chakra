@@ -138,3 +138,12 @@ $ python -m utils.et_generator.et_generator\
 $ cd -
 $ ./run.sh
 ```
+
+## Execution Trace Jsonizer (et_jsonizer)
+This tool prints the nodes within execution traces for better comprehension.
+The printed information includes the node's id, name, type, and any associated metadata, which are all outputted in a user-friendly text format.
+```
+$ python -m et_jsonizer.et_jsonizer\
+    --input_filename <input_filename>\
+    --output_filename <output_filename>
+```
