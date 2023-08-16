@@ -15,6 +15,7 @@ def main():
         f"{package_base}.et_def": "et_def",
         f"{package_base}.et_converter": "et_converter",
         f"{package_base}.et_generator": "utils/et_generator",
+        f"{package_base}.et_jsonizer": "utils/et_jsonizer",
         f"{package_base}.et_visualizer": "et_visualizer",
         f"{package_base}.timeline_visualizer": "timeline_visualizer"
     }
