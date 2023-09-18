@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 
+import bisect
+import copy
 import json
 import logging
-from typing import Any, Dict
+
+from enum import Enum
+from typing import Any, Dict, List
 
 from chakra.third_party.utils.protolib import encodeMessage as encode_message
 from chakra.et_def.et_def_pb2 import (
@@ -12,104 +16,250 @@ from chakra.et_def.et_def_pb2 import (
     INVALID_NODE,
     COMP_NODE,
     COMM_COLL_NODE,
-    BOOL,
-    FLOAT,
-    UINT,
-    INT,
-    STRING,
-    BOOLS,
-    FLOATS,
-    UINTS,
-    INTS,
-    STRINGS,
     ALL_REDUCE,
-    ALL_TO_ALL,
     ALL_GATHER,
-    REDUCE_SCATTER,
     BROADCAST,
+    ALL_TO_ALL,
+    REDUCE_SCATTER,
 )
+
+
+class PyTorchNodeType(Enum):
+    CPU_OP = 1
+    GPU_OP = 2
+    LABEL = 3 # Non-operator nodes
 
 
 class PyTorch2ChakraConverter:
     def __init__(
-            self,
-            input_filename: str,
-            output_filename: str,
-            num_dims: int,
-            logger: logging.Logger
+        self,
+        input_filename: str,
+        output_filename: str,
+        num_dims: int,
+        logger: logging.Logger
     ) -> None:
-        self.input_filename = input_filename
-        self.output_filename = output_filename
+        try:
+            self.pytorch_et = open(input_filename, "r")
+        except IOError as e:
+            raise Exception(f"Could not open file {input_filename}")
+        pytorch_et_data = json.load(self.pytorch_et)
+        self.pt_schema = pytorch_et_data["schema"]
+        self.pt_pid = pytorch_et_data["pid"]
+        self.pt_time = pytorch_et_data["time"]
+        self.pt_start_ts = pytorch_et_data["start_ts"]
+        self.pt_finish_ts = pytorch_et_data["finish_ts"]
+        self.pt_nodes = pytorch_et_data["nodes"]
+
+        try:
+            self.chakra_et = open(output_filename, "wb")
+        except IOError as e:
+            raise Exception(f"Could not open file {output_filename}")
+
         self.num_dims = num_dims
         self.logger = logger
 
-    @staticmethod
-    def get_node_type(node: Dict[str, Any]) -> int:
-        if "c10d::" in node["name"]:
-            return COMM_COLL_NODE
-        if node["op_schema"] != "" or node["outputs"]:
-            return COMP_NODE
-        return INVALID_NODE
+        # All PyTorch CPU operators are kept in pt_cpu_node_dict.
+        # Mappings between PyTorch NIDs and PyTorch nodes.
+        self.pt_cpu_node_dict = {}
+
+        # All PyTorch GPU operators are kept in pt_gpu_node_dict.
+        # Mappings between PyTorch CPU node IDs (parent) and PyTorch GPU nodes (children).
+        self.pt_gpu_node_dict = {}
+
+        # All record_param_comms nodes are tracked in pt_record_param_comms_node_dict.
+        # Mappings between parent PyTorch NIDs and PyTorch record_param_comms nodes.
+        self.pt_record_param_comms_node_dict = {}
+
+        # All PyTorch NCCL nodes are kept in pt_nccl_node_dict.
+        # Mappings between parent PyTorch NIDs and PyTorch NCCL nodes.
+        self.pt_nccl_node_dict = {}
+
+        # All Chakra nodes are maintained in ck_node_dict.
+        # Mappings between Chakra NIDs and Chakra nodes.
+        self.ck_node_dict = {}
+
+        # A list of NIDs to enforce dependencies between phases.
+        self.inter_phase_dependency = []
+
+        # ---------------------------------------------------------------------
+        # These four dictionaries are used for identifying data dependencies
+        # between operators. Data dependencies can be discovered by identifying
+        # tensor input-output relationships between operators.
+        #
+        # Tensors have two types of IDs: storage ID and tensor ID
+        # A storage ID is considered as valid when it is larger than zero.
+        # When a storage ID is valid, it should be used for identifying a tensor
+        # Otherwise, a tensor ID should be utilized.
+        # ---------------------------------------------------------------------
+        # Mapping between storage_id and nid
+        self.input_storage_id_nid_dict = {} # storage_id is an input of a node with nid
+        self.output_storage_id_nid_dict = {} # storage_id is an output of a node with nid
+        # Mapping between tensor_id and nid
+        self.input_tensor_id_nid_dict = {} # tensor_id is an input of a node with nid
+        self.output_tensor_id_nid_dict = {} # tensor_id is an output of a node with nid
+
+    def __del__(self):
+        if self.pytorch_et and not self.pytorch_et.closed:
+            self.pytorch_et.close()
+        if self.chakra_et and not self.chakra_et.closed:
+            self.chakra_et.close()
 
     @staticmethod
-    def get_attr(
-            pt_node: Dict[str, Any],
-            attr_name: str,
-            attr_type: int
-    ) -> ChakraAttr:
-        attr = ChakraAttr(name=attr_name, type=attr_type)
+    def is_valid_tensor(
+        obj: Any
+    ) -> bool:
+        """
+        Returns true if a given object is a valid tensor.
 
-        if attr_name in pt_node.keys():
-            if attr_type == BOOL:
-                attr.b = pt_node[attr_name]
-            elif attr_type == FLOAT:
-                attr.f = pt_node[attr_name]
-            elif attr_type == UINT:
-                attr.u = pt_node[attr_name]
-            elif attr_type == INT:
-                attr.i = pt_node[attr_name]
-            elif attr_type == STRING:
-                attr.s = pt_node[attr_name]
-            elif attr_type == BOOLS:
-                attr.bools = pt_node[attr_name]
-            elif attr_type == FLOATS:
-                attr.floats = pt_node[attr_name]
-            elif attr_type == UINTS:
-                attr.uints = pt_node[attr_name]
-            elif attr_type == INTS:
-                attr.ints = pt_node[attr_name]
-            elif attr_type == STRINGS:
-                attr.strings = pt_node[attr_name]
+        An object is a valid tensor object when it is a list and the length of
+        the list is six.
+        """
+        return isinstance(obj, list) and (len(obj) == 6)
 
-        return attr
+    @staticmethod
+    def get_storage_id_from_tensor(
+        tensor: List[Any]
+    ) -> int:
+        """
+        Returns the storage ID of a tensor.
+        """
+        if len(tensor) < 2:
+            raise IndexError("Index out of bounds")
+        return tensor[1]
 
-    def detect_type(self, node: Dict[str, Any]) -> str:
-        if node["op_schema"] or node["outputs"]:
-            return 'operator'
+    @staticmethod
+    def get_tensor_id_from_tensor(
+        tensor: List[Any]
+    ) -> int:
+        """
+        Returns the tensor ID of a tensor.
+        """
+        if len(tensor) < 1:
+            raise IndexError("Index out of bounds")
+        return tensor[0]
+
+    def has_valid_storage_id(
+        self,
+        tensor: List[Any]
+    ) -> bool:
+        """
+        Returns true if a given tensor has a valid storage ID.
+
+        A storage ID is considered valid if it is larger than zero.
+        When a storage ID is valid, it should be used instead of a tensor ID.
+        """
+        storage_id = self.get_storage_id_from_tensor(tensor)
+        return storage_id > 0
+
+    @staticmethod
+    def has_cat_field(
+        node: Dict[str, Any]
+    ) -> bool:
+        """
+        Returns true if a PyTorch node has a category field.
+        """
+        return "cat" in node.keys()
+
+    @staticmethod
+    def get_cat_field(
+        node: Dict[str, Any]
+    ) -> bool:
+        """
+        Returns the category field of a given PyTorch node.
+        """
+        return node["cat"]
+
+    @staticmethod
+    def has_dur(
+        node: Dict[str, Any]
+    ) -> bool:
+        """
+        Returns true if a PyTorch node has a duration field.
+        """
+        return "dur" in node.keys()
+
+    def get_pytorch_node_type(
+        self,
+        node: Dict[str, Any]
+    ) -> PyTorchNodeType:
+        if self.is_gpu_op(node):
+            return PyTorchNodeType.GPU_OP
+        elif (node["op_schema"] or node["outputs"])\
+                or ("c10d::" in node["name"] or ("nccl:" in node["name"])):
+            return PyTorchNodeType.CPU_OP
         else:
-            return 'label'
+            return PyTorchNodeType.LABEL
 
-    def get_comm_type(self, node: Dict[str, Any]) -> int:
-        if node["name"] == "nccl:all_reduce":
+    @staticmethod
+    def is_record_param_comms_node(
+        node: Dict[str, Any]
+    ) -> bool:
+        """
+        Returns true if a PyToch node has "record_param_comms" in its name.
+        """
+        return "record_param_comms" in node["name"]
+
+    @staticmethod
+    def is_nccl_node(
+        node: Dict[str, Any]
+    ) -> bool:
+        """
+        Returns true if a PyToch node is a NCCL node.
+        """
+        return "nccl:" in node["name"]
+
+    def is_cpu_op_with_dur(
+        self,
+        node: Dict[str, Any]
+    ) -> bool:
+        """
+        Returns true if a PyTorch node is a CPU operator and has a duration field.
+        """
+        return (self.get_pytorch_node_type(node) == PyTorchNodeType.CPU_OP)\
+                and self.has_dur(node)
+
+    def is_cpu_op(
+        self,
+        node: Dict[str, Any]
+    ) -> bool:
+        """
+        Takes a PyTorch node and returns true if the node is a CPU operator.
+        """
+        return self.get_pytorch_node_type(node) == PyTorchNodeType.CPU_OP
+
+    @staticmethod
+    def get_collective_comm_type(
+        node: Dict[str, Any]
+    ) -> int:
+        """
+        Returns the collective communication type of a given PyTorch node.
+        """
+        if "all_reduce" in node["name"]:
             return ALL_REDUCE
-        elif node["name"] == "nccl:all_to_all":
+        elif "all_to_all" in node["name"]:
             return ALL_TO_ALL
-        elif (node["name"] == "nccl:all_gather")\
-            or (node["name"] == "nccl:_all_gather_base"):
+        elif "all_gather" in node["name"]:
             return ALL_GATHER
-        elif (node["name"] == "nccl:reduce_scatter")\
-            or (node["name"] == "nccl:_reduce_scatter_base"):
+        elif "reduce_scatter" in node["name"]:
             return REDUCE_SCATTER
-        elif node["name"] == "nccl:broadcast":
+        elif "broadcast" in node["name"]:
             return BROADCAST
         else:
             node_name = node["name"]
             raise ValueError(f"{node_name} is not supported")
         return INVALID_COMM
 
-    # https://pytorch.org/docs/stable/tensors.html
-    # https://github.com/pytorch/pytorch/blob/master/c10/util/Half.h
-    def get_data_type_size(self, data_type: str) -> int:
+    @staticmethod
+    def get_data_type_size(
+        data_type: str
+    ) -> int:
+        """
+        Returns the data type size of a given data type in string.
+
+        References
+        * https://pytorch.org/docs/stable/tensors.html
+        * https://github.com/pytorch/pytorch/blob/master/c10/util/Half.h
+        """
         data_type_size_dict = {
                 "Tensor(float32)": 4,
                 "Tensor(float)": 4,
@@ -138,7 +288,36 @@ class PyTorch2ChakraConverter:
         except:
             raise ValueError(f"{data_type} is unsupported")
 
-    def get_comm_size(self, node: Dict[str, Any]) -> int:
+    def get_chakra_node_type_from_pytorch_node(
+        self,
+        node: Dict[str, Any]
+    ) -> int:
+        if self.has_cat_field(node) and ("ncclKernel" in node["name"]):
+            return COMM_COLL_NODE
+        elif self.has_cat_field(node):
+            return COMP_NODE
+        elif ("c10d::" in node["name"]) or ("nccl:" in node["name"]):
+            return COMM_COLL_NODE
+        elif (node["op_schema"] != "") or node["outputs"]:
+            return COMP_NODE
+        return INVALID_NODE
+
+    def has_gpu_op(
+        self,
+        nid: int
+    ) -> bool:
+        """
+        Returns true if a Chakra node has any associated GPU operator.
+        """
+        return nid in self.pt_gpu_node_dict.keys()
+
+    def get_comm_size(
+        self,
+        node: Dict[str, Any]
+    ) -> int:
+        """
+        Calculates the communication size for a given input_type and input_shape.
+        """
         comm_size = 1
         for input_types in node["input_types"]:
             comm_size *= self.get_data_type_size(input_types)
@@ -147,164 +326,568 @@ class PyTorch2ChakraConverter:
                 comm_size = comm_size * input_shape_inner
         return comm_size
 
-    def dfs(
-            self,
-            node: Dict[str, Any],
-            pytorch_et_data: Dict[str, Any],
-            pt_node_dict: Dict[int, Dict[str, Any]]
+    def sort_pytorch_nodes_with_starting_time(
+        self
     ) -> None:
-        if self.detect_type(node) == 'operator':
-            pt_node_dict[node['id']] = node
+        """
+        Sorts PyTorch nodes with their starting time ("ts").
+
+        Sorting helps executing nodes with earlier starting time first.
+        """
+        self.pt_nodes = sorted(self.pt_nodes, key=lambda kv: kv["ts"])
+
+    def get_total_runtime_ms(
+        self,
+        pt_node_list: List[Any]
+    ) -> int:
+        """
+        Returns the total runtime of PyTorch CPU operators with a duration field.
+        """
+        total_runtime_ms = 0
+        for pt_node in pt_node_list:
+            if self.is_cpu_op_with_dur(pt_node):
+                total_runtime_ms += pt_node["dur"] # in milliseconds
+        return total_runtime_ms
+
+    def get_prev_inter_phase_dep_nid(
+        self,
+        node: ChakraNode,
+    ) -> int:
+        """
+        Returns the NID of the latest operator of the previous phase.
+
+        Finds the closest but smaller value from inter_phase_dependency compared to node.id.
+        """
+        index = bisect.bisect_left(self.inter_phase_dependency, node.id)
+
+        if index == 0:
+            # All elements in the list are greater than node.id; no element satisfies the condition.
+            return -1
         else:
-            for pt_node in pytorch_et_data["nodes"]:
-                if pt_node['parent'] == node['id']:
-                    self.dfs(pt_node, pytorch_et_data, pt_node_dict)
+            # The element at index-1 will be the closest, smaller value compared to node.id.
+            return self.inter_phase_dependency[index - 1]
 
-    def convert(self) -> None:
-        pt_node_dict = {}
-        ck_node_dict = {}
-        record_param_comms_pt_node_dict = {}
-        nccl_pt_node_dict = {}
-        input_storage_id_node_id_dict = {}
-        input_tensor_id_node_id_dict = {}
-        output_storage_id_node_id_dict = {}
-        output_tensor_id_node_id_dict = {}
+    @staticmethod
+    def find_root_nid(
+        nodes: List[Any]
+    ) -> int:
+        """
+        Finds a root node and return its NID.
 
-        with open(self.input_filename, "r") as pytorch_et, \
-                open(self.output_filename, "wb") as chakra_et:
-            pytorch_et_data = json.load(pytorch_et)
+        * Assumption: There is only one root node in a given execution trace.
+        """
+        root_nid = -1
+        for node in nodes:
+            if "[pytorch|profiler|execution_graph|thread]" in node["name"]:
+                root_nid = node["id"]
+                break
+        if root_nid == -1:
+            raise ValueError("Cannot find a root NID")
+        return root_nid
 
-            md = GlobalMetadata(
-              attribute=[
-                ChakraAttr(name="schema", type=STRING, s=pytorch_et_data["schema"]),
-                ChakraAttr(name="pid", type=UINT, u=pytorch_et_data["pid"]),
-                ChakraAttr(name="time", type=STRING, s=pytorch_et_data["time"]),
-                ChakraAttr(name="start_ts", type=UINT, u=pytorch_et_data["start_ts"]),
-                ChakraAttr(name="finish_ts", type=UINT, u=pytorch_et_data["finish_ts"])
-              ]
+    @staticmethod
+    def is_label_node(
+        node: Dict[str, Any]
+    ) -> bool:
+        """
+        Returns true if a given PyTorch node is a label node.
+
+        All label node names start with "## ".
+        """
+        return node["name"].startswith("## ")
+
+    def is_phase_root_node(
+        self,
+        root_nid: int,
+        node: Dict[str, Any]
+    ) -> bool:
+        return self.is_label_node(node) and (node["parent"] == root_nid)
+
+    def is_gpu_op(
+        self,
+        node: Dict[str, Any]
+    ) -> bool:
+        """
+        Takes a PyTorch node and returns true if it is a GPU operator.
+
+        All GPU operators have a category field.
+        """
+        return self.has_cat_field(node)
+
+    def find_children_gpu_ops(
+        self,
+        root_cpu_nid: int,
+        cpu_node: Dict[str, Any],
+    ) -> None:
+        """
+        Discovers all GPU operators under a CPU operator.
+
+        Once discovered, GPU operators are tracked in pt_gpu_node_dict.
+        """
+        cpu_nid = cpu_node["id"]
+        for node in self.pt_nodes:
+            if node["parent"] == cpu_nid:
+                if self.is_gpu_op(node):
+                    self.pt_gpu_node_dict.setdefault(root_cpu_nid, []).append(node)
+                else:
+                    # label or CPU operators
+                    self.find_children_gpu_ops(root_cpu_nid, node)
+
+    def dfs(
+        self,
+        node: Dict[str, Any],
+        root_nid: int,
+    ) -> int:
+        """
+        Discovers all PyTorch CPU operators under a given node while populating
+        pt_cpu_node_dict, After that, returns the largest NID in the tree.
+        """
+        nid = node["id"]
+        node_type = self.get_pytorch_node_type(node)
+        if node_type == PyTorchNodeType.GPU_OP:
+            return -1
+        elif node_type == PyTorchNodeType.CPU_OP:
+            self.pt_cpu_node_dict[nid] = node
+            self.find_children_gpu_ops(node["id"], node)
+            return nid
+        elif node_type == PyTorchNodeType.LABEL:
+            largest_nid = -1
+            for child in self.pt_nodes:
+                # We should not call dfs for the root node or phase root nodes
+                # as they will be covered by other DFS calls.
+                if (child["parent"] == nid)\
+                        and (nid != root_nid)\
+                        and not self.is_phase_root_node(root_nid, child):
+                    largest_nid = max(largest_nid, self.dfs(child, root_nid))
+            return largest_nid
+        else:
+            raise ValueError(f"Invalid node type: {node_type}")
+        return -1
+
+    def discover_pytorch_cpu_ops(
+        self
+    ) -> None:
+        """
+        Discovers PyTorch CPU operators and populate pt_cpu_node_dict.
+
+        Run DFS on a root node and phase root nodes as they may have CPU operators.
+        DFS populates pt_cpu_node_dict and returns the largest NID within the phase.
+        """
+        root_nid = self.find_root_nid(self.pt_nodes)
+        for node in self.pt_nodes:
+            if (node["id"] == root_nid) or self.is_phase_root_node(root_nid, node):
+                largest_nid_within_phase = self.dfs(node, root_nid)
+                if self.is_phase_root_node(root_nid, node):
+                    self.inter_phase_dependency.append(largest_nid_within_phase)
+
+        # Make sure that the NIDs in inter_phase_dependency are in the increasing order.
+        self.inter_phase_dependency.sort()
+
+    def assign_chakra_ids(
+        self,
+        total_assigned_ids: List[int],
+        assigned_ids: List[int],
+        id: int
+    ) -> int:
+        """
+        This function assign_chakra_ids is designed to assign unique identifiers (IDs).
+        """
+        orig_id = id
+        while True:
+            if id in total_assigned_ids:
+                id += 1
+            else:
+                total_assigned_ids.append(id)
+                if orig_id in assigned_ids.keys():
+                    assigned_ids[orig_id].append(id)
+                else:
+                    assigned_ids[orig_id] = [id]
+                return id
+
+    def merge_gpu_ops_with_cpu_ops(
+        self,
+    ) -> Any:
+        """
+        This function, merge_gpu_ops_with_cpu_ops,
+        aims to integrate GPU operations with corresponding CPU operations
+
+        If a GPU operation is associated with the current CPU node:
+        1) The GPU nodes are sorted based on their timestamp.
+        2) The function ensures that the CPU node duration is longer than the start of the GPU node.
+        3) It then creates a copy of the CPU node, modifies its ID using assign_chakra_ids,
+        and splits the CPU node's duration based on the GPU node's timestamps.
+        """
+        self.logger.info("Merge CPU Kernels with GPU Kernels")
+
+        decomposed_nodes = []
+        assigned_ids = {}
+        total_assigned_ids = []
+        new_pt_gpu_node_dict = {}
+        decomposed_nodes_dep = {}
+        for nid, node in self.pt_cpu_node_dict.items():
+            if self.has_gpu_op(nid):
+                self.pt_gpu_node_dict[nid] = sorted(self.pt_gpu_node_dict[nid], key=lambda kv: kv["ts"])
+
+                for gpu_node in self.pt_gpu_node_dict[nid]:
+                    assert (node["ts"] + node["dur"]) > gpu_node["ts"]
+
+                last_ts = node["ts"]
+                for i in range(len(self.pt_gpu_node_dict[nid])+1):
+                    copy_node = copy.deepcopy(node)
+                    copy_node["id"] = self.assign_chakra_ids(total_assigned_ids, assigned_ids, nid)
+                    copy_node["name"] = copy_node["name"]+"("+str(i)+")"
+                    if i < len(self.pt_gpu_node_dict[nid]):
+                        self.pt_gpu_node_dict[nid][i]["id"] =\
+                                self.assign_chakra_ids(
+                                        total_assigned_ids,
+                                        assigned_ids,
+                                        self.pt_gpu_node_dict[nid][i]["id"])
+                        assert self.pt_gpu_node_dict[nid][i]["ts"] > copy_node["ts"]
+                        copy_node["ts"] = last_ts
+                        copy_node["dur"] = self.pt_gpu_node_dict[nid][i]["ts"]-last_ts
+                        last_ts = self.pt_gpu_node_dict[nid][i]["ts"]
+                        new_pt_gpu_node_dict.setdefault(copy_node["id"], []).append(self.pt_gpu_node_dict[nid][i])
+                    else:
+                        copy_node["dur"] = copy_node["dur"]-(last_ts-copy_node["ts"])
+                        copy_node["ts"] = last_ts
+                        last_ts = copy_node["ts"]+copy_node["dur"]
+
+                    assert (copy_node["ts"] >= 0) and (copy_node["dur"] > 0)
+                    if i > 0:
+                        assert copy_node["ts"] > decomposed_nodes[-1]["ts"]
+                        decomposed_nodes_dep[copy_node["id"]] = decomposed_nodes[-1]["id"]
+                    decomposed_nodes.append(copy_node)
+            else:
+                node["id"] = self.assign_chakra_ids(total_assigned_ids, assigned_ids, nid)
+                decomposed_nodes.append(node)
+
+        merged_pt_cpu_node_dict = {
+            decomposed_node["id"]: decomposed_node for decomposed_node in decomposed_nodes
+        }
+
+        self.pt_cpu_node_dict = merged_pt_cpu_node_dict
+        self.pt_gpu_node_dict = new_pt_gpu_node_dict
+        return assigned_ids, decomposed_nodes_dep
+
+    def validate_pt_node_dict(
+        self,
+    ) -> None:
+        """
+        Raises an exception if any anomaly is detected in pt_cpu_node_dict or
+        pt_gpu_node_dict.
+
+        * NIDs of CPU nodes should be unique.
+        * CPU operators can have at most one GPU operator.
+        """
+        seen_nids = set()
+        for nid, node in self.pt_cpu_node_dict.items():
+            assert nid == node["id"]
+            if nid in seen_nids:
+                self.logger.error(f"NID {nid} is duplicate")
+                raise ValueError("Duplicate NID detected!")
+            seen_nids.add(nid)
+            if nid in self.pt_gpu_node_dict.keys():
+                assert len(self.pt_gpu_node_dict[nid]) == 1
+
+    def discover_pytorch_comm_ops(
+        self,
+        assigned_ids: List[int]
+    ) -> None:
+        """
+        Discovers communication nodes and populate pt_record_param_comms_node_dict
+        and pt_nccl_node_dict.
+        """
+        self.logger.info("Discover communication nodes")
+        for node in self.pt_nodes:
+            if self.is_record_param_comms_node(node):
+                if node["parent"] in assigned_ids.keys():
+                    nodes_to_assign = assigned_ids[node["parent"]]
+                    for parent_id in nodes_to_assign:
+                        self.pt_record_param_comms_node_dict.update({parent_id: node})
+            if self.is_nccl_node(node):
+                self.pt_nccl_node_dict.update({node["parent"]: node})
+
+        for i in range(len(self.inter_phase_dependency)):
+            self.inter_phase_dependency[i] = assigned_ids[self.inter_phase_dependency[i]][-1]
+        self.inter_phase_dependency.sort()
+
+    def update_input_tensor_dict(
+        self,
+        nid: int,
+        inputs: str
+    ) -> int:
+        """
+        Updates input_storage_id_nid_dict and input_tensor_id_nid_dict
+
+        Each dictionary is populcated with mappings between storage ID
+        (or tensor ID) and corresponding node IDs. If node 0 takes tensor 10 as
+        an input, a new mapping will be created like this `10: [0]`
+        """
+        for i in inputs:
+            if self.is_valid_tensor(i):
+                if self.has_valid_storage_id(i):
+                    storage_id = self.get_storage_id_from_tensor(i)
+                    self.input_storage_id_nid_dict.setdefault(storage_id, []).append(nid)
+                else:
+                    tensor_id = self.get_tensor_id_from_tensor(i)
+                    self.input_tensor_id_nid_dict.setdefault(tensor_id, []).append(nid)
+
+    def update_output_tensor_dict(
+        self,
+        nid: int,
+        outputs: str
+    ) -> int:
+        """
+        Updates output_storage_id_nid_dict and output_tensor_id_nid_dict.
+
+        Each dictionary is populcated with mappings between storage ID
+        (or tensor ID) and corresponding node IDs. If node 0 produces tensor 10
+        as an output, a new mapping will be created like this `10: [0]`.
+        """
+        for o in outputs:
+            if self.is_valid_tensor(o):
+                if self.has_valid_storage_id(o):
+                    storage_id = self.get_storage_id_from_tensor(o)
+                    self.output_storage_id_nid_dict.setdefault(storage_id, []).append(nid)
+                else:
+                    tensor_id = self.get_tensor_id_from_tensor(o)
+                    self.output_tensor_id_nid_dict.setdefault(tensor_id, []).append(nid)
+
+    def convert_pytorch_node_to_chakra_node(
+        self,
+        pt_node: Dict[str, Any]
+    ) -> ChakraNode:
+        """
+        Converts a PyToch node to a Chakra node.
+        """
+        ck_node = ChakraNode()
+        ck_node.id = pt_node["id"]
+        ck_node.name = pt_node["name"]
+        ck_node.type = self.get_chakra_node_type_from_pytorch_node(pt_node)
+        ck_node.ctrl_deps.append(pt_node["parent"])
+        if "dur" in pt_node.keys():
+            ck_node.duration_micros = pt_node["dur"]
+        else:
+            ck_node.duration_micros = 0
+        ck_node.inputs.values = str(pt_node["inputs"])
+        ck_node.inputs.shapes = str(pt_node["input_shapes"])
+        ck_node.inputs.types = str(pt_node["input_types"])
+        ck_node.outputs.values = str(pt_node["outputs"])
+        ck_node.outputs.shapes = str(pt_node["output_shapes"])
+        ck_node.outputs.types = str(pt_node["output_types"])
+        ck_node.attr.append(
+                ChakraAttr(name="is_cpu_op",
+                           bool_val=self.is_cpu_op(pt_node)))
+        if "fw_parent" in pt_node.keys():
+            ck_node.attr.append(
+                    ChakraAttr(name="fw_parent",
+                               int64_val=pt_node["fw_parent"]))
+        if "fw_tid" in pt_node.keys():
+            ck_node.attr.append(
+                    ChakraAttr(name="fw_tid",
+                               int64_val=pt_node["fw_tid"]))
+        if "op_schema" in pt_node.keys():
+            ck_node.attr.append(
+                    ChakraAttr(name="op_schema",
+                               string_val=pt_node["op_schema"]))
+        if "seq_id" in pt_node.keys():
+            ck_node.attr.append(
+                    ChakraAttr(name="seq_id",
+                               int64_val=pt_node["seq_id"]))
+        if "rf_id" in pt_node.keys():
+            ck_node.attr.append(
+                    ChakraAttr(name="rf_id",
+                               int64_val=pt_node["rf_id"]))
+        if "scope" in pt_node.keys():
+            ck_node.attr.append(
+                    ChakraAttr(name="scope",
+                               int64_val=pt_node["scope"]))
+        if "tid" in pt_node.keys():
+            ck_node.attr.append(
+                    ChakraAttr(name="tid",
+                               int64_val=pt_node["tid"]))
+        return ck_node
+
+    def get_nccl_node(
+        self,
+        nid: int
+    ) -> Dict[str, Any]:
+        """
+        Returns a PyTorch NCCL node for a given Chakra NID.
+
+        For communication nodes, finding a corresponding NCCL node is critical
+        to identify the communication type and communication size.
+
+        There are two cases:
+          (1) Given node is a parent of a record_param_comms node
+            * In this case, the corresponding NCCL node should be a child of
+            the record_param_comms_pt node.
+          (2) Given node is a parent of a NCCL node
+        """
+        pt_nccl_node = None
+        if nid in self.pt_record_param_comms_node_dict.keys():
+            pt_record_param_comms_node = self.pt_record_param_comms_node_dict[nid]
+            rpcp_nid = pt_record_param_comms_node["id"]
+            if rpcp_nid in self.pt_nccl_node_dict.keys():
+                pt_nccl_node = self.pt_nccl_node_dict[rpcp_nid]
+            else:
+                raise ValueError(
+                        f"NID {nid} has a pt_record_param_comms_node "
+                        f"but it does not have a correspondin pt_nccl_node.")
+        elif nid in self.pt_nccl_node_dict.keys():
+            pt_nccl_node = self.pt_nccl_node_dict[nid]
+        else:
+            raise ValueError(
+                f"NID {nid} does not have an entry in pt_record_param_comms_node_dict "
+                f"nor pt_nccl_node_dict"
             )
-            encode_message(chakra_et, md)
+        return pt_nccl_node
 
-            self.dfs(pytorch_et_data["nodes"][0], pytorch_et_data, pt_node_dict)
+    def add_gpu_chakra_node(
+        self,
+        ck_cpu_node: ChakraNode
+    ) -> None:
+        """
+        Converts a PyTorch GPU node to a Chakra node and add it to ck_node_dict.
+        """
+        assert ck_cpu_node.id in self.pt_gpu_node_dict.keys()
+        pt_gpu_node = self.pt_gpu_node_dict[ck_cpu_node.id][0]
+        if len(self.pt_gpu_node_dict[ck_cpu_node.id]) != 1:
+            raise ValueError(f"Chakra node {ck_cpu_node.id} has more than one GPU operators")
+        ck_gpu_node = self.convert_pytorch_node_to_chakra_node(pt_gpu_node)
+        if ck_cpu_node.type == COMM_COLL_NODE:
+            pt_nccl_node = self.get_nccl_node(ck_cpu_node.id)
+            ck_gpu_node.attr.append(
+                    ChakraAttr(name="comm_type",
+                               int64_val=self.get_collective_comm_type(pt_nccl_node)))
+            ck_gpu_node.attr.append(
+                    ChakraAttr(name="comm_size",
+                               int64_val=self.get_comm_size(pt_nccl_node)))
+            attr = ChakraAttr(name="involved_dim")
+            for _ in range(self.num_dims):
+                attr.bool_list.values.append(True)
+            ck_gpu_node.attr.append(attr)
+        ck_gpu_node.data_deps.append(ck_cpu_node.id)
+        self.ck_node_dict[ck_gpu_node.id] = ck_gpu_node
 
-            self.logger.info("Identify communication nodes")
-            for pt_node in pytorch_et_data["nodes"]:
-                if "record_param_comms" in pt_node["name"]:
-                    record_param_comms_pt_node_dict.update({pt_node["parent"]: pt_node})
-                if "nccl:" in pt_node["name"]:
-                    nccl_pt_node_dict.update({pt_node["parent"]: pt_node})
+    def identify_data_dependency_with_storage_id(
+        self
+    ) -> None:
+        """
+        Identifies data dependency between operators with storage IDs.
+        """
+        self.logger.info("Identify data dependency with storage IDs")
+        for input_storage_id, child_nids in self.input_storage_id_nid_dict.items():
+            if input_storage_id in self.output_storage_id_nid_dict:
+                parent_nids = self.output_storage_id_nid_dict[input_storage_id]
+                for child_nid in child_nids:
+                    for parent_nid in parent_nids:
+                        child_node = self.ck_node_dict[child_nid]
+                        if (parent_nid not in child_node.data_deps)\
+                        and (parent_nid < child_nid):
+                            child_node.data_deps.append(parent_nid)
 
-            self.logger.info("Convert PyTorch nodes to Chakra nodes")
-            for pt_node_id, pt_node in pt_node_dict.items():
-                for i in pt_node["inputs"]:
-                    if isinstance(i, list) and len(i) == 6:
-                        tensor_id = i[0]
-                        storage_id = i[1]
-                        if storage_id > 0:
-                            input_storage_id_node_id_dict.setdefault(storage_id, []).append(pt_node["id"])
-                        else:
-                            input_tensor_id_node_id_dict.setdefault(tensor_id, []).append(pt_node["id"])
-                for o in pt_node["outputs"]:
-                    if isinstance(o, list) and len(o) == 6:
-                        tensor_id = o[0]
-                        storage_id = o[1]
-                        if storage_id > 0:
-                            output_storage_id_node_id_dict.setdefault(storage_id, []).append(pt_node["id"])
-                        else:
-                            output_tensor_id_node_id_dict.setdefault(tensor_id, []).append(pt_node["id"])
+    def identify_data_dependency_with_tensor_id(
+        self
+    ) -> None:
+        """
+        Identifies data dependency between operators with tensor IDs.
+        """
+        self.logger.info("Identify data dependency with tensor IDs")
+        for input_tensor_id, child_nids in self.input_tensor_id_nid_dict.items():
+            if input_tensor_id in self.output_tensor_id_nid_dict:
+                parent_nids = self.output_tensor_id_nid_dict[input_tensor_id]
+                for child_nid in child_nids:
+                    for parent_nid in parent_nids:
+                        child_node = self.ck_node_dict[child_nid]
+                        if (parent_nid not in child_node.data_deps)\
+                        and (parent_nid < child_nid):
+                            child_node.data_deps.append(parent_nid)
 
-                ck_node = ChakraNode()
-                ck_node.id = pt_node["id"]
-                ck_node.name = pt_node["name"]
-                ck_node.type = self.get_node_type(pt_node)
-                ck_node.inputs = str(pt_node["inputs"])
-                ck_node.input_shapes = str(pt_node["input_shapes"])
-                ck_node.input_types = str(pt_node["input_types"])
-                ck_node.outputs = str(pt_node["outputs"])
-                ck_node.output_shapes = str(pt_node["output_shapes"])
-                ck_node.output_types = str(pt_node["output_types"])
+    def identify_data_dependency(
+        self
+    ) -> None:
+        """
+        Identifies data dependency between operators using tensors.
 
-                attrs = [("fw_parent", UINT), ("fw_tid", UINT), ("op_schema", STRING),
-                        ("parent", UINT), ("seq_id", INT), ("rf_id", UINT), ("scope", UINT), ("tid", UINT)]
-                for attr_name, attr_type in attrs:
-                    attr = self.get_attr(pt_node, attr_name, attr_type)
-                    ck_node.attribute.append(attr)
+        Dependencies between operators can be identified by their tensor input/
+        output relationships. A tensor can be identified by either a storage ID
+        or a tensor ID. Use the storage ID if it's valid; otherwise, use the
+        tensor ID.
+        """
+        self.logger.info("Identify data dependency")
+        self.identify_data_dependency_with_storage_id()
+        self.identify_data_dependency_with_tensor_id()
 
-                # Convert compute nodes
-                if ck_node.type == COMP_NODE:
-                    attr = ChakraAttr(name="runtime", type=INT)
-                    if "dur" in pt_node.keys():
-                        attr.i = pt_node["dur"]
-                    else:
-                        attr.i = 0
-                    ck_node.attribute.append(attr)
+    def write_chakra_et(
+        self,
+    ) -> None:
+        self.logger.info("Write Chakra trace")
 
-                # Convert collective communication nodes
-                elif ck_node.type == COMM_COLL_NODE:
-                    if ck_node.id in record_param_comms_pt_node_dict.keys():
-                        record_param_comms_pt_node = record_param_comms_pt_node_dict[ck_node.id]
-                        nccl_pt_node = nccl_pt_node_dict[record_param_comms_pt_node["id"]]
-                    else:
-                        nccl_pt_node = nccl_pt_node_dict[ck_node.id]
+        self.logger.info("Encode global metadata")
+        md = GlobalMetadata(
+            attr=[
+                ChakraAttr(name="schema", string_val=self.pt_schema),
+                ChakraAttr(name="pid", uint64_val=self.pt_pid),
+                ChakraAttr(name="time", string_val=self.pt_time),
+                ChakraAttr(name="start_ts", uint64_val=self.pt_start_ts),
+                ChakraAttr(name="finish_ts", uint64_val=self.pt_finish_ts)
+            ]
+        )
+        encode_message(self.chakra_et, md)
 
-                    attr = ChakraAttr(name="comm_type", type=INT)
-                    attr.i = self.get_comm_type(nccl_pt_node)
-                    ck_node.attribute.append(attr)
-
-                    attr = ChakraAttr(name="comm_size", type=INT)
-                    attr.i = self.get_comm_size(nccl_pt_node)
-                    ck_node.attribute.append(attr)
-
-                    attr = ChakraAttr(name="involved_dim", type=BOOLS)
-                    for _ in range(self.num_dims):
-                        attr.bools.append(True)
-                    ck_node.attribute.append(attr)
-
-                ck_node_dict[ck_node.id] = ck_node
-
-            self.logger.info("Encode data dependency with storage IDs")
-            for input_storage_id, child_node_ids in input_storage_id_node_id_dict.items():
-                if input_storage_id in output_storage_id_node_id_dict:
-                    parent_node_ids = output_storage_id_node_id_dict[input_storage_id]
-                    for child_node_id in child_node_ids:
-                        for parent_node_id in parent_node_ids:
-                            child_node = ck_node_dict[child_node_id]
-                            if (parent_node_id not in child_node.parent)\
-                            and child_node.id != parent_node_id:
-                                child_node.parent.append(parent_node_id)
-
-                                # remove cycles
-                                parent_node = ck_node_dict[parent_node_id]
-                                if (parent_node_id in child_node.parent) and\
-                                   (child_node_id in parent_node.parent):
-                                   if child_node_id < parent_node_id:
-                                       child_node.parent.remove(parent_node_id)
-                                   else:
-                                       parent_node.parent.remove(child_node_id)
-
-            self.logger.info("Encode data dependency with tensor IDs")
-            for input_tensor_id, child_node_ids in input_tensor_id_node_id_dict.items():
-                if input_tensor_id in output_tensor_id_node_id_dict:
-                    parent_node_ids = output_tensor_id_node_id_dict[input_tensor_id]
-                    for child_node_id in child_node_ids:
-                        for parent_node_id in parent_node_ids:
-                            child_node = ck_node_dict[child_node_id]
-                            if (parent_node_id not in child_node.parent)\
-                            and child_node.id != parent_node_id:
-                                child_node.parent.append(parent_node_id)
-
-                                # remove cycles
-                                parent_node = ck_node_dict[parent_node_id]
-                                if (parent_node_id in child_node.parent) and\
-                                   (child_node_id in parent_node.parent):
-                                   if child_node_id < parent_node_id:
-                                       child_node.parent.remove(parent_node_id)
-                                   else:
-                                       parent_node.parent.remove(child_node_id)
-
-            self.logger.info("Write Chakra traces")
-            for ck_node_id in sorted(ck_node_dict.keys()):
-                ck_node = ck_node_dict[ck_node_id]
-                encode_message(chakra_et, ck_node)
+        self.logger.info("Encode nodes (operators)")
+        seen_nids = set()
+        for nid in sorted(self.ck_node_dict.keys()):
+            if nid in seen_nids:
+                self.logger.error(f"NID {nid} is duplicate")
+                raise ValueError("Duplicate NID detected!")
+            seen_nids.add(nid)
+            ck_node = self.ck_node_dict[nid]
+            encode_message(self.chakra_et, ck_node)
 
         self.logger.info("All Chakra nodes are written to the output file")
+
+    def convert(
+        self
+    ) -> None:
+        self.sort_pytorch_nodes_with_starting_time()
+
+        self.discover_pytorch_cpu_ops()
+
+        total_runtime_ns = self.get_total_runtime_ms(list(self.pt_cpu_node_dict.values())) * 1000
+        self.logger.info(f"Total runtime exluding children operators: {total_runtime_ns} ns")
+
+        assigned_ids, decomposed_nodes_dep = self.merge_gpu_ops_with_cpu_ops()
+
+        self.validate_pt_node_dict()
+
+        self.discover_pytorch_comm_ops(assigned_ids)
+
+        self.logger.info("Convert PyTorch nodes to Chakra nodes")
+        for pt_nid, pt_node in self.pt_cpu_node_dict.items():
+            self.update_input_tensor_dict(pt_node["id"], pt_node["inputs"])
+            self.update_output_tensor_dict(pt_node["id"], pt_node["outputs"])
+            if pt_nid in self.pt_gpu_node_dict.keys():
+                for pt_gpu_node in self.pt_gpu_node_dict[pt_nid]:
+                    self.update_input_tensor_dict(pt_gpu_node["id"], pt_gpu_node["inputs"])
+                    # Assumption: same input / output as its parent CPU operator
+
+            ck_node = self.convert_pytorch_node_to_chakra_node(pt_node)
+            self.ck_node_dict[ck_node.id] = ck_node
+            if self.has_gpu_op(ck_node.id):
+                self.add_gpu_chakra_node(ck_node)
+
+            # Adding previous phase node dependency
+            dep_nid = self.get_prev_inter_phase_dep_nid(ck_node)
+            if (dep_nid != -1) and (dep_nid not in ck_node.data_deps):
+                ck_node.data_deps.append(dep_nid)
+
+            # Adding decomposed nodes dependency
+            if (pt_nid in decomposed_nodes_dep.keys())\
+                    and (decomposed_nodes_dep[pt_nid] not in ck_node.data_deps):
+                 ck_node.data_deps.append(decomposed_nodes_dep[pt_nid])
+
+        self.identify_data_dependency()
+
+        self.write_chakra_et()
