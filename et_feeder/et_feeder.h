@@ -32,6 +32,7 @@ class ETFeeder {
   void freeChildrenNodes(uint64_t node_id);
 
  private:
+  void readGlobalMetadata();
   std::shared_ptr<ETFeederNode> readNode();
   void readNextWindow();
   void resolveDep();
