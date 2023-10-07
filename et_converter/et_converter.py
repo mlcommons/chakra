@@ -6,9 +6,9 @@ import sys
 import traceback
 
 from logging import FileHandler
-from et_converter.text2chakra_converter import Text2ChakraConverter
-from et_converter.flexflow2chakra_converter import FlexFlow2ChakraConverter
-from et_converter.pytorch2chakra_converter import PyTorch2ChakraConverter
+from .text2chakra_converter import Text2ChakraConverter
+from .flexflow2chakra_converter import FlexFlow2ChakraConverter
+from .pytorch2chakra_converter import PyTorch2ChakraConverter
 
 def get_logger(log_filename: str) -> logging.Logger:
     formatter = logging.Formatter(

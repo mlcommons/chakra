@@ -4,8 +4,8 @@ import json
 import logging
 from typing import Any, Dict
 
-from third_party.utils.protolib import encodeMessage as encode_message
-from et_def.et_def_pb2 import (
+from chakra.third_party.utils.protolib import encodeMessage as encode_message
+from chakra.et_def.et_def_pb2 import (
     GlobalMetadata,
     Node as ChakraNode,
     AttributeProto as ChakraAttr,
