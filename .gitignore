@@ -1,0 +1,4 @@
+*.egg-info/
+build/
+*_pb2*.py*
+*.pyc

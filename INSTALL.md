@@ -1,13 +1,23 @@
 # Chakra
 ## Installation
-We use `setuptools` to install/uninstall the `chakra` package:
+We use `pip` to install/uninstall the `chakra` package:
 ```shell
-# Install package
+# Install package from source
+$ pip install .
+
+# Install latest from github
+$ pip install https://github.com/mlcommons/chakra/archive/refs/heads/main.zip
+
+# Install specific revision from github
+$ pip install https://github.com/mlcommons/chakra/archive/ae7c671db702eb1384015bb2618dc753eed787f2.zip
+
+# Install as dependency from requirements.txt
+$ cat requirements.txt
+chakra@https://github.com/mlcommons/chakra/archive/ae7c671db702eb1384015bb2618dc753eed787f2.zip
 $ pip install -r requirements.txt
-$ python setup.py install
 
 # Uninstall package
-$ python -m pip uninstall chakra
+$ pip uninstall chakra
 ```
 
 ## Execution Trace Converter (et_converter)
