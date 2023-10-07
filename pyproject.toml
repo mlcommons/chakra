@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "chakra"
-requires-python = ">=3.8"
+requires-python = ">=3.7"
 version = "0.0.3"
 readme = "README.md"
 license = {file = "LICENSE.md"}
