@@ -242,7 +242,7 @@ def two_comp_nodes_dependent(num_npus: int, runtime: int) -> None:
             encode_message(et, child_node)
 
 
-def one_comm_send_node(num_npus: int, num_dims: int) -> None:
+def one_comm_send_node(num_npus: int, comm_size: int) -> None:
     for npu_id in range(num_npus):
         output_filename = f"one_comm_send_node.{npu_id}.et"
         with open(output_filename, "wb") as et:
@@ -256,10 +256,12 @@ def one_comm_send_node(num_npus: int, num_dims: int) -> None:
             else:
                 attr.i = npu_id + 1
             node.attribute.append(attr)
+            attr = get_comm_size_attr(comm_size)
+            node.attribute.append(attr)
             encode_message(et, node)
 
 
-def one_comm_recv_node(num_npus: int, num_dims: int) -> None:
+def one_comm_recv_node(num_npus: int, comm_size: int) -> None:
     for npu_id in range(num_npus):
         output_filename = f"one_comm_recv_node.{npu_id}.et"
         with open(output_filename, "wb") as et:
@@ -272,6 +274,8 @@ def one_comm_recv_node(num_npus: int, num_dims: int) -> None:
             node.attribute.append(attr)
             attr = get_attr("dst", INT)
             attr.i = npu_id
+            node.attribute.append(attr)
+            attr = get_comm_size_attr(comm_size)
             node.attribute.append(attr)
             encode_message(et, node)
 
