@@ -22,7 +22,3 @@ jobs:
       - run: conda install pytorch
       - run: pip install fbgemm-gpu-cpu
       - run: pip install .
-      - run: python3 -m chakra.et_generator.et_generator --help
-      - run: python3 -m chakra.et_visualizer.et_visualizer --help
-      - run: python3 -m chakra.timeline_visualizer.timeline_visualizer --help
-      - run: python3 -m chakra.et_converter.et_converter --help

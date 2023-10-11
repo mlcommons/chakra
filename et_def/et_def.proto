@@ -1,9 +1,110 @@
-syntax = "proto2";
+syntax = "proto3";
 
 package ChakraProtoMsg;
 
-enum NodeType
-{
+message AttributeProto {
+  string name = 1;
+  string doc_string = 2;
+
+  oneof value {
+    double double_val = 3;
+    DoubleList double_list = 4;
+    float float_val = 5;
+    FloatList float_list = 6;
+    int32 int32_val = 7;
+    Int32List int32_list = 8;
+    int64 int64_val = 9;
+    Int64List int64_list = 10;
+    uint32 uint32_val = 11;
+    Uint32List uint32_list = 12;
+    uint64 uint64_val = 13;
+    Uint64List uint64_list = 14;
+    sint32 sint32_val = 15;
+    Sint32List sint32_list = 16;
+    sint64 sint64_val = 17;
+    Sint64List sint64_list = 18;
+    fixed32 fixed32_val = 19;
+    Fixed32List fixed32_list = 20;
+    fixed64 fixed64_val = 21;
+    Fixed64List fixed64_list = 22;
+    sfixed32 sfixed32_val = 23;
+    Sfixed32List sfixed32_list = 24;
+    sfixed64 sfixed64_val = 25;
+    Sfixed64List sfixed64_list = 26;
+    bool bool_val = 27;
+    BoolList bool_list = 28;
+    string string_val = 29;
+    StringList string_list = 30;
+    bytes bytes_val = 31;
+    BytesList bytes_list = 32;
+  }
+}
+
+message DoubleList {
+  repeated double values = 1;
+}
+
+message FloatList {
+  repeated float values = 1;
+}
+
+message Int32List {
+  repeated int32 values = 1;
+}
+
+message Int64List {
+  repeated int64 values = 1;
+}
+
+message Uint32List {
+  repeated uint32 values = 1;
+}
+
+message Uint64List {
+  repeated uint64 values = 1;
+}
+
+message Sint32List {
+  repeated sint32 values = 1;
+}
+
+message Sint64List {
+  repeated sint64 values = 1;
+}
+
+message Fixed32List {
+  repeated fixed32 values = 1;
+}
+
+message Fixed64List {
+  repeated fixed64 values = 1;
+}
+
+message Sfixed32List {
+  repeated sfixed32 values = 1;
+}
+
+message Sfixed64List {
+  repeated sfixed64 values = 1;
+}
+
+message BoolList {
+  repeated bool values = 1;
+}
+
+message StringList {
+  repeated string values = 1;
+}
+
+message BytesList {
+  repeated bytes values = 1;
+}
+
+message GlobalMetadata {
+  repeated AttributeProto attr = 1;
+}
+
+enum NodeType {
   INVALID_NODE = 0;
   METADATA_NODE = 1;
   MEM_LOAD_NODE = 2;
@@ -14,59 +115,48 @@ enum NodeType
   COMM_COLL_NODE = 7;
 }
 
-enum AttributeType
-{
-  BOOL = 0;
-  FLOAT = 1;
-  UINT = 2;
-  INT = 3;
-  STRING = 4;
-  BOOLS = 5;
-  FLOATS = 6;
-  UINTS = 7;
-  INTS = 8;
-  STRINGS = 9;
-}
-
-enum CollectiveCommType
-{
+enum CollectiveCommType {
   ALL_REDUCE = 0;
-  ALL_TO_ALL = 1;
+  REDUCE = 1;
   ALL_GATHER = 2;
-  REDUCE_SCATTER = 3;
-  BROADCAST = 4;
-}
-
-message AttributeProto {
-  required string name = 1;
-  required AttributeType type = 2;
-  optional string doc_string = 3;
-  optional bool b = 4;
-  optional float f = 5;
-  optional uint64 u = 6;
-  optional int64 i = 7;
-  optional string s = 8;
-  repeated bool bools = 9;
-  repeated float floats = 10;
-  repeated uint64 uints = 11;
-  repeated int64 ints = 12;
-  repeated string strings = 13;
-}
-
-message GlobalMetadata {
-  repeated AttributeProto attribute = 1;
+  GATHER = 3;
+  SCATTER = 4;
+  BROADCAST = 5;
+  ALL_TO_ALL = 6;
+  REDUCE_SCATTER = 7;
+  REDUCE_SCATTER_BLOCK = 8;
+  BARRIER = 9;
 }
 
 message Node {
-  required uint64 id = 1;
-  required string name = 2;
-  required NodeType type = 3 [default = INVALID_NODE];
-  repeated uint64 parent = 4;
-  optional string inputs = 5;
-  optional string input_shapes = 6;
-  optional string input_types = 7;
-  optional string outputs = 8;
-  optional string output_shapes = 9;
-  optional string output_types = 10;
-  repeated AttributeProto attribute = 11;
+  uint64 id = 1;
+  string name = 2;
+  NodeType type = 3;
+
+  // Control and data dependencies
+  repeated uint64 ctrl_deps = 4;
+  repeated uint64 data_deps = 5;
+
+  // Timing information
+  uint64 start_time_micros = 6;
+  uint64 duration_micros = 7;
+
+  IOInfo inputs = 8;
+  IOInfo outputs = 9;
+  repeated AttributeProto attr = 10;
+}
+
+message IOInfo {
+  string values = 1;
+  string shapes = 2;
+  string types = 3;
+}
+
+message Tensor {
+    uint64 tensor_id = 1;  // An unique ID for the TensorImpl object.
+    uint64 storage_id = 2; // An unique ID for the underlying storage object.
+    uint64 offset = 3;     // Offset to the storage memory.
+    uint64 num_elem = 4;   // Number of elements in the storage.
+    uint64 elem_bytes = 5; // Number of bytes per element.
+    string device = 6;     // Tensor object device location.
 }
