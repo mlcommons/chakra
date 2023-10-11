@@ -30,7 +30,7 @@ bool ETFeeder::hasNodesToIssue() {
 
 shared_ptr<ETFeederNode> ETFeeder::getNextIssuableNode() {
   if (dep_free_node_queue_.size() != 0) {
-    shared_ptr<ETFeederNode> node = dep_free_node_queue_.front();
+    shared_ptr<ETFeederNode> node = dep_free_node_queue_.top();
     dep_free_node_id_set_.erase(node->getChakraNode()->id());
     dep_free_node_queue_.pop();
     return node;
