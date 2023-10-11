@@ -12,7 +12,6 @@ from chakra.et_def.et_def_pb2 import (
     COMP_NODE,
     COMM_SEND_NODE,
     COMM_RECV_NODE,
-    INT,
 )
 
 class FlexFlow2ChakraConverter:
@@ -109,9 +108,7 @@ class FlexFlow2ChakraConverter:
         ck_node.name = self.get_name(ff_node)
         ck_node.type = self.get_node_type(ff_node)
         if ck_node.type == COMP_NODE:
-            attr = ChakraAttr(name="runtime", type=INT)
-            attr.i = self.get_runtime(ff_node)
-            ck_node.attribute.append(attr)
+            ck_node.duration_micros = self.get_runtime(ff_node)
         elif ck_node.type == COMM_SEND_NODE:
             self.node_id_comm_info_dict[ck_node.id] = {}
             self.node_id_comm_info_dict[ck_node.id]["comm_src"] = self.get_comm_src(ff_node)
@@ -190,21 +187,18 @@ class FlexFlow2ChakraConverter:
                             ck_comm_node.type = COMM_RECV_NODE
                         ck_comm_node.name += f"_{ck_node.name}"
 
-                        attr = ChakraAttr(name="comm_src", type=INT)
-                        attr.i = self.node_id_comm_info_dict[ck_node.id]["comm_src"]
-                        ck_comm_node.attribute.append(attr)
-
-                        attr = ChakraAttr(name="comm_dst", type=INT)
-                        attr.i = self.node_id_comm_info_dict[ck_node.id]["comm_dst"]
-                        ck_comm_node.attribute.append(attr)
-
-                        attr = ChakraAttr(name="comm_size", type=INT)
-                        attr.i = self.node_id_comm_info_dict[ck_node.id]["comm_size"]
-                        ck_comm_node.attribute.append(attr)
-
-                        attr = ChakraAttr(name="comm_tag", type=INT)
-                        attr.i = comm_tag
-                        ck_comm_node.attribute.append(attr)
+                        ck_comm_node.attr.append(
+                                ChakraAttr(name="comm_src",
+                                           int64_val=self.node_id_comm_info_dict[ck_node.id]["comm_src"]))
+                        ck_comm_node.attr.append(
+                                ChakraAttr(name="comm_dst",
+                                           int64_val=self.node_id_comm_info_dict[ck_node.id]["comm_dst"]))
+                        ck_comm_node.attr.append(
+                                ChakraAttr(name="comm_size",
+                                           int64_val=self.node_id_comm_info_dict[ck_node.id]["comm_size"]))
+                        ck_comm_node.attr.append(
+                                ChakraAttr(name="comm_tag",
+                                           int64_val=comm_tag))
 
                         per_npu_comm_nodes += 1
                         total_comm_nodes += 1
