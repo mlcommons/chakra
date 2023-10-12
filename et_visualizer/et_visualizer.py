@@ -42,8 +42,14 @@ def main() -> None:
                    label=f"{node.name}",
                    id=str(node.id),
                    shape="record")
-            for parent_id in node.parent:
-                f.edge(str(parent_id), str(node.id))
+
+            # Handling data dependencies
+            for data_dep_id in node.data_deps:
+                f.edge(str(data_dep_id), str(node.id), arrowhead="normal")  # using "normal" arrow for data_deps
+
+            # Handling control dependencies
+            for ctrl_dep_id in node.ctrl_deps:
+                f.edge(str(ctrl_dep_id), str(node.id), arrowhead="tee")  # using "tee" arrow for ctrl_deps
 
         if args.output_filename.endswith(".pdf"):
             f.render(args.output_filename.replace(".pdf", ""),
@@ -55,8 +61,15 @@ def main() -> None:
         G = nx.DiGraph()
         while decode_message(et, node):
             G.add_node(node.id, label=node.name)
-            for parent_id in node.parent:
-                G.add_edge(parent_id, node.id)
+
+            # Handling data dependencies
+            for data_dep_id in node.data_deps:
+                G.add_edge(data_dep_id, node.id, dependency="data")
+
+            # Handling control dependencies
+            for ctrl_dep_id in node.ctrl_deps:
+                G.add_edge(ctrl_dep_id, node.id, dependency="control")
+
         nx.write_graphml(G, args.output_filename)
 
     et.close()
