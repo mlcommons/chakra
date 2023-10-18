@@ -101,7 +101,8 @@ message BytesList {
 }
 
 message GlobalMetadata {
-  repeated AttributeProto attr = 1;
+  string version = 1;
+  repeated AttributeProto attr = 2;
 }
 
 enum NodeType {
