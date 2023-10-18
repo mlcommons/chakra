@@ -5,8 +5,22 @@ import argparse
 from third_party.utils.protolib import encodeMessage as encode_message
 from et_def.et_def_pb2 import (
     Node as ChakraNode,
+    DoubleList,
+    FloatList,
+    Int32List,
+    Int64List,
+    Uint32List,
+    Uint64List,
+    Sint32List,
+    Sint64List,
+    Fixed32List,
+    Fixed64List,
+    Sfixed32List,
+    Sfixed64List,
+    BoolList,
+    StringList,
+    BytesList,
     AttributeProto as ChakraAttr,
-    INVALID_NODE,
     METADATA_NODE,
     MEM_LOAD_NODE,
     MEM_STORE_NODE,
@@ -34,24 +48,79 @@ def get_node(node_name: str, node_type: int) -> ChakraNode:
 
 
 def get_comm_type_attr(comm_type: int) -> ChakraAttr:
-    attr = ChakraAttr(name="comm_type")
-    attr.i = comm_type
-    return attr
+    return ChakraAttr(name="comm_type", int64_val=comm_type)
 
 
 def get_involved_dim_attr(num_dims: int) -> ChakraAttr:
-    attr = ChakraAttr(name="involved_dim")
-    for i in range(num_dims):
-        attr.bool_list.values.append(True)
-    return attr
+    return ChakraAttr(name="involved_dim", bool_list=BoolList(values=[True] * num_dims))
 
 
-def one_metadata_node_bool(num_npus: int) -> None:
+def one_metadata_node_all_types(num_npus: int) -> None:
     for npu_id in range(num_npus):
-        output_filename = f"one_metadata_node_bool.{npu_id}.et"
+        output_filename = f"one_metadata_node_all_types.{npu_id}.et"
         with open(output_filename, "wb") as et:
             node = get_node("METADATA_NODE", METADATA_NODE)
-            node.attr.append(ChakraAttr(name="bool", bool_val=True))
+
+            node.attr.append(ChakraAttr(name="double", double_val=1.2345, doc_string="double"))
+            double_list = DoubleList(values=[1.2345, 2.3456])
+            node.attr.append(ChakraAttr(name="double_list", double_list=double_list))
+
+            node.attr.append(ChakraAttr(name="float", float_val=1.2345, doc_string="float"))
+            float_list = FloatList(values=[1.2345, 2.3456])
+            node.attr.append(ChakraAttr(name="float_list", float_list=float_list))
+
+            node.attr.append(ChakraAttr(name="int32", int32_val=12345, doc_string="int32"))
+            int32_list = Int32List(values=[12345, 23456])
+            node.attr.append(ChakraAttr(name="int32_list", int32_list=int32_list))
+
+            node.attr.append(ChakraAttr(name="int64", int64_val=9876543210, doc_string="int64"))
+            int64_list = Int64List(values=[9876543210, 1234567890])
+            node.attr.append(ChakraAttr(name="int64_list", int64_list=int64_list))
+
+            node.attr.append(ChakraAttr(name="uint32", uint32_val=12345, doc_string="uint32"))
+            uint32_list = Uint32List(values=[12345, 23456])
+            node.attr.append(ChakraAttr(name="uint32_list", uint32_list=uint32_list))
+
+            node.attr.append(ChakraAttr(name="uint64", uint64_val=9876543210, doc_string="uint64"))
+            uint64_list = Uint64List(values=[9876543210, 1234567890])
+            node.attr.append(ChakraAttr(name="uint64_list", uint64_list=uint64_list))
+
+            node.attr.append(ChakraAttr(name="sint32", sint32_val=-12345, doc_string="sint32"))
+            sint32_list = Sint32List(values=[12345, -23456])
+            node.attr.append(ChakraAttr(name="sint32_list", sint32_list=sint32_list))
+
+            node.attr.append(ChakraAttr(name="sint64", sint64_val=-9876543210, doc_string="sint64"))
+            sint64_list = Sint64List(values=[9876543210, -1234567890])
+            node.attr.append(ChakraAttr(name="sint64_list", sint64_list=sint64_list))
+
+            node.attr.append(ChakraAttr(name="fixed32", fixed32_val=12345))
+            fixed32_list = Fixed32List(values=[12345, 23456])
+            node.attr.append(ChakraAttr(name="fixed32_list", fixed32_list=fixed32_list))
+
+            node.attr.append(ChakraAttr(name="fixed64", fixed64_val=9876543210))
+            fixed64_list = Fixed64List(values=[9876543210, 1234567890])
+            node.attr.append(ChakraAttr(name="fixed64_list", fixed64_list=fixed64_list))
+
+            node.attr.append(ChakraAttr(name="sfixed32", sfixed32_val=-12345))
+            sfixed32_list = Sfixed32List(values=[12345, -23456])
+            node.attr.append(ChakraAttr(name="sfixed32_list", sfixed32_list=sfixed32_list))
+
+            node.attr.append(ChakraAttr(name="sfixed64", sfixed64_val=-9876543210))
+            sfixed64_list = Sfixed64List(values=[9876543210, -1234567890])
+            node.attr.append(ChakraAttr(name="sfixed64_list", sfixed64_list=sfixed64_list))
+
+            node.attr.append(ChakraAttr(name="bool", bool_val=True, doc_string="bool"))
+            bool_list = BoolList(values=[i % 2 == 0 for i in range(10)])
+            node.attr.append(ChakraAttr(name="bool_list", bool_list=bool_list))
+
+            node.attr.append(ChakraAttr(name="string", string_val="12345", doc_string="string"))
+            string_list = StringList(values=[str(12345+i) for i in range(10)])
+            node.attr.append(ChakraAttr(name="string_list", string_list=string_list))
+
+            node.attr.append(ChakraAttr(name="bytes", bytes_val=bytes("12345")))
+            bytes_list = BytesList(values=[bytes(str(12345+i)) for i in range(10)])
+            node.attr.append(ChakraAttr(name="bytes_list", bytes_list=bytes_list))
+
             encode_message(et, node)
 
 
@@ -60,9 +129,7 @@ def one_mem_load_node(num_npus: int, tensor_size: int) -> None:
         output_filename = f"one_mem_load_node.{npu_id}.et"
         with open(output_filename, "wb") as et:
             node = get_node("MEM_LOAD_NODE", MEM_LOAD_NODE)
-            attr = get_attr("tensor_size", INT)
-            attr.i = tensor_size
-            node.attr.append(attr)
+            node.attr.append(ChakraAttr(name="tensor_size", uint64_val=tensor_size))
             encode_message(et, node)
 
 
@@ -71,9 +138,7 @@ def one_mem_store_node(num_npus: int, tensor_size: int) -> None:
         output_filename = f"one_mem_store_node.{npu_id}.et"
         with open(output_filename, "wb") as et:
             node = get_node("MEM_STORE_NODE", MEM_STORE_NODE)
-            attr = get_attr("tensor_size", INT)
-            attr.i = tensor_size
-            node.attr.append(attr)
+            node.attr.append(ChakraAttr(name="tensor_size", uint64_val=tensor_size))
             encode_message(et, node)
 
 
@@ -109,37 +174,30 @@ def two_comp_nodes_dependent(num_npus: int, runtime: int) -> None:
 
             child_node = get_node("COMP_NODE", COMP_NODE)
             child_node.duration_micros = runtime
-            child_node.parent.append(parent_node.id)
+            child_node.data_deps.append(parent_node.id)
             encode_message(et, child_node)
 
 
-def one_comm_send_node(num_npus: int, num_dims: int) -> None:
+def one_comm_send_node(num_npus: int, comm_size: int) -> None:
     for npu_id in range(num_npus):
         output_filename = f"one_comm_send_node.{npu_id}.et"
         with open(output_filename, "wb") as et:
             node = get_node("COMM_SEND_NODE", COMM_SEND_NODE)
             node.attr.append(ChakraAttr(name="src", int64_val=npu_id))
-            if npu_id == (num_npus - 1):
-                node.attr.append(ChakraAttr(name="dst", int64_val=0))
-            else:
-                node.attr.append(ChakraAttr(name="dst", int64_val=npu_id+1))
+            node.attr.append(ChakraAttr(name="dst", int64_val=(npu_id+1) % num_npus))
+            node.attr.append(ChakraAttr(name="comm_size", uint64_val=comm_size))
             encode_message(et, node)
 
 
-def one_comm_recv_node(num_npus: int, num_dims: int) -> None:
+def one_comm_recv_node(num_npus: int, comm_size: int) -> None:
     for npu_id in range(num_npus):
         output_filename = f"one_comm_recv_node.{npu_id}.et"
         with open(output_filename, "wb") as et:
             node = get_node("COMM_RECV_NODE", COMM_RECV_NODE)
-            attr = get_attr("src", INT)
-            if npu_id == 0:
-                attr.i = num_npus - 1
-            else:
-                attr.i = npu_id - 1
-            node.attr.append(attr)
-            attr = get_attr("dst", INT)
-            attr.i = npu_id
-            node.attr.append(attr)
+            src_attr = ChakraAttr(name="src", uint64_val=(npu_id-1) % num_npus)
+            dst_attr = ChakraAttr(name="dst", uint64_val=npu_id)
+            size_attr = ChakraAttr(name="comm_size", uint64_val=comm_size)
+            node.attr.extend([src_attr, dst_attr, size_attr])
             encode_message(et, node)
 
 
@@ -231,8 +289,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    one_metadata_node_bool(args.num_npus)
-    # TODO: add test cases
+    one_metadata_node_all_types(args.num_npus)
 
     one_mem_load_node(args.num_npus, args.default_tensor_size)
     one_mem_store_node(args.num_npus, args.default_tensor_size)
