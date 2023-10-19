@@ -19,7 +19,7 @@ jobs:
         with:
           activate-conda: true
           python-version: 3.7
-      - run: conda install protobuf==3.6.1 setuptools pydot pytorch python-graphviz networkx
+      - run: conda install protobuf==3.* setuptools pydot pytorch python-graphviz networkx
       - run: pip install fbgemm-gpu-cpu
       - run: protoc et_def.proto --proto_path et_def --python_out et_def
       - run: python3 setup.py install
