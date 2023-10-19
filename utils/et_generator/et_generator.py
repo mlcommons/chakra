@@ -117,8 +117,8 @@ def one_metadata_node_all_types(num_npus: int) -> None:
             string_list = StringList(values=[str(12345+i) for i in range(10)])
             node.attr.append(ChakraAttr(name="string_list", string_list=string_list))
 
-            node.attr.append(ChakraAttr(name="bytes", bytes_val=bytes("12345")))
-            bytes_list = BytesList(values=[bytes(str(12345+i)) for i in range(10)])
+            node.attr.append(ChakraAttr(name="bytes", bytes_val=bytes("12345", "utf-8")))
+            bytes_list = BytesList(values=[bytes(str(12345+i), "utf-8") for i in range(10)])
             node.attr.append(ChakraAttr(name="bytes_list", bytes_list=bytes_list))
 
             encode_message(et, node)
