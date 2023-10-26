@@ -25,7 +25,7 @@ jobs:
       - run: python3 setup.py install
       - run: python3 -m utils.et_generator.et_generator --num_npus 1
       - run: |
-          set -e
+          python3 -m et_visualizer.et_visualizer --help
           for f in *.et
           do
               python3 -m et_visualizer.et_visualizer --input_filename ${f} --output_filename "${f%.*}".dot
