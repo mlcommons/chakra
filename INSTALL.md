@@ -11,11 +11,6 @@ $ pip install https://github.com/mlcommons/chakra/archive/refs/heads/main.zip
 # Install specific revision from github
 $ pip install https://github.com/mlcommons/chakra/archive/ae7c671db702eb1384015bb2618dc753eed787f2.zip
 
-# Install as dependency from requirements.txt
-$ cat requirements.txt
-chakra@https://github.com/mlcommons/chakra/archive/ae7c671db702eb1384015bb2618dc753eed787f2.zip
-$ pip install -r requirements.txt
-
 # Uninstall package
 $ pip uninstall chakra
 ```
