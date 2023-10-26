@@ -71,6 +71,8 @@ def main() -> None:
                 G.add_edge(ctrl_dep_id, node.id, dependency="control")
 
         nx.write_graphml(G, args.output_filename)
+    else:
+        print("Unknown output file extension. Must be one of pdf, dot, graphml.")
 
     et.close()
 
