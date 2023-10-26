@@ -8,8 +8,9 @@ jobs:
       - uses: actions/checkout@v2
       - uses: awalsh128/cache-apt-pkgs-action@latest
         with:
-          packages: make gcc g++ libprotobuf-dev protobuf-compiler dot
+          packages: make gcc g++ libprotobuf-dev protobuf-compiler
           version: 1.0
+      - run: apt-get install -y dot
       - uses: lukka/get-cmake@latest
       - run: protoc et_def.proto --proto_path et_def --cpp_out et_def
       - uses: actions/setup-python@v2
