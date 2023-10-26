@@ -4,3 +4,4 @@ chakra.egg-info/
 __pycache__/
 *.egg
 *.et
+*.dot
