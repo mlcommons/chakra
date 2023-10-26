@@ -8,7 +8,7 @@ jobs:
       - uses: actions/checkout@v2
       - uses: awalsh128/cache-apt-pkgs-action@latest
         with:
-          packages: make gcc g++ libprotobuf-dev protobuf-compiler
+          packages: make gcc g++ libprotobuf-dev protobuf-compiler graphviz
           version: 1.0
       - uses: lukka/get-cmake@latest
       - run: protoc et_def.proto --proto_path et_def --cpp_out et_def
@@ -22,3 +22,10 @@ jobs:
       - run: conda install pytorch
       - run: pip install fbgemm-gpu-cpu
       - run: pip install .
+      - run: python3 -m utils.et_generator.et_generator --num_npus 1
+      - run: |
+          python3 -m et_visualizer.et_visualizer --help
+          for f in *.et
+          do
+              python3 -m et_visualizer.et_visualizer --input_filename ${f} --output_filename "${f%.*}".dot
+          done

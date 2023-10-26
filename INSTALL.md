@@ -53,7 +53,6 @@ $ python -m chakra.et_converter.et_converter\
     --input_type PyTorch\
     --input_filename <input_filename>\
     --output_filename <output_filename>\
-    --default_simulated_run_time <default_simulated_run_time>\
     --num_dims <num_dims>
 ```
 
@@ -65,17 +64,6 @@ You can follow the commands below to run the generator.
 $ python -m chakra.et_generator.et_generator\
     --num_npus <num_npus>\
     --num_dims <num_dims>
-```
-
-## Execution Trace Visualizer (et_visualizer)
-This tool visualizes a given execution trace (ET) by converting the ET to a graphviz file.
-A user has to feed the output graphviz file to a graphviz visualizer such as https://dreampuf.github.io/GraphvizOnline/.
-
-You can run this tool with the following command.
-```shell
-$ python -m chakra.et_visualizer.et_visualizer\
-    --input_filename <input_filename>\
-    --output_filename <output_filename>
 ```
 
 ## Execution Trace Visualizer (et_visualizer)
