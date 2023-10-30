@@ -599,8 +599,15 @@ class PyTorch2ChakraConverter:
                     nodes_to_assign = assigned_ids[node["parent"]]
                     for parent_id in nodes_to_assign:
                         self.pt_record_param_comms_node_dict.update({parent_id: node})
+                else:
+                    self.pt_record_param_comms_node_dict.update({node["parent"]: node})
             if self.is_nccl_node(node):
-                self.pt_nccl_node_dict.update({node["parent"]: node})
+                if node["parent"] in assigned_ids.keys():
+                        nodes_to_assign=assigned_ids[node["parent"]]
+                        for parent_id in nodes_to_assign:
+                            self.pt_nccl_node_dict.update({parent_id: node})
+                else:
+                    self.pt_nccl_node_dict.update({node["parent"]: node})
 
         for i in range(len(self.inter_phase_dependency)):
             # If an op is decomposed into multiple sub_ops, we want to point to the last subop [-1]
