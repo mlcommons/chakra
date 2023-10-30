@@ -4,7 +4,7 @@ using namespace std;
 using namespace Chakra;
 
 ETFeeder::ETFeeder(string filename)
-  : trace_(filename), window_size_(4096), et_complete_(false) {
+  : trace_(filename), window_size_(4096 * 256), et_complete_(false) {
   readGlobalMetadata();
   readNextWindow();
 }
