@@ -368,22 +368,21 @@ class PyTorch2ChakraConverter:
             return self.inter_phase_dependency[index - 1]
 
     @staticmethod
-    def find_root_nid(
+    def find_root_nids(
         nodes: List[Any]
     ) -> int:
         """
         Finds a root node and return its NID.
 
-        * Assumption: There is only one root node in a given execution trace.
+        * Assumption: There could be multiple root node in a given execution trace.
         """
-        root_nid = -1
+        root_nids = []
         for node in nodes:
             if "[pytorch|profiler|execution_graph|thread]" in node["name"]:
-                root_nid = node["id"]
-                break
-        if root_nid == -1:
+                root_nids.append(node["id"])
+        if not root_nids:
             raise ValueError("Cannot find a root NID")
-        return root_nid
+        return root_nids
 
     @staticmethod
     def is_label_node(
@@ -398,10 +397,10 @@ class PyTorch2ChakraConverter:
 
     def is_phase_root_node(
         self,
-        root_nid: int,
+        root_nids: List[int],
         node: Dict[str, Any]
     ) -> bool:
-        return self.is_label_node(node) and (node["parent"] == root_nid)
+        return node["parent"] in root_nids
 
     def is_gpu_op(
         self,
@@ -455,9 +454,7 @@ class PyTorch2ChakraConverter:
             for child in self.pt_nodes:
                 # We should not call dfs for the root node or phase root nodes
                 # as they will be covered by other DFS calls.
-                if (child["parent"] == nid)\
-                        and (nid != root_nid)\
-                        and not self.is_phase_root_node(root_nid, child):
+                if child["parent"] == nid:
                     largest_nid = max(largest_nid, self.dfs(child, root_nid))
             return largest_nid
         else:
@@ -475,9 +472,9 @@ class PyTorch2ChakraConverter:
         """
         root_nid = self.find_root_nid(self.pt_nodes)
         for node in self.pt_nodes:
-            if (node["id"] == root_nid) or self.is_phase_root_node(root_nid, node):
-                largest_nid_within_phase = self.dfs(node, root_nid)
-                if self.is_phase_root_node(root_nid, node):
+            if self.is_phase_root_node(root_nids, node):
+                largest_nid_within_phase = self.dfs(node, root_nids)
+                if largest_nid_within_phase != -1:
                     self.inter_phase_dependency.append(largest_nid_within_phase)
 
         # Make sure that the NIDs in inter_phase_dependency are in the increasing order.
