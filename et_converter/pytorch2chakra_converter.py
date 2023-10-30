@@ -485,24 +485,26 @@ class PyTorch2ChakraConverter:
 
     def assign_chakra_ids(
         self,
-        total_assigned_ids: List[int],
+        total_assigned_ids: Dict[int,bool],
         assigned_ids: List[int],
-        id: int
+        initial_id_to_assign: int
     ) -> int:
         """
-        This function assign_chakra_ids is designed to assign unique identifiers (IDs).
+        This function is used to assign unique ids to the ops. During the conversion, we may decompose an op into multiple
+        ops. So it is important to re-assign unique ids to all ops and make sure the ops that should be executed first have
+        smaller ids.
         """
-        orig_id = id
+        orig_id = initial_id_to_assign
         while True:
-            if id in total_assigned_ids:
-                id += 1
+            if initial_id_to_assign in total_assigned_ids.keys():
+                initial_id_to_assign += 1
             else:
-                total_assigned_ids.append(id)
+                total_assigned_ids[initial_id_to_assign] = True
                 if orig_id in assigned_ids.keys():
-                    assigned_ids[orig_id].append(id)
+                    assigned_ids[orig_id].append(initial_id_to_assign)
                 else:
-                    assigned_ids[orig_id] = [id]
-                return id
+                    assigned_ids[orig_id] = [initial_id_to_assign]
+                return initial_id_to_assign
 
     def merge_gpu_ops_with_cpu_ops(
         self,
@@ -519,9 +521,10 @@ class PyTorch2ChakraConverter:
         """
         self.logger.info("Merge CPU Kernels with GPU Kernels")
 
+
         decomposed_nodes = []
         assigned_ids = {}
-        total_assigned_ids = []
+        total_assigned_ids = {}
         new_pt_gpu_node_dict = {}
         decomposed_nodes_dep = {}
         for nid, node in self.pt_cpu_node_dict.items():
