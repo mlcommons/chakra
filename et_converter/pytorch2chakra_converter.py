@@ -79,6 +79,8 @@ class PyTorch2ChakraConverter:
         self.ck_node_dict = {}
 
         # A list of NIDs to enforce dependencies between phases.
+        # Phase of training iteration may include forward-pass, back-prop, optimizer, etc.
+        # We assume a phase ops cannot start until after all ops of previous phases are executed
         self.inter_phase_dependency = []
 
         # ---------------------------------------------------------------------
@@ -507,17 +509,10 @@ class PyTorch2ChakraConverter:
         self,
     ) -> Any:
         """
-        This function, merge_gpu_ops_with_cpu_ops,
-        aims to integrate GPU operations with corresponding CPU operations
-
-        If a GPU operation is associated with the current CPU node:
-        1) The GPU nodes are sorted based on their timestamp.
-        2) The function ensures that the CPU node duration is longer than the start of the GPU node.
-        3) It then creates a copy of the CPU node, modifies its ID using assign_chakra_ids,
-        and splits the CPU node's duration based on the GPU node's timestamps.
+        This function decomposes the CPU ops that have GPU child ops into multiple sub_ops.
+        This required to allow running GPU ops and CPU ops at the same time.
         """
-        self.logger.info("Merge CPU Kernels with GPU Kernels")
-
+        self.logger.info("Merge CPU ops with GPU ops")
 
         decomposed_nodes = []
         assigned_ids = {}
@@ -608,6 +603,7 @@ class PyTorch2ChakraConverter:
                 self.pt_nccl_node_dict.update({node["parent"]: node})
 
         for i in range(len(self.inter_phase_dependency)):
+            # If an op is decomposed into multiple sub_ops, we want to point to the last subop [-1]
             self.inter_phase_dependency[i] = assigned_ids[self.inter_phase_dependency[i]][-1]
         self.inter_phase_dependency.sort()
 
@@ -870,8 +866,10 @@ class PyTorch2ChakraConverter:
             self.update_output_tensor_dict(pt_node["id"], pt_node["outputs"])
             if pt_nid in self.pt_gpu_node_dict.keys():
                 for pt_gpu_node in self.pt_gpu_node_dict[pt_nid]:
-                    self.update_input_tensor_dict(pt_gpu_node["id"], pt_gpu_node["inputs"])
                     # Assumption: same input / output as its parent CPU operator
+                    self.update_input_tensor_dict(pt_gpu_node["id"], pt_gpu_node["inputs"])
+                    # For now we ignore GPU->CPU dependencies since it creates unwanted dependencies.
+                    # self.update_output_tensor_dict(pt_gpu_node["id"], pt_gpu_node["outputs"])
 
             ck_node = self.convert_pytorch_node_to_chakra_node(pt_node)
             self.ck_node_dict[ck_node.id] = ck_node
@@ -884,6 +882,8 @@ class PyTorch2ChakraConverter:
                 ck_node.data_deps.append(dep_nid)
 
             # Adding decomposed nodes dependency
+            # When we decompose a CPU op into multiple sub_ops, these ops have linear dependeny with themselves
+            # For example, the first sub_op should be finished before the second sub_op. Here, we capture these dependencies.
             if (pt_nid in decomposed_nodes_dep.keys())\
                     and (decomposed_nodes_dep[pt_nid] not in ck_node.data_deps):
                  ck_node.data_deps.append(decomposed_nodes_dep[pt_nid])
