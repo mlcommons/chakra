@@ -1,13 +1,18 @@
 # Chakra
 ## Installation
-We use `setuptools` to install/uninstall the `chakra` package:
+We use `pip` to install/uninstall the `chakra` package:
 ```shell
-# Install package
-$ pip install -r requirements.txt
-$ python setup.py install
+# Install package from source
+$ pip install .
+
+# Install latest from github
+$ pip install https://github.com/mlcommons/chakra/archive/refs/heads/main.zip
+
+# Install specific revision from github
+$ pip install https://github.com/mlcommons/chakra/archive/ae7c671db702eb1384015bb2618dc753eed787f2.zip
 
 # Uninstall package
-$ python -m pip uninstall chakra
+$ pip uninstall chakra
 ```
 
 ## Execution Trace Converter (et_converter)
@@ -18,7 +23,7 @@ You can use the following commands for each input type.
 
 ### ASTRA-sim Text Files
 ```shell
-$ python -m et_converter.et_converter\
+$ python -m chakra.et_converter.et_converter\
     --input_type Text\
     --input_filename <input_filename>\
     --output_filename <output_filename>\
@@ -29,7 +34,7 @@ $ python -m et_converter.et_converter\
 
 ### FlexFlow Execution Graphs
 ```shell
-$ python -m et_converter.et_converter\
+$ python -m chakra.et_converter.et_converter\
     --input_type FlexFlow\
     --input_filename <input_filename>\
     --output_filename <output_filename>\
@@ -39,7 +44,7 @@ $ python -m et_converter.et_converter\
 
 ### PyTorch Execution Graphs
 ```shell
-$ python -m et_converter.et_converter\
+$ python -m chakra.et_converter.et_converter\
     --input_type PyTorch\
     --input_filename <input_filename>\
     --output_filename <output_filename>\
@@ -51,7 +56,7 @@ This is an execution trace generator that generates synthetic execution traces.
 A user can define a new function in the generator to generate new synthetic execution traces.
 You can follow the commands below to run the generator.
 ```shell
-$ python -m utils.et_generator.et_generator\
+$ python -m chakra.et_generator.et_generator\
     --num_npus <num_npus>\
     --num_dims <num_dims>
 ```
@@ -67,7 +72,7 @@ For visualizing GraphML files, you can use Gephi (https://gephi.org/).
 
 Run the tool with the following command:
 ```shell
-$ python -m et_visualizer.et_visualizer\
+$ python -m chakra.et_visualizer.et_visualizer\
     --input_filename <input_filename>\
     --output_filename <output_filename>
 ```
@@ -80,7 +85,7 @@ This tool visualizes the execution timeline of a given execution trace (ET).
 
 You can run this timeline visualizer with the following command.
 ```shell
-$ python -m timeline_visualizer.timeline_visualizer\
+$ python -m chakra.timeline_visualizer.timeline_visualizer\
     --input_filename <input_filename>\
     --output_filename <output_filename>\
     --num_npus <num_npus>\
@@ -119,7 +124,7 @@ $ cd -
 $ ./build/astra_analytical/build.sh -c
 
 $ cd extern/graph_frontend/chakra/
-$ python -m utils.et_generator.et_generator\
+$ python -m chakra.et_generator.et_generator\
     --num_npus <num_npus>\
     --num_dims <num_dims>
 
@@ -131,7 +136,7 @@ $ ./run.sh
 This tool prints the nodes within execution traces for better comprehension.
 The printed information includes the node's id, name, type, and any associated metadata, which are all outputted in a user-friendly text format.
 ```
-$ python -m et_jsonizer.et_jsonizer\
+$ python -m chakra.et_jsonizer.et_jsonizer\
     --input_filename <input_filename>\
     --output_filename <output_filename>
 ```

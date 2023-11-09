@@ -4,8 +4,8 @@ import logging
 
 from io import TextIOWrapper
 from typing import Any, List
-from third_party.utils.protolib import encodeMessage as encode_message
-from et_def.et_def_pb2 import (
+from chakra.third_party.utils.protolib import encodeMessage as encode_message
+from chakra.et_def.et_def_pb2 import (
     Node,
     AttributeProto as ChakraAttr,
     COMP_NODE,

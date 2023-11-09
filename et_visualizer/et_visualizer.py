@@ -4,11 +4,11 @@ import argparse
 import graphviz
 import networkx as nx
 
-from third_party.utils.protolib import (
+from chakra.third_party.utils.protolib import (
     openFileRd as open_file_rd,
     decodeMessage as decode_message
 )
-from et_def.et_def_pb2 import Node
+from chakra.et_def.et_def_pb2 import Node
 
 
 def main() -> None:

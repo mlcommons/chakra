@@ -8,8 +8,9 @@ jobs:
       - uses: actions/checkout@v2
       - uses: awalsh128/cache-apt-pkgs-action@latest
         with:
-          packages: make gcc g++ libprotobuf-dev protobuf-compiler graphviz
+          packages: make gcc g++ libprotobuf-dev protobuf-compiler
           version: 1.0
+      - run: sudo apt install -y graphviz
       - uses: lukka/get-cmake@latest
       - run: protoc et_def.proto --proto_path et_def --cpp_out et_def
       - uses: actions/setup-python@v2
@@ -19,14 +20,13 @@ jobs:
         with:
           activate-conda: true
           python-version: 3.7
-      - run: conda install protobuf==3.* setuptools pydot pytorch python-graphviz networkx
+      - run: conda install pytorch
       - run: pip install fbgemm-gpu-cpu
-      - run: protoc et_def.proto --proto_path et_def --python_out et_def
-      - run: python3 setup.py install
-      - run: python3 -m utils.et_generator.et_generator --num_npus 1
+      - run: pip install .
+      - run: python3 -m chakra.et_generator.et_generator --num_npus 1
       - run: |
-          python3 -m et_visualizer.et_visualizer --help
+          python3 -m chakra.et_visualizer.et_visualizer --help
           for f in *.et
           do
-              python3 -m et_visualizer.et_visualizer --input_filename ${f} --output_filename "${f%.*}".dot
+              python3 -m chakra.et_visualizer.et_visualizer --input_filename ${f} --output_filename "${f%.*}".dot
           done
