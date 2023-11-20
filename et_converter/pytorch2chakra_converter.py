@@ -472,7 +472,7 @@ class PyTorch2ChakraConverter:
         Run DFS on a root node and phase root nodes as they may have CPU operators.
         DFS populates pt_cpu_node_dict and returns the largest NID within the phase.
         """
-        root_nid = self.find_root_nid(self.pt_nodes)
+        root_nids = self.find_root_nids(self.pt_nodes)
         for node in self.pt_nodes:
             if self.is_phase_root_node(root_nids, node):
                 largest_nid_within_phase = self.dfs(node, root_nids)
