@@ -1,0 +1,22 @@
+name: Python Linting
+
+on: [push, pull_request]
+
+jobs:
+  lint-and-format:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.8'
+
+    - name: Install dependencies
+      run: |
+        pip install black
+
+    - name: Check code formatting with Black
+      run: black --check .
