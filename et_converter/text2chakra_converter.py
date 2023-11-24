@@ -44,7 +44,7 @@ class Layer:
             self.bwd_wg_update_time = str(col[11])
             self.bwd_wg_comp_node = None
             self.bwd_wg_comm_node = None
-        except:
+        except Exception:
             raise ValueError(f'Cannot parse the following layer -- "{line}"')
 
 
@@ -167,7 +167,7 @@ class Text2ChakraConverter:
                             self.add_parent(
                                 fwd_comp_node, layers[idx - 1].fwd_comp_node
                             )
-                        if layer.bwd_wg_comm_node != None:
+                        if layer.bwd_wg_comm_node is not None:
                             self.add_parent(fwd_comp_node, layer.bwd_wg_comm_node)
                         layer.fwd_comp_node = fwd_comp_node
                         encode_message(g, fwd_comp_node)
@@ -178,7 +178,7 @@ class Text2ChakraConverter:
                             layer.name, "BWD_WG", layer.bwd_wg_comp_time
                         )
                         if idx == 0:
-                            if fwd_comp_node == None:
+                            if fwd_comp_node is None:
                                 raise ValueError("fwd_comp_node is None")
                             self.add_parent(bwd_wg_comp_node, fwd_comp_node)
                         else:
@@ -228,7 +228,7 @@ class Text2ChakraConverter:
                             self.add_parent(
                                 fwd_comp_node, layers[idx - 1].fwd_comm_node
                             )
-                        if layer.bwd_wg_comp_node != None:
+                        if layer.bwd_wg_comp_node is not None:
                             self.add_parent(fwd_comp_node, layer.bwd_wg_comp_node)
                         layer.fwd_comp_node = fwd_comp_node
                         encode_message(g, fwd_comp_node)
@@ -250,7 +250,7 @@ class Text2ChakraConverter:
                             layer.name, "BWD_IG", layer.bwd_ig_comp_time
                         )
                         if idx == 0:
-                            if fwd_comm_node == None:
+                            if fwd_comm_node is None:
                                 raise ValueError("fwd_comm_node is None")
                             self.add_parent(bwd_ig_comp_node, fwd_comm_node)
                         else:
@@ -301,7 +301,7 @@ class Text2ChakraConverter:
                         fwd_comp_node = self.get_comp_node(
                             layer.name, "FWD", layer.fwd_comp_time
                         )
-                        if layer.bwd_wg_comm_node != None:
+                        if layer.bwd_wg_comm_node is not None:
                             self.add_parent(fwd_comp_node, layer.bwd_wg_comm_node)
                         if idx != 0:
                             self.add_parent(
@@ -327,7 +327,7 @@ class Text2ChakraConverter:
                             layer.name, "BWD_IG", layer.bwd_ig_comp_time
                         )
                         if idx == 0:
-                            if fwd_comm_node == None:
+                            if fwd_comm_node is None:
                                 raise ValueError("fwd_comm_node is None")
                             self.add_parent(bwd_ig_comp_node, fwd_comm_node)
                         else:
@@ -391,7 +391,7 @@ class Text2ChakraConverter:
                         fwd_comp_node = self.get_comp_node(
                             layer.name, "FWD", layer.fwd_comp_time
                         )
-                        if layer.bwd_wg_comm_node != None:
+                        if layer.bwd_wg_comm_node is not None:
                             self.add_parent(fwd_comp_node, layer.bwd_wg_comm_node)
                         if idx != 0:
                             self.add_parent(
@@ -417,7 +417,7 @@ class Text2ChakraConverter:
                             layer.name, "BWD_IG", layer.bwd_ig_comp_time
                         )
                         if idx == 0:
-                            if fwd_comm_node == None:
+                            if fwd_comm_node is None:
                                 raise ValueError("fwd_comm_node is None")
                             self.add_parent(bwd_ig_comp_node, fwd_comm_node)
                         else:
@@ -483,9 +483,9 @@ class Text2ChakraConverter:
                         fwd_comp_node = self.get_comp_node(
                             layer.name, "FWD", layer.fwd_comp_time
                         )
-                        if layer.bwd_wg_comm_node != None:
+                        if layer.bwd_wg_comm_node is not None:
                             self.add_parent(fwd_comp_node, layer.bwd_wg_comm_node)
-                        elif layer.bwd_wg_comp_node != None:
+                        elif layer.bwd_wg_comp_node is not None:
                             self.add_parent(fwd_comp_node, layer.bwd_wg_comp_node)
                         if idx != 0:
                             self.add_parent(
@@ -514,16 +514,19 @@ class Text2ChakraConverter:
                             layer.name, "BWD_WG", layer.bwd_wg_comp_time
                         )
                         if idx == 0:
-                            if fwd_comp_node == None:
+                            if fwd_comp_node is None:
                                 raise ValueError("fwd_comp_node is None")
                             self.add_parent(bwd_wg_comp_node, fwd_comp_node)
                         else:
-                            if layers[len(layers) - idx].bwd_ig_comp_node != None:
+                            if layers[len(layers) - idx].bwd_ig_comp_node is not None:
                                 self.add_parent(
                                     bwd_wg_comp_node,
                                     layers[len(layers) - idx].bwd_ig_comp_node,
                                 )
-                            if layers[len(layers) - idx - 1].bwd_ig_comm_node != None:
+                            if (
+                                layers[len(layers) - idx - 1].bwd_ig_comm_node
+                                is not None
+                            ):
                                 self.add_parent(
                                     bwd_wg_comp_node,
                                     layers[len(layers) - idx - 1].bwd_ig_comm_node,
@@ -564,7 +567,7 @@ class Text2ChakraConverter:
                             for _ in range(self.num_dims):
                                 attr.bool_list.values.append(True)
                             bwd_ig_comm_node.attr.append(attr)
-                            if bwd_ig_comp_node == None:
+                            if bwd_ig_comp_node is None:
                                 raise ValueError("bwd_ig_comp_node is None")
                             self.add_parent(bwd_ig_comm_node, bwd_ig_comp_node)
                             layers[0].bwd_ig_comm_node = bwd_ig_comm_node
