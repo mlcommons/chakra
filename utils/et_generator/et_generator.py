@@ -26,8 +26,6 @@ from chakra.et_def.et_def_pb2 import (
     MEM_LOAD_NODE,
     MEM_STORE_NODE,
     COMP_NODE,
-    COMM_SEND_NODE,
-    COMM_RECV_NODE,
     COMM_COLL_NODE,
     ALL_REDUCE,
     ALL_TO_ALL,
