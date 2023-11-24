@@ -5,8 +5,17 @@ using namespace Chakra;
 
 ETFeeder::ETFeeder(string filename)
   : trace_(filename), window_size_(4096 * 256), et_complete_(false) {
-  readGlobalMetadata();
-  readNextWindow();
+  if (!trace_.is_open()) { // Assuming a method to check if file is open
+    throw std::runtime_error("Failed to open trace file: " + filename);
+  }
+
+  try {
+    readGlobalMetadata();
+    readNextWindow();
+  } catch (const std::exception& e) {
+    cerr << "Error in constructor: " << e.what() << endl;
+    throw;  // Rethrow the exception for caller to handle
+  }
 }
 
 ETFeeder::~ETFeeder() {
@@ -70,6 +79,9 @@ void ETFeeder::freeChildrenNodes(uint64_t node_id) {
 }
 
 void ETFeeder::readGlobalMetadata() {
+  if (!trace_.is_open()) {
+    throw runtime_error("Trace file closed unexpectedly during reading global metadata.");
+  }
   shared_ptr<ChakraProtoMsg::GlobalMetadata> pkt_msg = make_shared<ChakraProtoMsg::GlobalMetadata>();
   trace_.read(*pkt_msg);
 }
@@ -124,6 +136,9 @@ void ETFeeder::resolveDep() {
 }
 
 void ETFeeder::readNextWindow() {
+  if (!trace_.is_open()) {
+    throw runtime_error("Trace file closed unexpectedly during reading next window.");
+  }
   uint32_t num_read = 0;
   do {
     shared_ptr<ETFeederNode> new_node = readNode();
