@@ -9,16 +9,18 @@ from typing import Any, Dict, List, Tuple
 from logging import FileHandler
 from enum import IntEnum
 
+
 class TID(IntEnum):
     LOCAL_MEMORY = 1
     REMOTE_MEMORY = 2
     COMP = 3
     COMM = 4
 
+
 def get_logger(log_filename: str) -> logging.Logger:
     formatter = logging.Formatter(
-            "%(levelname)s [%(asctime)s] %(message)s",
-            datefmt="%m/%d/%Y %I:%M:%S %p")
+        "%(levelname)s [%(asctime)s] %(message)s", datefmt="%m/%d/%Y %I:%M:%S %p"
+    )
 
     file_handler = FileHandler(log_filename, mode="w")
     file_handler.setLevel(logging.DEBUG)
@@ -35,25 +37,24 @@ def get_logger(log_filename: str) -> logging.Logger:
 
     return logger
 
+
 def is_local_mem_node(node_name: str) -> bool:
-    if ("MEM_LOAD_NODE" in node_name)\
-            and ("LOCAL_MEMORY" in node_name):
+    if ("MEM_LOAD_NODE" in node_name) and ("LOCAL_MEMORY" in node_name):
         return True
-    elif ("MEM_STORE_NODE" in node_name)\
-            and ("LOCAL_MEMORY" in node_name):
+    elif ("MEM_STORE_NODE" in node_name) and ("LOCAL_MEMORY" in node_name):
         return True
     else:
         return False
 
+
 def is_remote_mem_node(node_name: str) -> bool:
-    if ("MEM_LOAD_NODE" in node_name)\
-            and ("REMOTE_MEMORY" in node_name):
+    if ("MEM_LOAD_NODE" in node_name) and ("REMOTE_MEMORY" in node_name):
         return True
-    elif ("MEM_STORE_NODE" in node_name)\
-            and ("REMOTE_MEMORY" in node_name):
+    elif ("MEM_STORE_NODE" in node_name) and ("REMOTE_MEMORY" in node_name):
         return True
     else:
         return False
+
 
 def is_comp_node(node_name: str) -> bool:
     if "COMP_NODE" in node_name:
@@ -61,13 +62,17 @@ def is_comp_node(node_name: str) -> bool:
     else:
         return False
 
+
 def is_comm_node(node_name: str) -> bool:
-    if ("COMM_SEND_NODE" in node_name)\
-            or ("COMM_RECV_NODE" in node_name)\
-            or ("COMM_COLL_NODE" in node_name):
+    if (
+        ("COMM_SEND_NODE" in node_name)
+        or ("COMM_RECV_NODE" in node_name)
+        or ("COMM_COLL_NODE" in node_name)
+    ):
         return True
     else:
         return False
+
 
 def get_tid(node_name: str) -> TID:
     if is_local_mem_node(node_name):
@@ -81,9 +86,8 @@ def get_tid(node_name: str) -> TID:
     else:
         raise ValueError(f"Node type cannot be identified from {node_name}")
 
-def parse_event(
-    line: str
-) -> Tuple[str, int, int, int, str]:
+
+def parse_event(line: str) -> Tuple[str, int, int, int, str]:
     try:
         cols = line.strip().split(",")
         trace_type = cols[0]
@@ -93,12 +97,11 @@ def parse_event(
         node_name = cols[4].split("=")[1]
         return (trace_type, npu_id, curr_cycle, node_id, node_name)
     except:
-        raise ValueError(f"Cannot parse the following event -- \"{line}\"")
+        raise ValueError(f'Cannot parse the following event -- "{line}"')
+
 
 def get_trace_events(
-    input_filename: str,
-    num_npus: int,
-    npu_frequency: int
+    input_filename: str, num_npus: int, npu_frequency: int
 ) -> List[Dict[str, Any]]:
     trace_dict = {i: {} for i in range(num_npus)}
     trace_events = []
@@ -106,12 +109,10 @@ def get_trace_events(
     with open(input_filename, "r") as f:
         for line in f:
             if ("issue" in line) or ("callback" in line):
-                (trace_type, npu_id, curr_cycle, node_id, node_name) =\
-                    parse_event(line)
+                (trace_type, npu_id, curr_cycle, node_id, node_name) = parse_event(line)
 
                 if trace_type == "issue":
-                    trace_dict[npu_id].update(
-                        {node_id: [node_name, curr_cycle]})
+                    trace_dict[npu_id].update({node_id: [node_name, curr_cycle]})
                 elif trace_type == "callback":
                     node_name = trace_dict[npu_id][node_id][0]
                     tid = get_tid(node_name)
@@ -121,15 +122,16 @@ def get_trace_events(
                     duration_in_ms = duration_in_cycles / (npu_frequency * 1_000)
 
                     trace_events.append(
-                            {
-                                "pid": npu_id,
-                                "tid": tid,
-                                "ts": issued_ms,
-                                "dur": duration_in_ms,
-                                "ph": "X",
-                                "name": node_name,
-                                "args": {"ms": duration_in_ms}
-                            })
+                        {
+                            "pid": npu_id,
+                            "tid": tid,
+                            "ts": issued_ms,
+                            "dur": duration_in_ms,
+                            "ph": "X",
+                            "name": node_name,
+                            "args": {"ms": duration_in_ms},
+                        }
+                    )
 
                     del trace_dict[npu_id][node_id]
                 else:
@@ -139,56 +141,50 @@ def get_trace_events(
 
 
 def write_trace_events(
-    output_filename: str,
-    num_npus: int,
-    trace_events: List[Dict[str, Any]]
+    output_filename: str, num_npus: int, trace_events: List[Dict[str, Any]]
 ) -> None:
     output_dict = {
         "meta_user": "aras",
         "traceEvents": trace_events,
         "meta_user": "aras",
-        "meta_cpu_count": num_npus
+        "meta_cpu_count": num_npus,
     }
     with open(output_filename, "w") as f:
         json.dump(output_dict, f)
 
+
 def main() -> None:
-    parser = argparse.ArgumentParser(
-            description="Timeline Visualizer"
+    parser = argparse.ArgumentParser(description="Timeline Visualizer")
+    parser.add_argument(
+        "--input_filename",
+        type=str,
+        default=None,
+        required=True,
+        help="Input timeline filename",
     )
     parser.add_argument(
-            "--input_filename",
-            type=str,
-            default=None,
-            required=True,
-            help="Input timeline filename"
+        "--output_filename",
+        type=str,
+        default=None,
+        required=True,
+        help="Output trace filename",
     )
     parser.add_argument(
-            "--output_filename",
-            type=str,
-            default=None,
-            required=True,
-            help="Output trace filename"
+        "--num_npus",
+        type=int,
+        default=None,
+        required=True,
+        help="Number of NPUs in a system",
     )
     parser.add_argument(
-            "--num_npus",
-            type=int,
-            default=None,
-            required=True,
-            help="Number of NPUs in a system"
+        "--npu_frequency",
+        type=int,
+        default=None,
+        required=True,
+        help="NPU frequency in MHz",
     )
     parser.add_argument(
-            "--npu_frequency",
-            type=int,
-            default=None,
-            required=True,
-            help="NPU frequency in MHz"
-    )
-    parser.add_argument(
-            "--log_filename",
-            type=str,
-            default="debug.log",
-            help="Log filename"
+        "--log_filename", type=str, default="debug.log", help="Log filename"
     )
     args = parser.parse_args()
 
@@ -197,16 +193,13 @@ def main() -> None:
 
     try:
         trace_events = get_trace_events(
-            args.input_filename,
-            args.num_npus,
-            args.npu_frequency)
-        write_trace_events(
-            args.output_filename,
-            args.num_npus,
-            trace_events)
+            args.input_filename, args.num_npus, args.npu_frequency
+        )
+        write_trace_events(args.output_filename, args.num_npus, trace_events)
     except Exception as e:
         logger.error(str(e))
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

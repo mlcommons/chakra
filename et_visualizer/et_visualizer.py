@@ -6,28 +6,26 @@ import networkx as nx
 
 from chakra.third_party.utils.protolib import (
     openFileRd as open_file_rd,
-    decodeMessage as decode_message
+    decodeMessage as decode_message,
 )
 from chakra.et_def.et_def_pb2 import Node
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Execution Trace Visualizer"
-    )
+    parser = argparse.ArgumentParser(description="Execution Trace Visualizer")
     parser.add_argument(
         "--input_filename",
         type=str,
         default=None,
         required=True,
-        help="Input Chakra execution trace filename"
+        help="Input Chakra execution trace filename",
     )
     parser.add_argument(
         "--output_filename",
         type=str,
         default=None,
         required=True,
-        help="Output graph filename"
+        help="Output graph filename",
     )
     args = parser.parse_args()
 
@@ -38,25 +36,30 @@ def main() -> None:
     if args.output_filename.endswith((".pdf", ".dot")):
         f = graphviz.Digraph()
         while decode_message(et, node):
-            f.node(name=f"{node.id}",
-                   label=f"{node.name}",
-                   id=str(node.id),
-                   shape="record")
+            f.node(
+                name=f"{node.id}", label=f"{node.name}", id=str(node.id), shape="record"
+            )
 
             # Handling data dependencies
             for data_dep_id in node.data_deps:
-                f.edge(str(data_dep_id), str(node.id), arrowhead="normal")  # using "normal" arrow for data_deps
+                f.edge(
+                    str(data_dep_id), str(node.id), arrowhead="normal"
+                )  # using "normal" arrow for data_deps
 
             # Handling control dependencies
             for ctrl_dep_id in node.ctrl_deps:
-                f.edge(str(ctrl_dep_id), str(node.id), arrowhead="tee")  # using "tee" arrow for ctrl_deps
+                f.edge(
+                    str(ctrl_dep_id), str(node.id), arrowhead="tee"
+                )  # using "tee" arrow for ctrl_deps
 
         if args.output_filename.endswith(".pdf"):
-            f.render(args.output_filename.replace(".pdf", ""),
-                     format="pdf", cleanup=True)
+            f.render(
+                args.output_filename.replace(".pdf", ""), format="pdf", cleanup=True
+            )
         else:  # ends with ".dot"
-            f.render(args.output_filename.replace(".dot", ""),
-                     format="dot", cleanup=True)
+            f.render(
+                args.output_filename.replace(".dot", ""), format="dot", cleanup=True
+            )
     elif args.output_filename.endswith(".graphml"):
         G = nx.DiGraph()
         while decode_message(et, node):
