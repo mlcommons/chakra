@@ -16,7 +16,10 @@ jobs:
 
     - name: Install dependencies
       run: |
-        pip install black
+        pip install black flake8
 
     - name: Check code formatting with Black
       run: black --check .
+
+    - name: Run Flake8
+      run: flake8 .
