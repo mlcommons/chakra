@@ -96,7 +96,7 @@ def parse_event(line: str) -> Tuple[str, int, int, int, str]:
         node_id = int(cols[3].split("=")[1])
         node_name = cols[4].split("=")[1]
         return (trace_type, npu_id, curr_cycle, node_id, node_name)
-    except:
+    except Exception:
         raise ValueError(f'Cannot parse the following event -- "{line}"')
 
 
