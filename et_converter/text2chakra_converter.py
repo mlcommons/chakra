@@ -16,11 +16,9 @@ from chakra.et_def.et_def_pb2 import (
     REDUCE_SCATTER,
 )
 
+
 class Layer:
-    def __init__(
-        self,
-        line: str
-    ) -> None:
+    def __init__(self, line: str) -> None:
         try:
             col = line.strip().split()
             self.name = col[0]
@@ -47,7 +45,8 @@ class Layer:
             self.bwd_wg_comp_node = None
             self.bwd_wg_comm_node = None
         except:
-            raise ValueError(f"Cannot parse the following layer -- \"{line}\"")
+            raise ValueError(f'Cannot parse the following layer -- "{line}"')
+
 
 class Text2ChakraConverter:
     def __init__(
@@ -57,7 +56,7 @@ class Text2ChakraConverter:
         num_dims: int,
         num_npus: int,
         num_passes: int,
-        logger: logging.Logger
+        logger: logging.Logger,
     ) -> None:
         self.input_filename = input_filename
         self.output_filename = output_filename
@@ -67,21 +66,13 @@ class Text2ChakraConverter:
         self.logger = logger
         self.next_node_id = 0
 
-    def get_layers(
-        self,
-        f: TextIOWrapper,
-        num_layers: int
-    ) -> List[Layer]:
+    def get_layers(self, f: TextIOWrapper, num_layers: int) -> List[Layer]:
         layers = []
         for line in f:
             layers.append(Layer(line))
         return layers
 
-    def get_node(
-        self,
-        name: str,
-        node_type: int
-    ) -> Any:
+    def get_node(self, name: str, node_type: int) -> Any:
         node = Node()
         node.id = self.next_node_id
         self.next_node_id += 1
@@ -89,21 +80,12 @@ class Text2ChakraConverter:
         node.type = node_type
         return node
 
-    def get_comp_node(
-        self,
-        layer_name: str,
-        phase: str,
-        comp_time: int
-    ) -> Any:
-        node = self.get_node("COMP_NODE_" + layer_name + "_" + phase,
-                             COMP_NODE)
+    def get_comp_node(self, layer_name: str, phase: str, comp_time: int) -> Any:
+        node = self.get_node("COMP_NODE_" + layer_name + "_" + phase, COMP_NODE)
         node.duration_micros = comp_time
         return node
 
-    def get_comm_type(
-        self,
-        comm_type: str
-    ) -> int:
+    def get_comm_type(self, comm_type: str) -> int:
         if comm_type == "ALLREDUCE":
             return ALL_REDUCE
         elif comm_type == "ALLTOALL":
@@ -115,24 +97,15 @@ class Text2ChakraConverter:
         return 0
 
     def get_comm_coll_node(
-        self,
-        layer_name: str,
-        comm_type: str,
-        comm_size: int
+        self, layer_name: str, comm_type: str, comm_size: int
     ) -> Any:
-        node = self.get_node(
-                f"COMM_COLL_NODE_{layer_name}_{comm_type}",
-                COMM_COLL_NODE)
+        node = self.get_node(f"COMM_COLL_NODE_{layer_name}_{comm_type}", COMM_COLL_NODE)
         node.attr.append(
-                ChakraAttr(name="comm_type",
-                           int64_val=self.get_comm_type(comm_type)))
+            ChakraAttr(name="comm_type", int64_val=self.get_comm_type(comm_type))
+        )
         return node
 
-    def add_parent(
-        self,
-        child_node: Any,
-        parent_node: Any
-    ) -> None:
+    def add_parent(self, child_node: Any, parent_node: Any) -> None:
         child_node.parent.append(parent_node.id)
 
     def convert(self) -> None:
@@ -147,22 +120,19 @@ class Text2ChakraConverter:
                 self.convert_data_parallel(f, num_layers)
             elif parallelism_type == "MODEL":
                 self.convert_model_parallel(f, num_layers)
-            elif (parallelism_type == "HYBRID_DATA_MODEL"):
+            elif parallelism_type == "HYBRID_DATA_MODEL":
                 self.convert_hybrid_data_model(f, num_layers)
-            elif (parallelism_type == "HYBRID_MODEL_DATA"):
+            elif parallelism_type == "HYBRID_MODEL_DATA":
                 self.convert_hybrid_model_data(f, num_layers)
-            elif (parallelism_type == "HYBRID_DLRM")\
-                    or (parallelism_type == "HYBRID_DLRM_ENHANCED"):
+            elif (parallelism_type == "HYBRID_DLRM") or (
+                parallelism_type == "HYBRID_DLRM_ENHANCED"
+            ):
                 last_bottom_layer = int(first_line[1])
                 self.convert_hybrid_dlrm(f, num_layers, last_bottom_layer)
             else:
                 raise ValueError(f"Unsupported parallelism type, {parallelism_type}")
 
-    def convert_microbenchmark(
-        self,
-        f: TextIOWrapper,
-        num_layers: int
-    ) -> None:
+    def convert_microbenchmark(self, f: TextIOWrapper, num_layers: int) -> None:
         layers = self.get_layers(f, num_layers)
         for npu_id in range(self.num_npus):
             output_filename = "%s.%d.et" % (self.output_filename, npu_id)
@@ -170,9 +140,8 @@ class Text2ChakraConverter:
                 for i in range(self.num_passes):
                     for layer in layers:
                         bwd_wg_comm_node = self.get_comm_coll_node(
-                                layer.name,
-                                layer.bwd_wg_comm_type,
-                                layer.bwd_wg_comm_size)
+                            layer.name, layer.bwd_wg_comm_type, layer.bwd_wg_comm_size
+                        )
 
                         attr = ChakraAttr(name="involved_dim")
                         for _ in range(self.num_dims):
@@ -181,11 +150,7 @@ class Text2ChakraConverter:
 
                         encode_message(g, bwd_wg_comm_node)
 
-    def convert_data_parallel(
-        self,
-        f: TextIOWrapper,
-        num_layers: int
-    ) -> None:
+    def convert_data_parallel(self, f: TextIOWrapper, num_layers: int) -> None:
         layers = self.get_layers(f, num_layers)
         for npu_id in range(self.num_npus):
             output_filename = "%s.%d.et" % (self.output_filename, npu_id)
@@ -196,10 +161,12 @@ class Text2ChakraConverter:
                     # forward pass
                     for idx, layer in enumerate(layers):
                         fwd_comp_node = self.get_comp_node(
-                                layer.name, "FWD",
-                                layer.fwd_comp_time)
+                            layer.name, "FWD", layer.fwd_comp_time
+                        )
                         if idx != 0:
-                            self.add_parent(fwd_comp_node, layers[idx-1].fwd_comp_node)
+                            self.add_parent(
+                                fwd_comp_node, layers[idx - 1].fwd_comp_node
+                            )
                         if layer.bwd_wg_comm_node != None:
                             self.add_parent(fwd_comp_node, layer.bwd_wg_comm_node)
                         layer.fwd_comp_node = fwd_comp_node
@@ -208,21 +175,22 @@ class Text2ChakraConverter:
                     # backward pass
                     for idx, layer in enumerate(reversed(layers)):
                         bwd_wg_comp_node = self.get_comp_node(
-                                layer.name, "BWD_WG",
-                                layer.bwd_wg_comp_time)
+                            layer.name, "BWD_WG", layer.bwd_wg_comp_time
+                        )
                         if idx == 0:
                             if fwd_comp_node == None:
                                 raise ValueError("fwd_comp_node is None")
                             self.add_parent(bwd_wg_comp_node, fwd_comp_node)
                         else:
-                            self.add_parent(bwd_wg_comp_node,
-                                    layers[len(layers)-idx].bwd_ig_comp_node)
+                            self.add_parent(
+                                bwd_wg_comp_node,
+                                layers[len(layers) - idx].bwd_ig_comp_node,
+                            )
                         encode_message(g, bwd_wg_comp_node)
 
                         bwd_wg_comm_node = self.get_comm_coll_node(
-                                layer.name,
-                                layer.bwd_wg_comm_type,
-                                layer.bwd_wg_comm_size)
+                            layer.name, layer.bwd_wg_comm_type, layer.bwd_wg_comm_size
+                        )
                         attr = ChakraAttr(name="involved_dim")
                         for _ in range(self.num_dims):
                             attr.bool_list.values.append(True)
@@ -234,8 +202,8 @@ class Text2ChakraConverter:
 
                         if idx != (len(layers) - 1):
                             bwd_ig_comp_node = self.get_comp_node(
-                                    layer.name, "BWD_IG",
-                                    layer.bwd_ig_comp_time)
+                                layer.name, "BWD_IG", layer.bwd_ig_comp_time
+                            )
                             self.add_parent(bwd_ig_comp_node, bwd_wg_comp_node)
                             layer.bwd_ig_comp_node = bwd_ig_comp_node
                             encode_message(g, bwd_ig_comp_node)
@@ -243,11 +211,7 @@ class Text2ChakraConverter:
                 for layer in layers:
                     layer.bwd_wg_comm_node = None
 
-    def convert_model_parallel(
-        self,
-        f: TextIOWrapper,
-        num_layers: int
-    ) -> None:
+    def convert_model_parallel(self, f: TextIOWrapper, num_layers: int) -> None:
         layers = self.get_layers(f, num_layers)
         for npu_id in range(self.num_npus):
             output_filename = "%s.%d.et" % (self.output_filename, npu_id)
@@ -258,19 +222,20 @@ class Text2ChakraConverter:
                     # forward pass
                     for idx, layer in enumerate(layers):
                         fwd_comp_node = self.get_comp_node(
-                                layer.name, "FWD",
-                                layer.fwd_comp_time)
+                            layer.name, "FWD", layer.fwd_comp_time
+                        )
                         if idx != 0:
-                            self.add_parent(fwd_comp_node, layers[idx-1].fwd_comm_node)
+                            self.add_parent(
+                                fwd_comp_node, layers[idx - 1].fwd_comm_node
+                            )
                         if layer.bwd_wg_comp_node != None:
                             self.add_parent(fwd_comp_node, layer.bwd_wg_comp_node)
                         layer.fwd_comp_node = fwd_comp_node
                         encode_message(g, fwd_comp_node)
 
                         fwd_comm_node = self.get_comm_coll_node(
-                                layer.name,
-                                layer.fwd_comm_type,
-                                layer.fwd_comm_size)
+                            layer.name, layer.fwd_comm_type, layer.fwd_comm_size
+                        )
                         attr = ChakraAttr(name="involved_dim")
                         for _ in range(self.num_dims):
                             attr.bool_list.values.append(True)
@@ -282,24 +247,29 @@ class Text2ChakraConverter:
                     # backward pass
                     for idx, layer in enumerate(reversed(layers)):
                         bwd_ig_comp_node = self.get_comp_node(
-                                layer.name, "BWD_IG",
-                                layer.bwd_ig_comp_time)
+                            layer.name, "BWD_IG", layer.bwd_ig_comp_time
+                        )
                         if idx == 0:
                             if fwd_comm_node == None:
                                 raise ValueError("fwd_comm_node is None")
                             self.add_parent(bwd_ig_comp_node, fwd_comm_node)
                         else:
-                            self.add_parent(bwd_ig_comp_node,
-                                    layers[len(layers)-idx].bwd_wg_comp_node)
-                            self.add_parent(bwd_ig_comp_node,
-                                    layers[len(layers)-idx].bwd_ig_comm_node)
+                            self.add_parent(
+                                bwd_ig_comp_node,
+                                layers[len(layers) - idx].bwd_wg_comp_node,
+                            )
+                            self.add_parent(
+                                bwd_ig_comp_node,
+                                layers[len(layers) - idx].bwd_ig_comm_node,
+                            )
                         encode_message(g, bwd_ig_comp_node)
 
                         if idx != (num_layers - 1):
                             bwd_ig_comm_node = self.get_comm_coll_node(
-                                    layer.name,
-                                    layer.bwd_ig_comm_type,
-                                    layer.bwd_ig_comm_size)
+                                layer.name,
+                                layer.bwd_ig_comm_type,
+                                layer.bwd_ig_comm_size,
+                            )
                             attr = ChakraAttr(name="involved_dim")
                             for _ in range(self.num_dims):
                                 attr.bool_list.values.append(True)
@@ -309,8 +279,8 @@ class Text2ChakraConverter:
                             encode_message(g, bwd_ig_comm_node)
 
                         bwd_wg_comp_node = self.get_comp_node(
-                                layer.name, "BWD_WG",
-                                layer.bwd_wg_comp_time)
+                            layer.name, "BWD_WG", layer.bwd_wg_comp_time
+                        )
                         self.add_parent(bwd_wg_comp_node, bwd_ig_comp_node)
                         layer.bwd_wg_comp_node = bwd_wg_comp_node
                         encode_message(g, bwd_wg_comp_node)
@@ -318,11 +288,7 @@ class Text2ChakraConverter:
                 for layer in layers:
                     layer.bwd_wg_comp_node = None
 
-    def convert_hybrid_data_model(
-        self,
-        f: TextIOWrapper,
-        num_layers: int
-    ) -> None:
+    def convert_hybrid_data_model(self, f: TextIOWrapper, num_layers: int) -> None:
         layers = self.get_layers(f, num_layers)
         for npu_id in range(self.num_npus):
             output_filename = "%s.%d.et" % (self.output_filename, npu_id)
@@ -333,21 +299,22 @@ class Text2ChakraConverter:
                     # forward pass
                     for idx, layer in enumerate(layers):
                         fwd_comp_node = self.get_comp_node(
-                                layer.name, "FWD",
-                                layer.fwd_comp_time)
+                            layer.name, "FWD", layer.fwd_comp_time
+                        )
                         if layer.bwd_wg_comm_node != None:
                             self.add_parent(fwd_comp_node, layer.bwd_wg_comm_node)
                         if idx != 0:
-                            self.add_parent(fwd_comp_node, layers[idx-1].fwd_comm_node)
+                            self.add_parent(
+                                fwd_comp_node, layers[idx - 1].fwd_comm_node
+                            )
                         encode_message(g, fwd_comp_node)
 
                         fwd_comm_node = self.get_comm_coll_node(
-                                layer.name,
-                                layer.fwd_comm_type,
-                                layer.fwd_comm_size)
+                            layer.name, layer.fwd_comm_type, layer.fwd_comm_size
+                        )
                         attr = ChakraAttr(name="involved_dim")
                         attr.bool_list.values.append(True)
-                        for _ in range(self.num_dims-1):
+                        for _ in range(self.num_dims - 1):
                             attr.bool_list.values.append(False)
                         fwd_comm_node.attr.append(attr)
                         self.add_parent(fwd_comm_node, fwd_comp_node)
@@ -357,27 +324,32 @@ class Text2ChakraConverter:
                     # backward pass
                     for idx, layer in enumerate(reversed(layers)):
                         bwd_ig_comp_node = self.get_comp_node(
-                                layer.name, "BWD_IG",
-                                layer.bwd_ig_comp_time)
+                            layer.name, "BWD_IG", layer.bwd_ig_comp_time
+                        )
                         if idx == 0:
                             if fwd_comm_node == None:
                                 raise ValueError("fwd_comm_node is None")
                             self.add_parent(bwd_ig_comp_node, fwd_comm_node)
                         else:
-                            self.add_parent(bwd_ig_comp_node,
-                                    layers[len(layers)-idx].bwd_wg_comp_node)
-                            self.add_parent(bwd_ig_comp_node,
-                                    layers[len(layers)-idx].bwd_ig_comm_node)
+                            self.add_parent(
+                                bwd_ig_comp_node,
+                                layers[len(layers) - idx].bwd_wg_comp_node,
+                            )
+                            self.add_parent(
+                                bwd_ig_comp_node,
+                                layers[len(layers) - idx].bwd_ig_comm_node,
+                            )
                         encode_message(g, bwd_ig_comp_node)
 
                         if idx != num_layers - 1:
                             bwd_ig_comm_node = self.get_comm_coll_node(
-                                    layer.name + "_IG_COMM_",
-                                    layer.bwd_ig_comm_type,
-                                    layer.bwd_ig_comm_size)
+                                layer.name + "_IG_COMM_",
+                                layer.bwd_ig_comm_type,
+                                layer.bwd_ig_comm_size,
+                            )
                             attr = ChakraAttr(name="involved_dim")
                             attr.bool_list.values.append(True)
-                            for _ in range(self.num_dims-1):
+                            for _ in range(self.num_dims - 1):
                                 attr.bool_list.values.append(False)
                             bwd_ig_comm_node.attr.append(attr)
                             self.add_parent(bwd_ig_comm_node, bwd_ig_comp_node)
@@ -385,19 +357,18 @@ class Text2ChakraConverter:
                             encode_message(g, bwd_ig_comm_node)
 
                         bwd_wg_comp_node = self.get_comp_node(
-                                layer.name, "BWD_WG",
-                                layer.bwd_wg_comp_time)
+                            layer.name, "BWD_WG", layer.bwd_wg_comp_time
+                        )
                         self.add_parent(bwd_wg_comp_node, bwd_ig_comp_node)
                         layer.bwd_wg_comp_node = bwd_wg_comp_node
                         encode_message(g, bwd_wg_comp_node)
 
                         bwd_wg_comm_node = self.get_comm_coll_node(
-                                layer.name,
-                                layer.bwd_wg_comm_type,
-                                layer.bwd_wg_comm_size)
+                            layer.name, layer.bwd_wg_comm_type, layer.bwd_wg_comm_size
+                        )
                         attr = ChakraAttr(name="involved_dim")
                         attr.bool_list.values.append(False)
-                        for _ in range(self.num_dims-1):
+                        for _ in range(self.num_dims - 1):
                             attr.bool_list.values.append(True)
                         bwd_wg_comm_node.attr.append(attr)
                         self.add_parent(bwd_wg_comm_node, bwd_wg_comp_node)
@@ -407,11 +378,7 @@ class Text2ChakraConverter:
                 for layer in layers:
                     layer.bwd_wg_comm_node = None
 
-    def convert_hybrid_model_data(
-        self,
-        f: TextIOWrapper,
-        num_layers: int
-    ) -> None:
+    def convert_hybrid_model_data(self, f: TextIOWrapper, num_layers: int) -> None:
         layers = self.get_layers(f, num_layers)
         for npu_id in range(self.num_npus):
             output_filename = "%s.%d.et" % (self.output_filename, npu_id)
@@ -422,21 +389,22 @@ class Text2ChakraConverter:
                     # forward pass
                     for idx, layer in enumerate(layers):
                         fwd_comp_node = self.get_comp_node(
-                                layer.name, "FWD",
-                                layer.fwd_comp_time)
+                            layer.name, "FWD", layer.fwd_comp_time
+                        )
                         if layer.bwd_wg_comm_node != None:
                             self.add_parent(fwd_comp_node, layer.bwd_wg_comm_node)
                         if idx != 0:
-                            self.add_parent(fwd_comp_node, layers[idx-1].fwd_comm_node)
+                            self.add_parent(
+                                fwd_comp_node, layers[idx - 1].fwd_comm_node
+                            )
                         encode_message(g, fwd_comp_node)
 
                         fwd_comm_node = self.get_comm_coll_node(
-                                layer.name,
-                                layer.fwd_comm_type,
-                                layer.fwd_comm_size)
+                            layer.name, layer.fwd_comm_type, layer.fwd_comm_size
+                        )
                         attr = ChakraAttr(name="involved_dim")
                         attr.bool_list.values.append(False)
-                        for _ in range(self.num_dims-1):
+                        for _ in range(self.num_dims - 1):
                             attr.bool_list.values.append(True)
                         fwd_comm_node.attr.append(attr)
                         self.add_parent(fwd_comm_node, fwd_comp_node)
@@ -446,25 +414,32 @@ class Text2ChakraConverter:
                     # backward pass
                     for idx, layer in enumerate(reversed(layers)):
                         bwd_ig_comp_node = self.get_comp_node(
-                                layer.name, "BWD_IG",
-                                layer.bwd_ig_comp_time)
+                            layer.name, "BWD_IG", layer.bwd_ig_comp_time
+                        )
                         if idx == 0:
                             if fwd_comm_node == None:
                                 raise ValueError("fwd_comm_node is None")
                             self.add_parent(bwd_ig_comp_node, fwd_comm_node)
                         else:
-                            self.add_parent(bwd_ig_comp_node, layers[len(layers)-idx].bwd_wg_comp_node)
-                            self.add_parent(bwd_ig_comp_node, layers[len(layers)-idx].bwd_ig_comm_node)
+                            self.add_parent(
+                                bwd_ig_comp_node,
+                                layers[len(layers) - idx].bwd_wg_comp_node,
+                            )
+                            self.add_parent(
+                                bwd_ig_comp_node,
+                                layers[len(layers) - idx].bwd_ig_comm_node,
+                            )
                         encode_message(g, bwd_ig_comp_node)
 
                         if idx != num_layers - 1:
                             bwd_ig_comm_node = self.get_comm_coll_node(
-                                    layer.name,
-                                    layer.bwd_ig_comm_type,
-                                    layer.bwd_ig_comm_size)
+                                layer.name,
+                                layer.bwd_ig_comm_type,
+                                layer.bwd_ig_comm_size,
+                            )
                             attr = ChakraAttr(name="involved_dim")
                             attr.bool_list.values.append(False)
-                            for _ in range(self.num_dims-1):
+                            for _ in range(self.num_dims - 1):
                                 attr.bool_list.values.append(True)
                             bwd_ig_comm_node.attr.append(attr)
                             self.add_parent(bwd_ig_comm_node, bwd_ig_comp_node)
@@ -472,19 +447,18 @@ class Text2ChakraConverter:
                             encode_message(g, bwd_ig_comm_node)
 
                         bwd_wg_comp_node = self.get_comp_node(
-                                layer.name, "BWD_WG",
-                                layer.bwd_wg_comp_time)
+                            layer.name, "BWD_WG", layer.bwd_wg_comp_time
+                        )
                         self.add_parent(bwd_wg_comp_node, bwd_ig_comp_node)
                         layer.bwd_wg_comp_node = bwd_wg_comp_node
                         encode_message(g, bwd_wg_comp_node)
 
                         bwd_wg_comm_node = self.get_comm_coll_node(
-                                layer.name,
-                                layer.bwd_wg_comm_type,
-                                layer.bwd_wg_comm_size)
+                            layer.name, layer.bwd_wg_comm_type, layer.bwd_wg_comm_size
+                        )
                         attr = ChakraAttr(name="involved_dim")
                         attr.bool_list.values.append(True)
-                        for _ in range(self.num_dims-1):
+                        for _ in range(self.num_dims - 1):
                             attr.bool_list.values.append(False)
                         bwd_wg_comm_node.attr.append(attr)
                         self.add_parent(bwd_wg_comm_node, bwd_wg_comp_node)
@@ -495,10 +469,7 @@ class Text2ChakraConverter:
                     layer.bwd_wg_comm_node = None
 
     def convert_hybrid_dlrm(
-        self,
-        f: TextIOWrapper,
-        num_layers: int,
-        last_bottom_layer: int
+        self, f: TextIOWrapper, num_layers: int, last_bottom_layer: int
     ) -> None:
         layers = self.get_layers(f, num_layers)
         for npu_id in range(self.num_npus):
@@ -510,14 +481,16 @@ class Text2ChakraConverter:
                     # forward pass
                     for idx, layer in enumerate(layers):
                         fwd_comp_node = self.get_comp_node(
-                                layer.name, "FWD",
-                                layer.fwd_comp_time)
+                            layer.name, "FWD", layer.fwd_comp_time
+                        )
                         if layer.bwd_wg_comm_node != None:
                             self.add_parent(fwd_comp_node, layer.bwd_wg_comm_node)
                         elif layer.bwd_wg_comp_node != None:
                             self.add_parent(fwd_comp_node, layer.bwd_wg_comp_node)
                         if idx != 0:
-                            self.add_parent(fwd_comp_node, layers[idx-1].fwd_comp_node)
+                            self.add_parent(
+                                fwd_comp_node, layers[idx - 1].fwd_comp_node
+                            )
                         if idx == last_bottom_layer:
                             self.add_parent(fwd_comp_node, layers[0].fwd_comm_node)
                         layer.fwd_comp_node = fwd_comp_node
@@ -525,9 +498,8 @@ class Text2ChakraConverter:
 
                         if layer.fwd_comm_type == "ALLTOALL":
                             fwd_comm_node = self.get_comm_coll_node(
-                                    layer.name,
-                                    layer.fwd_comm_type,
-                                    layer.fwd_comm_size)
+                                layer.name, layer.fwd_comm_type, layer.fwd_comm_size
+                            )
                             attr = ChakraAttr(name="involved_dim")
                             for _ in range(self.num_dims):
                                 attr.bool_list.values.append(True)
@@ -539,27 +511,32 @@ class Text2ChakraConverter:
                     # backward pass
                     for idx, layer in enumerate(reversed(layers)):
                         bwd_wg_comp_node = self.get_comp_node(
-                                layer.name, "BWD_WG",
-                                layer.bwd_wg_comp_time)
+                            layer.name, "BWD_WG", layer.bwd_wg_comp_time
+                        )
                         if idx == 0:
                             if fwd_comp_node == None:
                                 raise ValueError("fwd_comp_node is None")
                             self.add_parent(bwd_wg_comp_node, fwd_comp_node)
                         else:
-                            if layers[len(layers)-idx].bwd_ig_comp_node != None:
-                                self.add_parent(bwd_wg_comp_node,
-                                        layers[len(layers)-idx].bwd_ig_comp_node)
-                            if layers[len(layers)-idx-1].bwd_ig_comm_node != None:
-                                self.add_parent(bwd_wg_comp_node,
-                                        layers[len(layers)-idx-1].bwd_ig_comm_node)
+                            if layers[len(layers) - idx].bwd_ig_comp_node != None:
+                                self.add_parent(
+                                    bwd_wg_comp_node,
+                                    layers[len(layers) - idx].bwd_ig_comp_node,
+                                )
+                            if layers[len(layers) - idx - 1].bwd_ig_comm_node != None:
+                                self.add_parent(
+                                    bwd_wg_comp_node,
+                                    layers[len(layers) - idx - 1].bwd_ig_comm_node,
+                                )
                         layer.bwd_wg_comp_node = bwd_wg_comp_node
                         encode_message(g, bwd_wg_comp_node)
 
                         if layer.bwd_wg_comm_type != "NONE":
                             bwd_wg_comm_node = self.get_comm_coll_node(
-                                    layer.name,
-                                    layer.bwd_wg_comm_type,
-                                    layer.bwd_wg_comm_size)
+                                layer.name,
+                                layer.bwd_wg_comm_type,
+                                layer.bwd_wg_comm_size,
+                            )
                             attr = ChakraAttr(name="involved_dim")
                             for _ in range(self.num_dims):
                                 attr.bool_list.values.append(True)
@@ -571,17 +548,18 @@ class Text2ChakraConverter:
                         bwd_ig_comp_node = None
                         if idx != (len(layers) - 1):
                             bwd_ig_comp_node = self.get_comp_node(
-                                    layer.name, "BWD_IG",
-                                    layer.bwd_ig_comp_time)
+                                layer.name, "BWD_IG", layer.bwd_ig_comp_time
+                            )
                             self.add_parent(bwd_ig_comp_node, bwd_wg_comp_node)
                             layer.bwd_ig_comp_node = bwd_ig_comp_node
                             encode_message(g, bwd_ig_comp_node)
 
                         if (len(layers) - idx - 1) == (last_bottom_layer + 1):
                             bwd_ig_comm_node = self.get_comm_coll_node(
-                                    layers[0].name,
-                                    layers[0].bwd_ig_comm_type,
-                                    layers[0].bwd_ig_comm_size)
+                                layers[0].name,
+                                layers[0].bwd_ig_comm_type,
+                                layers[0].bwd_ig_comm_size,
+                            )
                             attr = ChakraAttr(name="involved_dim")
                             for _ in range(self.num_dims):
                                 attr.bool_list.values.append(True)

@@ -27,7 +27,7 @@ from chakra.et_def.et_def_pb2 import (
 class PyTorchNodeType(Enum):
     CPU_OP = 1
     GPU_OP = 2
-    LABEL = 3 # Non-operator nodes
+    LABEL = 3  # Non-operator nodes
 
 
 class PyTorch2ChakraConverter:
@@ -36,7 +36,7 @@ class PyTorch2ChakraConverter:
         input_filename: str,
         output_filename: str,
         num_dims: int,
-        logger: logging.Logger
+        logger: logging.Logger,
     ) -> None:
         try:
             self.pytorch_et = open(input_filename, "r")
@@ -94,11 +94,13 @@ class PyTorch2ChakraConverter:
         # Otherwise, a tensor ID should be utilized.
         # ---------------------------------------------------------------------
         # Mapping between storage_id and nid
-        self.input_storage_id_nid_dict = {} # storage_id is an input of a node with nid
-        self.output_storage_id_nid_dict = {} # storage_id is an output of a node with nid
+        self.input_storage_id_nid_dict = {}  # storage_id is an input of a node with nid
+        self.output_storage_id_nid_dict = (
+            {}
+        )  # storage_id is an output of a node with nid
         # Mapping between tensor_id and nid
-        self.input_tensor_id_nid_dict = {} # tensor_id is an input of a node with nid
-        self.output_tensor_id_nid_dict = {} # tensor_id is an output of a node with nid
+        self.input_tensor_id_nid_dict = {}  # tensor_id is an input of a node with nid
+        self.output_tensor_id_nid_dict = {}  # tensor_id is an output of a node with nid
 
     def __del__(self):
         if self.pytorch_et and not self.pytorch_et.closed:
@@ -107,9 +109,7 @@ class PyTorch2ChakraConverter:
             self.chakra_et.close()
 
     @staticmethod
-    def is_valid_tensor(
-        obj: Any
-    ) -> bool:
+    def is_valid_tensor(obj: Any) -> bool:
         """
         Returns true if a given object is a valid tensor.
 
@@ -119,9 +119,7 @@ class PyTorch2ChakraConverter:
         return isinstance(obj, list) and (len(obj) == 6)
 
     @staticmethod
-    def get_storage_id_from_tensor(
-        tensor: List[Any]
-    ) -> int:
+    def get_storage_id_from_tensor(tensor: List[Any]) -> int:
         """
         Returns the storage ID of a tensor.
         """
@@ -130,9 +128,7 @@ class PyTorch2ChakraConverter:
         return tensor[1]
 
     @staticmethod
-    def get_tensor_id_from_tensor(
-        tensor: List[Any]
-    ) -> int:
+    def get_tensor_id_from_tensor(tensor: List[Any]) -> int:
         """
         Returns the tensor ID of a tensor.
         """
@@ -140,10 +136,7 @@ class PyTorch2ChakraConverter:
             raise IndexError("Index out of bounds")
         return tensor[0]
 
-    def has_valid_storage_id(
-        self,
-        tensor: List[Any]
-    ) -> bool:
+    def has_valid_storage_id(self, tensor: List[Any]) -> bool:
         """
         Returns true if a given tensor has a valid storage ID.
 
@@ -154,85 +147,66 @@ class PyTorch2ChakraConverter:
         return storage_id > 0
 
     @staticmethod
-    def has_cat_field(
-        node: Dict[str, Any]
-    ) -> bool:
+    def has_cat_field(node: Dict[str, Any]) -> bool:
         """
         Returns true if a PyTorch node has a category field.
         """
         return "cat" in node.keys()
 
     @staticmethod
-    def get_cat_field(
-        node: Dict[str, Any]
-    ) -> bool:
+    def get_cat_field(node: Dict[str, Any]) -> bool:
         """
         Returns the category field of a given PyTorch node.
         """
         return node["cat"]
 
     @staticmethod
-    def has_dur(
-        node: Dict[str, Any]
-    ) -> bool:
+    def has_dur(node: Dict[str, Any]) -> bool:
         """
         Returns true if a PyTorch node has a duration field.
         """
         return "dur" in node.keys()
 
-    def get_pytorch_node_type(
-        self,
-        node: Dict[str, Any]
-    ) -> PyTorchNodeType:
+    def get_pytorch_node_type(self, node: Dict[str, Any]) -> PyTorchNodeType:
         if self.is_gpu_op(node):
             return PyTorchNodeType.GPU_OP
-        elif (node["op_schema"] or node["outputs"])\
-                or ("c10d::" in node["name"] or ("nccl:" in node["name"])):
+        elif (node["op_schema"] or node["outputs"]) or (
+            "c10d::" in node["name"] or ("nccl:" in node["name"])
+        ):
             return PyTorchNodeType.CPU_OP
         else:
             return PyTorchNodeType.LABEL
 
     @staticmethod
-    def is_record_param_comms_node(
-        node: Dict[str, Any]
-    ) -> bool:
+    def is_record_param_comms_node(node: Dict[str, Any]) -> bool:
         """
         Returns true if a PyToch node has "record_param_comms" in its name.
         """
         return "record_param_comms" in node["name"]
 
     @staticmethod
-    def is_nccl_node(
-        node: Dict[str, Any]
-    ) -> bool:
+    def is_nccl_node(node: Dict[str, Any]) -> bool:
         """
         Returns true if a PyToch node is a NCCL node.
         """
         return "nccl:" in node["name"]
 
-    def is_cpu_op_with_dur(
-        self,
-        node: Dict[str, Any]
-    ) -> bool:
+    def is_cpu_op_with_dur(self, node: Dict[str, Any]) -> bool:
         """
         Returns true if a PyTorch node is a CPU operator and has a duration field.
         """
-        return (self.get_pytorch_node_type(node) == PyTorchNodeType.CPU_OP)\
-                and self.has_dur(node)
+        return (
+            self.get_pytorch_node_type(node) == PyTorchNodeType.CPU_OP
+        ) and self.has_dur(node)
 
-    def is_cpu_op(
-        self,
-        node: Dict[str, Any]
-    ) -> bool:
+    def is_cpu_op(self, node: Dict[str, Any]) -> bool:
         """
         Takes a PyTorch node and returns true if the node is a CPU operator.
         """
         return self.get_pytorch_node_type(node) == PyTorchNodeType.CPU_OP
 
     @staticmethod
-    def get_collective_comm_type(
-        node: Dict[str, Any]
-    ) -> int:
+    def get_collective_comm_type(node: Dict[str, Any]) -> int:
         """
         Returns the collective communication type of a given PyTorch node.
         """
@@ -252,9 +226,7 @@ class PyTorch2ChakraConverter:
         return INVALID_COMM
 
     @staticmethod
-    def get_data_type_size(
-        data_type: str
-    ) -> int:
+    def get_data_type_size(data_type: str) -> int:
         """
         Returns the data type size of a given data type in string.
 
@@ -263,26 +235,26 @@ class PyTorch2ChakraConverter:
         * https://github.com/pytorch/pytorch/blob/master/c10/util/Half.h
         """
         data_type_size_dict = {
-                "Tensor(float32)": 4,
-                "Tensor(float)": 4,
-                "Tensor(float64)": 8,
-                "Tensor(double)": 8,
-                "Tensor(float16)": 2,
-                "Tensor(half)": 2,
-                "Tensor(bfloat16)": 2,
-                "Tensor(complex64)": 8,
-                "Tensor(complex128)": 16,
-                "Tensor(uint8)": 1,
-                "Tensor(int8)": 1,
-                "Tensor(int16)": 2,
-                "Tensor(short)": 2,
-                "Tensor(int32)": 4,
-                "Tensor(int)": 4,
-                "Tensor(int64)": 8,
-                "Tensor(long)": 8,
-                "Tensor(c10::Half)": 2,
-                "Tensor(unsigned char)": 1,
-                "Tensor(long int)": 8,
+            "Tensor(float32)": 4,
+            "Tensor(float)": 4,
+            "Tensor(float64)": 8,
+            "Tensor(double)": 8,
+            "Tensor(float16)": 2,
+            "Tensor(half)": 2,
+            "Tensor(bfloat16)": 2,
+            "Tensor(complex64)": 8,
+            "Tensor(complex128)": 16,
+            "Tensor(uint8)": 1,
+            "Tensor(int8)": 1,
+            "Tensor(int16)": 2,
+            "Tensor(short)": 2,
+            "Tensor(int32)": 4,
+            "Tensor(int)": 4,
+            "Tensor(int64)": 8,
+            "Tensor(long)": 8,
+            "Tensor(c10::Half)": 2,
+            "Tensor(unsigned char)": 1,
+            "Tensor(long int)": 8,
         }
         try:
             data_type_size = data_type_size_dict[data_type]
@@ -290,10 +262,7 @@ class PyTorch2ChakraConverter:
         except:
             raise ValueError(f"{data_type} is unsupported")
 
-    def get_chakra_node_type_from_pytorch_node(
-        self,
-        node: Dict[str, Any]
-    ) -> int:
+    def get_chakra_node_type_from_pytorch_node(self, node: Dict[str, Any]) -> int:
         if self.has_cat_field(node) and ("ncclKernel" in node["name"]):
             return COMM_COLL_NODE
         elif self.has_cat_field(node):
@@ -304,19 +273,13 @@ class PyTorch2ChakraConverter:
             return COMP_NODE
         return INVALID_NODE
 
-    def has_gpu_op(
-        self,
-        nid: int
-    ) -> bool:
+    def has_gpu_op(self, nid: int) -> bool:
         """
         Returns true if a Chakra node has any associated GPU operator.
         """
         return nid in self.pt_gpu_node_dict.keys()
 
-    def get_comm_size(
-        self,
-        node: Dict[str, Any]
-    ) -> int:
+    def get_comm_size(self, node: Dict[str, Any]) -> int:
         """
         Calculates the communication size for a given input_type and input_shape.
         """
@@ -328,9 +291,7 @@ class PyTorch2ChakraConverter:
                 comm_size = comm_size * input_shape_inner
         return comm_size
 
-    def sort_pytorch_nodes_with_starting_time(
-        self
-    ) -> None:
+    def sort_pytorch_nodes_with_starting_time(self) -> None:
         """
         Sorts PyTorch nodes with their starting time ("ts").
 
@@ -338,17 +299,14 @@ class PyTorch2ChakraConverter:
         """
         self.pt_nodes = sorted(self.pt_nodes, key=lambda kv: kv["ts"])
 
-    def get_total_runtime_ms(
-        self,
-        pt_node_list: List[Any]
-    ) -> int:
+    def get_total_runtime_ms(self, pt_node_list: List[Any]) -> int:
         """
         Returns the total runtime of PyTorch CPU operators with a duration field.
         """
         total_runtime_ms = 0
         for pt_node in pt_node_list:
             if self.is_cpu_op_with_dur(pt_node):
-                total_runtime_ms += pt_node["dur"] # in milliseconds
+                total_runtime_ms += pt_node["dur"]  # in milliseconds
         return total_runtime_ms
 
     def get_prev_inter_phase_dep_nid(
@@ -370,9 +328,7 @@ class PyTorch2ChakraConverter:
             return self.inter_phase_dependency[index - 1]
 
     @staticmethod
-    def find_root_nids(
-        nodes: List[Any]
-    ) -> int:
+    def find_root_nids(nodes: List[Any]) -> int:
         """
         Finds a root node and return its NID.
 
@@ -387,9 +343,7 @@ class PyTorch2ChakraConverter:
         return root_nids
 
     @staticmethod
-    def is_label_node(
-        node: Dict[str, Any]
-    ) -> bool:
+    def is_label_node(node: Dict[str, Any]) -> bool:
         """
         Returns true if a given PyTorch node is a label node.
 
@@ -397,17 +351,10 @@ class PyTorch2ChakraConverter:
         """
         return node["name"].startswith("## ")
 
-    def is_phase_root_node(
-        self,
-        root_nids: List[int],
-        node: Dict[str, Any]
-    ) -> bool:
+    def is_phase_root_node(self, root_nids: List[int], node: Dict[str, Any]) -> bool:
         return node["parent"] in root_nids
 
-    def is_gpu_op(
-        self,
-        node: Dict[str, Any]
-    ) -> bool:
+    def is_gpu_op(self, node: Dict[str, Any]) -> bool:
         """
         Takes a PyTorch node and returns true if it is a GPU operator.
 
@@ -463,9 +410,7 @@ class PyTorch2ChakraConverter:
             raise ValueError(f"Invalid node type: {node_type}")
         return -1
 
-    def discover_pytorch_cpu_ops(
-        self
-    ) -> None:
+    def discover_pytorch_cpu_ops(self) -> None:
         """
         Discovers PyTorch CPU operators and populate pt_cpu_node_dict.
 
@@ -484,9 +429,9 @@ class PyTorch2ChakraConverter:
 
     def assign_chakra_ids(
         self,
-        total_assigned_ids: Dict[int,bool],
+        total_assigned_ids: Dict[int, bool],
         assigned_ids: List[int],
-        initial_id_to_assign: int
+        initial_id_to_assign: int,
     ) -> int:
         """
         This function is used to assign unique ids to the ops. During the conversion, we may decompose an op into multiple
@@ -521,43 +466,56 @@ class PyTorch2ChakraConverter:
         decomposed_nodes_dep = {}
         for nid, node in self.pt_cpu_node_dict.items():
             if self.has_gpu_op(nid):
-                self.pt_gpu_node_dict[nid] = sorted(self.pt_gpu_node_dict[nid], key=lambda kv: kv["ts"])
+                self.pt_gpu_node_dict[nid] = sorted(
+                    self.pt_gpu_node_dict[nid], key=lambda kv: kv["ts"]
+                )
 
                 for gpu_node in self.pt_gpu_node_dict[nid]:
                     assert (node["ts"] + node["dur"]) > gpu_node["ts"]
 
                 last_ts = node["ts"]
-                for i in range(len(self.pt_gpu_node_dict[nid])+1):
+                for i in range(len(self.pt_gpu_node_dict[nid]) + 1):
                     copy_node = copy.deepcopy(node)
-                    copy_node["id"] = self.assign_chakra_ids(total_assigned_ids, assigned_ids, nid)
-                    copy_node["name"] = copy_node["name"]+"("+str(i)+")"
+                    copy_node["id"] = self.assign_chakra_ids(
+                        total_assigned_ids, assigned_ids, nid
+                    )
+                    copy_node["name"] = copy_node["name"] + "(" + str(i) + ")"
                     if i < len(self.pt_gpu_node_dict[nid]):
-                        self.pt_gpu_node_dict[nid][i]["id"] =\
-                                self.assign_chakra_ids(
-                                        total_assigned_ids,
-                                        assigned_ids,
-                                        self.pt_gpu_node_dict[nid][i]["id"])
+                        self.pt_gpu_node_dict[nid][i]["id"] = self.assign_chakra_ids(
+                            total_assigned_ids,
+                            assigned_ids,
+                            self.pt_gpu_node_dict[nid][i]["id"],
+                        )
                         assert self.pt_gpu_node_dict[nid][i]["ts"] > copy_node["ts"]
                         copy_node["ts"] = last_ts
-                        copy_node["dur"] = self.pt_gpu_node_dict[nid][i]["ts"]-last_ts
+                        copy_node["dur"] = self.pt_gpu_node_dict[nid][i]["ts"] - last_ts
                         last_ts = self.pt_gpu_node_dict[nid][i]["ts"]
-                        new_pt_gpu_node_dict.setdefault(copy_node["id"], []).append(self.pt_gpu_node_dict[nid][i])
+                        new_pt_gpu_node_dict.setdefault(copy_node["id"], []).append(
+                            self.pt_gpu_node_dict[nid][i]
+                        )
                     else:
-                        copy_node["dur"] = copy_node["dur"]-(last_ts-copy_node["ts"])
+                        copy_node["dur"] = copy_node["dur"] - (
+                            last_ts - copy_node["ts"]
+                        )
                         copy_node["ts"] = last_ts
-                        last_ts = copy_node["ts"]+copy_node["dur"]
+                        last_ts = copy_node["ts"] + copy_node["dur"]
 
                     assert (copy_node["ts"] >= 0) and (copy_node["dur"] > 0)
                     if i > 0:
                         assert copy_node["ts"] > decomposed_nodes[-1]["ts"]
-                        decomposed_nodes_dep[copy_node["id"]] = decomposed_nodes[-1]["id"]
+                        decomposed_nodes_dep[copy_node["id"]] = decomposed_nodes[-1][
+                            "id"
+                        ]
                     decomposed_nodes.append(copy_node)
             else:
-                node["id"] = self.assign_chakra_ids(total_assigned_ids, assigned_ids, nid)
+                node["id"] = self.assign_chakra_ids(
+                    total_assigned_ids, assigned_ids, nid
+                )
                 decomposed_nodes.append(node)
 
         merged_pt_cpu_node_dict = {
-            decomposed_node["id"]: decomposed_node for decomposed_node in decomposed_nodes
+            decomposed_node["id"]: decomposed_node
+            for decomposed_node in decomposed_nodes
         }
 
         self.pt_cpu_node_dict = merged_pt_cpu_node_dict
@@ -584,10 +542,7 @@ class PyTorch2ChakraConverter:
             if nid in self.pt_gpu_node_dict.keys():
                 assert len(self.pt_gpu_node_dict[nid]) == 1
 
-    def discover_pytorch_comm_ops(
-        self,
-        assigned_ids: List[int]
-    ) -> None:
+    def discover_pytorch_comm_ops(self, assigned_ids: List[int]) -> None:
         """
         Discovers communication nodes and populate pt_record_param_comms_node_dict
         and pt_nccl_node_dict.
@@ -603,22 +558,20 @@ class PyTorch2ChakraConverter:
                     self.pt_record_param_comms_node_dict.update({node["parent"]: node})
             if self.is_nccl_node(node):
                 if node["parent"] in assigned_ids.keys():
-                        nodes_to_assign=assigned_ids[node["parent"]]
-                        for parent_id in nodes_to_assign:
-                            self.pt_nccl_node_dict.update({parent_id: node})
+                    nodes_to_assign = assigned_ids[node["parent"]]
+                    for parent_id in nodes_to_assign:
+                        self.pt_nccl_node_dict.update({parent_id: node})
                 else:
                     self.pt_nccl_node_dict.update({node["parent"]: node})
 
         for i in range(len(self.inter_phase_dependency)):
             # If an op is decomposed into multiple sub_ops, we want to point to the last subop [-1]
-            self.inter_phase_dependency[i] = assigned_ids[self.inter_phase_dependency[i]][-1]
+            self.inter_phase_dependency[i] = assigned_ids[
+                self.inter_phase_dependency[i]
+            ][-1]
         self.inter_phase_dependency.sort()
 
-    def update_input_tensor_dict(
-        self,
-        nid: int,
-        inputs: str
-    ) -> int:
+    def update_input_tensor_dict(self, nid: int, inputs: str) -> int:
         """
         Updates input_storage_id_nid_dict and input_tensor_id_nid_dict
 
@@ -630,16 +583,14 @@ class PyTorch2ChakraConverter:
             if self.is_valid_tensor(i):
                 if self.has_valid_storage_id(i):
                     storage_id = self.get_storage_id_from_tensor(i)
-                    self.input_storage_id_nid_dict.setdefault(storage_id, []).append(nid)
+                    self.input_storage_id_nid_dict.setdefault(storage_id, []).append(
+                        nid
+                    )
                 else:
                     tensor_id = self.get_tensor_id_from_tensor(i)
                     self.input_tensor_id_nid_dict.setdefault(tensor_id, []).append(nid)
 
-    def update_output_tensor_dict(
-        self,
-        nid: int,
-        outputs: str
-    ) -> int:
+    def update_output_tensor_dict(self, nid: int, outputs: str) -> int:
         """
         Updates output_storage_id_nid_dict and output_tensor_id_nid_dict.
 
@@ -651,14 +602,15 @@ class PyTorch2ChakraConverter:
             if self.is_valid_tensor(o):
                 if self.has_valid_storage_id(o):
                     storage_id = self.get_storage_id_from_tensor(o)
-                    self.output_storage_id_nid_dict.setdefault(storage_id, []).append(nid)
+                    self.output_storage_id_nid_dict.setdefault(storage_id, []).append(
+                        nid
+                    )
                 else:
                     tensor_id = self.get_tensor_id_from_tensor(o)
                     self.output_tensor_id_nid_dict.setdefault(tensor_id, []).append(nid)
 
     def convert_pytorch_node_to_chakra_node(
-        self,
-        pt_node: Dict[str, Any]
+        self, pt_node: Dict[str, Any]
     ) -> ChakraNode:
         """
         Converts a PyToch node to a Chakra node.
@@ -679,42 +631,29 @@ class PyTorch2ChakraConverter:
         ck_node.outputs.shapes = str(pt_node["output_shapes"])
         ck_node.outputs.types = str(pt_node["output_types"])
         ck_node.attr.append(
-                ChakraAttr(name="is_cpu_op",
-                           bool_val=self.is_cpu_op(pt_node)))
+            ChakraAttr(name="is_cpu_op", bool_val=self.is_cpu_op(pt_node))
+        )
         if "fw_parent" in pt_node.keys():
             ck_node.attr.append(
-                    ChakraAttr(name="fw_parent",
-                               int64_val=pt_node["fw_parent"]))
+                ChakraAttr(name="fw_parent", int64_val=pt_node["fw_parent"])
+            )
         if "fw_tid" in pt_node.keys():
-            ck_node.attr.append(
-                    ChakraAttr(name="fw_tid",
-                               int64_val=pt_node["fw_tid"]))
+            ck_node.attr.append(ChakraAttr(name="fw_tid", int64_val=pt_node["fw_tid"]))
         if "op_schema" in pt_node.keys():
             ck_node.attr.append(
-                    ChakraAttr(name="op_schema",
-                               string_val=pt_node["op_schema"]))
+                ChakraAttr(name="op_schema", string_val=pt_node["op_schema"])
+            )
         if "seq_id" in pt_node.keys():
-            ck_node.attr.append(
-                    ChakraAttr(name="seq_id",
-                               int64_val=pt_node["seq_id"]))
+            ck_node.attr.append(ChakraAttr(name="seq_id", int64_val=pt_node["seq_id"]))
         if "rf_id" in pt_node.keys():
-            ck_node.attr.append(
-                    ChakraAttr(name="rf_id",
-                               int64_val=pt_node["rf_id"]))
+            ck_node.attr.append(ChakraAttr(name="rf_id", int64_val=pt_node["rf_id"]))
         if "scope" in pt_node.keys():
-            ck_node.attr.append(
-                    ChakraAttr(name="scope",
-                               int64_val=pt_node["scope"]))
+            ck_node.attr.append(ChakraAttr(name="scope", int64_val=pt_node["scope"]))
         if "tid" in pt_node.keys():
-            ck_node.attr.append(
-                    ChakraAttr(name="tid",
-                               int64_val=pt_node["tid"]))
+            ck_node.attr.append(ChakraAttr(name="tid", int64_val=pt_node["tid"]))
         return ck_node
 
-    def get_nccl_node(
-        self,
-        nid: int
-    ) -> Dict[str, Any]:
+    def get_nccl_node(self, nid: int) -> Dict[str, Any]:
         """
         Returns a PyTorch NCCL node for a given Chakra NID.
 
@@ -735,8 +674,9 @@ class PyTorch2ChakraConverter:
                 pt_nccl_node = self.pt_nccl_node_dict[rpcp_nid]
             else:
                 raise ValueError(
-                        f"NID {nid} has a pt_record_param_comms_node "
-                        f"but it does not have a correspondin pt_nccl_node.")
+                    f"NID {nid} has a pt_record_param_comms_node "
+                    f"but it does not have a correspondin pt_nccl_node."
+                )
         elif nid in self.pt_nccl_node_dict.keys():
             pt_nccl_node = self.pt_nccl_node_dict[nid]
         else:
@@ -746,26 +686,28 @@ class PyTorch2ChakraConverter:
             )
         return pt_nccl_node
 
-    def add_gpu_chakra_node(
-        self,
-        ck_cpu_node: ChakraNode
-    ) -> None:
+    def add_gpu_chakra_node(self, ck_cpu_node: ChakraNode) -> None:
         """
         Converts a PyTorch GPU node to a Chakra node and add it to ck_node_dict.
         """
         assert ck_cpu_node.id in self.pt_gpu_node_dict.keys()
         pt_gpu_node = self.pt_gpu_node_dict[ck_cpu_node.id][0]
         if len(self.pt_gpu_node_dict[ck_cpu_node.id]) != 1:
-            raise ValueError(f"Chakra node {ck_cpu_node.id} has more than one GPU operators")
+            raise ValueError(
+                f"Chakra node {ck_cpu_node.id} has more than one GPU operators"
+            )
         ck_gpu_node = self.convert_pytorch_node_to_chakra_node(pt_gpu_node)
         if ck_cpu_node.type == COMM_COLL_NODE:
             pt_nccl_node = self.get_nccl_node(ck_cpu_node.id)
             ck_gpu_node.attr.append(
-                    ChakraAttr(name="comm_type",
-                               int64_val=self.get_collective_comm_type(pt_nccl_node)))
+                ChakraAttr(
+                    name="comm_type",
+                    int64_val=self.get_collective_comm_type(pt_nccl_node),
+                )
+            )
             ck_gpu_node.attr.append(
-                    ChakraAttr(name="comm_size",
-                               int64_val=self.get_comm_size(pt_nccl_node)))
+                ChakraAttr(name="comm_size", int64_val=self.get_comm_size(pt_nccl_node))
+            )
             attr = ChakraAttr(name="involved_dim")
             for _ in range(self.num_dims):
                 attr.bool_list.values.append(True)
@@ -773,9 +715,7 @@ class PyTorch2ChakraConverter:
         ck_gpu_node.data_deps.append(ck_cpu_node.id)
         self.ck_node_dict[ck_gpu_node.id] = ck_gpu_node
 
-    def identify_data_dependency_with_storage_id(
-        self
-    ) -> None:
+    def identify_data_dependency_with_storage_id(self) -> None:
         """
         Identifies data dependency between operators with storage IDs.
         """
@@ -786,13 +726,12 @@ class PyTorch2ChakraConverter:
                 for child_nid in child_nids:
                     for parent_nid in parent_nids:
                         child_node = self.ck_node_dict[child_nid]
-                        if (parent_nid not in child_node.data_deps)\
-                        and (parent_nid < child_nid):
+                        if (parent_nid not in child_node.data_deps) and (
+                            parent_nid < child_nid
+                        ):
                             child_node.data_deps.append(parent_nid)
 
-    def identify_data_dependency_with_tensor_id(
-        self
-    ) -> None:
+    def identify_data_dependency_with_tensor_id(self) -> None:
         """
         Identifies data dependency between operators with tensor IDs.
         """
@@ -803,13 +742,12 @@ class PyTorch2ChakraConverter:
                 for child_nid in child_nids:
                     for parent_nid in parent_nids:
                         child_node = self.ck_node_dict[child_nid]
-                        if (parent_nid not in child_node.data_deps)\
-                        and (parent_nid < child_nid):
+                        if (parent_nid not in child_node.data_deps) and (
+                            parent_nid < child_nid
+                        ):
                             child_node.data_deps.append(parent_nid)
 
-    def identify_data_dependency(
-        self
-    ) -> None:
+    def identify_data_dependency(self) -> None:
         """
         Identifies data dependency between operators using tensors.
 
@@ -834,7 +772,7 @@ class PyTorch2ChakraConverter:
                 ChakraAttr(name="pid", uint64_val=self.pt_pid),
                 ChakraAttr(name="time", string_val=self.pt_time),
                 ChakraAttr(name="start_ts", uint64_val=self.pt_start_ts),
-                ChakraAttr(name="finish_ts", uint64_val=self.pt_finish_ts)
+                ChakraAttr(name="finish_ts", uint64_val=self.pt_finish_ts),
             ]
         )
         encode_message(self.chakra_et, md)
@@ -851,15 +789,17 @@ class PyTorch2ChakraConverter:
 
         self.logger.info("All Chakra nodes are written to the output file")
 
-    def convert(
-        self
-    ) -> None:
+    def convert(self) -> None:
         self.sort_pytorch_nodes_with_starting_time()
 
         self.discover_pytorch_cpu_ops()
 
-        total_runtime_ns = self.get_total_runtime_ms(list(self.pt_cpu_node_dict.values())) * 1000
-        self.logger.info(f"Total runtime exluding children operators: {total_runtime_ns} ns")
+        total_runtime_ns = (
+            self.get_total_runtime_ms(list(self.pt_cpu_node_dict.values())) * 1000
+        )
+        self.logger.info(
+            f"Total runtime exluding children operators: {total_runtime_ns} ns"
+        )
 
         assigned_ids, decomposed_nodes_dep = self.merge_gpu_ops_with_cpu_ops()
 
@@ -874,7 +814,9 @@ class PyTorch2ChakraConverter:
             if pt_nid in self.pt_gpu_node_dict.keys():
                 for pt_gpu_node in self.pt_gpu_node_dict[pt_nid]:
                     # Assumption: same input / output as its parent CPU operator
-                    self.update_input_tensor_dict(pt_gpu_node["id"], pt_gpu_node["inputs"])
+                    self.update_input_tensor_dict(
+                        pt_gpu_node["id"], pt_gpu_node["inputs"]
+                    )
                     # For now we ignore GPU->CPU dependencies since it creates unwanted dependencies.
                     # self.update_output_tensor_dict(pt_gpu_node["id"], pt_gpu_node["outputs"])
 
@@ -891,9 +833,10 @@ class PyTorch2ChakraConverter:
             # Adding decomposed nodes dependency
             # When we decompose a CPU op into multiple sub_ops, these ops have linear dependeny with themselves
             # For example, the first sub_op should be finished before the second sub_op. Here, we capture these dependencies.
-            if (pt_nid in decomposed_nodes_dep.keys())\
-                    and (decomposed_nodes_dep[pt_nid] not in ck_node.data_deps):
-                 ck_node.data_deps.append(decomposed_nodes_dep[pt_nid])
+            if (pt_nid in decomposed_nodes_dep.keys()) and (
+                decomposed_nodes_dep[pt_nid] not in ck_node.data_deps
+            ):
+                ck_node.data_deps.append(decomposed_nodes_dep[pt_nid])
 
         self.identify_data_dependency()
 
