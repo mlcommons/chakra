@@ -259,7 +259,7 @@ class PyTorch2ChakraConverter:
         try:
             data_type_size = data_type_size_dict[data_type]
             return data_type_size
-        except:
+        except Exception:
             raise ValueError(f"{data_type} is unsupported")
 
     def get_chakra_node_type_from_pytorch_node(self, node: Dict[str, Any]) -> int:
