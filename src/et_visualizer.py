@@ -78,7 +78,7 @@ def main() -> None:
 
         nx.write_graphml(G, args.output_filename)
     else:
-        print("Unknown output file extension. Must be one of pdf, dot, graphml.")
+        raise ValueError("Unsupported file extension. Must be one of: pdf, dot, graphml.")
 
     et.close()
 
