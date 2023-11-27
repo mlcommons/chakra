@@ -198,6 +198,22 @@ void ETFeederNode::assign_attr_val(shared_ptr<ChakraProtoMsg::Node> node, int i,
   }
 }
 
+void ETFeederNode::setStartTimeMicros(uint64_t start_time_micros) {
+  start_time_micros_ = start_time_micros;
+}
+
+uint64_t ETFeederNode::getStartTimeMicros() {
+  return start_time_micros_;
+}
+
+void ETFeederNode::setEndTimeMicros(uint64_t end_time_micros) {
+  end_time_micros_ = end_time_micros;
+}
+
+uint64_t ETFeederNode::getEndTimeMicros() {
+  return end_time_micros_;
+}
+
 uint64_t ETFeederNode::id() {
   return id_;
 }

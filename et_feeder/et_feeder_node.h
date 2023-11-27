@@ -18,6 +18,11 @@ class ETFeederNode {
     std::vector<uint64_t> getDepUnresolvedParentIDs();
     void setDepUnresolvedParentIDs(std::vector<uint64_t> const& dep_unresolved_parent_ids);
 
+    void setStartTimeMicros(uint64_t start_time_micros);
+    uint64_t getStartTimeMicros();
+    void setEndTimeMicros(uint64_t end_time_micros);
+    uint64_t getEndTimeMicros();
+
     uint64_t id();
     std::string name();
     bool is_cpu_op();
@@ -58,6 +63,8 @@ class ETFeederNode {
     uint32_t comm_src_;
     uint32_t comm_dst_;
     uint32_t comm_tag_;
+    uint64_t start_time_micros_;
+    uint64_t end_time_micros_;
 };
 
 } // namespace Chakra
