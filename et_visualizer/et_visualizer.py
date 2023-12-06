@@ -8,7 +8,10 @@ from chakra.third_party.utils.protolib import (
     openFileRd as open_file_rd,
     decodeMessage as decode_message
 )
-from chakra.et_def.et_def_pb2 import Node
+from chakra.et_def.et_def_pb2 import (
+    GlobalMetadata,
+    Node,
+)
 
 
 def main() -> None:
@@ -33,10 +36,12 @@ def main() -> None:
 
     et = open_file_rd(args.input_filename)
     node = Node()
+    gm = GlobalMetadata()
 
     # Determine the file type to be created based on the output filename
     if args.output_filename.endswith((".pdf", ".dot")):
         f = graphviz.Digraph()
+        decode_message(et, gm)
         while decode_message(et, node):
             f.node(name=f"{node.id}",
                    label=f"{node.name}",
@@ -59,6 +64,7 @@ def main() -> None:
                      format="dot", cleanup=True)
     elif args.output_filename.endswith(".graphml"):
         G = nx.DiGraph()
+        decode_message(et, gm)
         while decode_message(et, node):
             G.add_node(node.id, label=node.name)
 
