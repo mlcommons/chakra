@@ -10,6 +10,7 @@ from chakra.third_party.utils.protolib import (
 )
 
 from chakra.et_def.et_def_pb2 import (
+    GlobalMetadata,
     Node as ChakraNode,
 )
 
@@ -37,6 +38,9 @@ def main() -> None:
     et = open_file_rd(args.input_filename)
     node = ChakraNode()
     with open(args.output_filename, 'w') as f:
+        gm = GlobalMetadata()
+        decode_message(et, gm)
+        f.write(MessageToJson(gm))
         while decode_message(et, node):
             f.write(MessageToJson(node))
     et.close()
