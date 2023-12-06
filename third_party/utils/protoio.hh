@@ -143,6 +143,8 @@ class ProtoInputStream : public ProtoStream {
    */
   ~ProtoInputStream();
 
+  bool is_open();
+
   /**
    * Read a message from the stream.
    *
