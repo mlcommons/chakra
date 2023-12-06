@@ -155,6 +155,10 @@ void ProtoInputStream::reset() {
   createStreams();
 }
 
+bool ProtoInputStream::is_open() {
+  return fileStream.is_open();
+}
+
 bool ProtoInputStream::read(Message& msg) {
   // Read a message from the stream by getting the size, using it as
   // a limit when parsing the message, then popping the limit again
