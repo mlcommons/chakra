@@ -37,155 +37,144 @@
 
 #include "protoio.hh"
 
-#define panic(format, args...) 
+#define panic(format, args...)
 
 using namespace google::protobuf;
 
-ProtoOutputStream::ProtoOutputStream(const std::string& filename) :
-    fileStream(filename.c_str(),
-            std::ios::out | std::ios::binary | std::ios::trunc),
-    wrappedFileStream(NULL), gzipStream(NULL), zeroCopyStream(NULL)
-{
-    if (!fileStream.good())
-        panic("Could not open %s for writing\n", filename);
+ProtoOutputStream::ProtoOutputStream(const std::string& filename)
+    : fileStream(
+          filename.c_str(),
+          std::ios::out | std::ios::binary | std::ios::trunc),
+      wrappedFileStream(NULL),
+      gzipStream(NULL),
+      zeroCopyStream(NULL) {
+  if (!fileStream.good())
+    panic("Could not open %s for writing\n", filename);
 
-    // Wrap the output file in a zero copy stream, that in turn is
-    // wrapped in a gzip stream if the filename ends with .gz. The
-    // latter stream is in turn wrapped in a coded stream
-    wrappedFileStream = new io::OstreamOutputStream(&fileStream);
-    if (filename.find_last_of('.') != std::string::npos &&
-        filename.substr(filename.find_last_of('.') + 1) == "gz") {
-        gzipStream = new io::GzipOutputStream(wrappedFileStream);
-        zeroCopyStream = gzipStream;
+  // Wrap the output file in a zero copy stream, that in turn is
+  // wrapped in a gzip stream if the filename ends with .gz. The
+  // latter stream is in turn wrapped in a coded stream
+  wrappedFileStream = new io::OstreamOutputStream(&fileStream);
+  if (filename.find_last_of('.') != std::string::npos &&
+      filename.substr(filename.find_last_of('.') + 1) == "gz") {
+    gzipStream = new io::GzipOutputStream(wrappedFileStream);
+    zeroCopyStream = gzipStream;
+  } else {
+    zeroCopyStream = wrappedFileStream;
+  }
+}
+
+ProtoOutputStream::~ProtoOutputStream() {
+  // As the compression is optional, see if the stream exists
+  if (gzipStream != NULL)
+    delete gzipStream;
+  delete wrappedFileStream;
+  fileStream.close();
+}
+
+void ProtoOutputStream::write(const Message& msg) {
+  // Due to the byte limit of the coded stream we create it for
+  // every single mesage (based on forum discussions around the size
+  // limitation)
+  io::CodedOutputStream codedStream(zeroCopyStream);
+
+  // Write the size of the message to the stream
+#if GOOGLE_PROTOBUF_VERSION < 3001000
+  auto msg_size = msg.ByteSize();
+#else
+  auto msg_size = msg.ByteSizeLong();
+#endif
+  codedStream.WriteVarint32(msg_size);
+
+  // Write the message itself to the stream
+  msg.SerializeWithCachedSizes(&codedStream);
+}
+
+ProtoInputStream::ProtoInputStream(const std::string& filename)
+    : fileStream(filename.c_str(), std::ios::in | std::ios::binary),
+      fileName(filename),
+      useGzip(false),
+      wrappedFileStream(NULL),
+      gzipStream(NULL),
+      zeroCopyStream(NULL) {
+  if (!fileStream.good())
+    panic("Could not open %s for reading\n", filename);
+
+  // check the magic number to see if this is a gzip stream
+  unsigned char bytes[2];
+  fileStream.read((char*)bytes, 2);
+  useGzip = fileStream.good() && bytes[0] == 0x1f && bytes[1] == 0x8b;
+
+  // seek to the start of the input file and clear any flags
+  fileStream.clear();
+  fileStream.seekg(0, std::ifstream::beg);
+
+  createStreams();
+}
+
+void ProtoInputStream::createStreams() {
+  // All streams should be NULL at this point
+  assert(
+      wrappedFileStream == NULL && gzipStream == NULL &&
+      zeroCopyStream == NULL);
+
+  // Wrap the input file in a zero copy stream, that in turn is
+  // wrapped in a gzip stream if the filename ends with .gz. The
+  // latter stream is in turn wrapped in a coded stream
+  wrappedFileStream = new io::IstreamInputStream(&fileStream);
+  if (useGzip) {
+    gzipStream = new io::GzipInputStream(wrappedFileStream);
+    zeroCopyStream = gzipStream;
+  } else {
+    zeroCopyStream = wrappedFileStream;
+  }
+}
+
+void ProtoInputStream::destroyStreams() {
+  // As the compression is optional, see if the stream exists
+  if (gzipStream != NULL) {
+    delete gzipStream;
+    gzipStream = NULL;
+  }
+  delete wrappedFileStream;
+  wrappedFileStream = NULL;
+
+  zeroCopyStream = NULL;
+}
+
+ProtoInputStream::~ProtoInputStream() {
+  destroyStreams();
+  fileStream.close();
+}
+
+void ProtoInputStream::reset() {
+  destroyStreams();
+  // seek to the start of the input file and clear any flags
+  fileStream.clear();
+  fileStream.seekg(0, std::ifstream::beg);
+  createStreams();
+}
+
+bool ProtoInputStream::read(Message& msg) {
+  // Read a message from the stream by getting the size, using it as
+  // a limit when parsing the message, then popping the limit again
+  uint32_t size;
+
+  // Due to the byte limit of the coded stream we create it for
+  // every single mesage (based on forum discussions around the size
+  // limitation)
+  io::CodedInputStream codedStream(zeroCopyStream);
+  if (codedStream.ReadVarint32(&size)) {
+    io::CodedInputStream::Limit limit = codedStream.PushLimit(size);
+    if (msg.ParseFromCodedStream(&codedStream)) {
+      codedStream.PopLimit(limit);
+      // All went well, the message is parsed and the limit is
+      // popped again
+      return true;
     } else {
-        zeroCopyStream = wrappedFileStream;
+      panic("Unable to read message from coded stream %s\n", fileName);
     }
+  }
 
-}
-
-ProtoOutputStream::~ProtoOutputStream()
-{
-    // As the compression is optional, see if the stream exists
-    if (gzipStream != NULL)
-        delete gzipStream;
-    delete wrappedFileStream;
-    fileStream.close();
-}
-
-void
-ProtoOutputStream::write(const Message& msg)
-{
-    // Due to the byte limit of the coded stream we create it for
-    // every single mesage (based on forum discussions around the size
-    // limitation)
-    io::CodedOutputStream codedStream(zeroCopyStream);
-
-    // Write the size of the message to the stream
-#   if GOOGLE_PROTOBUF_VERSION < 3001000
-        auto msg_size = msg.ByteSize();
-#   else
-        auto msg_size = msg.ByteSizeLong();
-#   endif
-    codedStream.WriteVarint32(msg_size);
-
-    // Write the message itself to the stream
-    msg.SerializeWithCachedSizes(&codedStream);
-}
-
-ProtoInputStream::ProtoInputStream(const std::string& filename) :
-    fileStream(filename.c_str(), std::ios::in | std::ios::binary),
-    fileName(filename), useGzip(false),
-    wrappedFileStream(NULL), gzipStream(NULL), zeroCopyStream(NULL)
-{
-    if (!fileStream.good())
-        panic("Could not open %s for reading\n", filename);
-
-    // check the magic number to see if this is a gzip stream
-    unsigned char bytes[2];
-    fileStream.read((char*) bytes, 2);
-    useGzip = fileStream.good() && bytes[0] == 0x1f && bytes[1] == 0x8b;
-
-    // seek to the start of the input file and clear any flags
-    fileStream.clear();
-    fileStream.seekg(0, std::ifstream::beg);
-
-    createStreams();
-}
-
-void
-ProtoInputStream::createStreams()
-{
-    // All streams should be NULL at this point
-    assert(wrappedFileStream == NULL && gzipStream == NULL &&
-           zeroCopyStream == NULL);
-
-    // Wrap the input file in a zero copy stream, that in turn is
-    // wrapped in a gzip stream if the filename ends with .gz. The
-    // latter stream is in turn wrapped in a coded stream
-    wrappedFileStream = new io::IstreamInputStream(&fileStream);
-    if (useGzip) {
-        gzipStream = new io::GzipInputStream(wrappedFileStream);
-        zeroCopyStream = gzipStream;
-    } else {
-        zeroCopyStream = wrappedFileStream;
-    }
-}
-
-void
-ProtoInputStream::destroyStreams()
-{
-    // As the compression is optional, see if the stream exists
-    if (gzipStream != NULL) {
-        delete gzipStream;
-        gzipStream = NULL;
-    }
-    delete wrappedFileStream;
-    wrappedFileStream = NULL;
-
-    zeroCopyStream = NULL;
-}
-
-
-ProtoInputStream::~ProtoInputStream()
-{
-    destroyStreams();
-    fileStream.close();
-}
-
-
-void
-ProtoInputStream::reset()
-{
-    destroyStreams();
-    // seek to the start of the input file and clear any flags
-    fileStream.clear();
-    fileStream.seekg(0, std::ifstream::beg);
-    createStreams();
-}
-
-bool
-ProtoInputStream::read(Message& msg)
-{
-    // Read a message from the stream by getting the size, using it as
-    // a limit when parsing the message, then popping the limit again
-    uint32_t size;
-
-    // Due to the byte limit of the coded stream we create it for
-    // every single mesage (based on forum discussions around the size
-    // limitation)
-    io::CodedInputStream codedStream(zeroCopyStream);
-    if (codedStream.ReadVarint32(&size)) {
-        io::CodedInputStream::Limit limit = codedStream.PushLimit(size);
-        if (msg.ParseFromCodedStream(&codedStream)) {
-            codedStream.PopLimit(limit);
-            // All went well, the message is parsed and the limit is
-            // popped again
-            return true;
-        } else {
-            panic("Unable to read message from coded stream %s\n",
-                  fileName);
-        }
-    }
-
-    return false;
+  return false;
 }
