@@ -14,6 +14,7 @@ from chakra.et_def.et_def_pb2 import (
     ALL_TO_ALL,
     ALL_GATHER,
     REDUCE_SCATTER,
+    GlobalMetadata
 )
 
 class Layer:
@@ -66,6 +67,17 @@ class Text2ChakraConverter:
         self.num_passes = num_passes
         self.logger = logger
         self.next_node_id = 0
+        
+    def get_global_metadata(self):
+        input_text = ""
+        with open(self.input_filename, "r") as input_file:
+            input_text = input_file.read()
+        attr = [
+            ChakraAttr(name="schema", string_val="text2chakra_converter"),
+            ChakraAttr(name="input_file", string_val=input_text)
+        ]
+        metadata = GlobalMetadata(attr=attr)
+        return metadata
 
     def get_layers(
         self,
@@ -126,6 +138,10 @@ class Text2ChakraConverter:
         node.attr.append(
                 ChakraAttr(name="comm_type",
                            int64_val=self.get_comm_type(comm_type)))
+        node.attr.append(
+                ChakraAttr(name="comm_size", 
+                           uint64_val = comm_size)
+        )
         return node
 
     def add_parent(
@@ -133,7 +149,7 @@ class Text2ChakraConverter:
         child_node: Any,
         parent_node: Any
     ) -> None:
-        child_node.parent.append(parent_node.id)
+        child_node.data_deps.append(parent_node.id)
 
     def convert(self) -> None:
         with open(self.input_filename, "r") as f:
@@ -167,6 +183,8 @@ class Text2ChakraConverter:
         for npu_id in range(self.num_npus):
             output_filename = "%s.%d.et" % (self.output_filename, npu_id)
             with open(output_filename, "wb") as g:
+                global_metadata = self.get_global_metadata()
+                encode_message(g, global_metadata)
                 for i in range(self.num_passes):
                     for layer in layers:
                         bwd_wg_comm_node = self.get_comm_coll_node(
@@ -190,6 +208,8 @@ class Text2ChakraConverter:
         for npu_id in range(self.num_npus):
             output_filename = "%s.%d.et" % (self.output_filename, npu_id)
             with open(output_filename, "wb") as g:
+                global_metadata = self.get_global_metadata()
+                encode_message(g, global_metadata)
                 for i in range(self.num_passes):
                     fwd_comp_node = None
 
@@ -252,6 +272,8 @@ class Text2ChakraConverter:
         for npu_id in range(self.num_npus):
             output_filename = "%s.%d.et" % (self.output_filename, npu_id)
             with open(output_filename, "wb") as g:
+                global_metadata = self.get_global_metadata()
+                encode_message(g, global_metadata)
                 for i in range(self.num_passes):
                     fwd_comm_node = None
 
@@ -327,6 +349,8 @@ class Text2ChakraConverter:
         for npu_id in range(self.num_npus):
             output_filename = "%s.%d.et" % (self.output_filename, npu_id)
             with open(output_filename, "wb") as g:
+                global_metadata = self.get_global_metadata()
+                encode_message(g, global_metadata)
                 for i in range(self.num_passes):
                     fwd_comm_node = None
 
@@ -416,6 +440,8 @@ class Text2ChakraConverter:
         for npu_id in range(self.num_npus):
             output_filename = "%s.%d.et" % (self.output_filename, npu_id)
             with open(output_filename, "wb") as g:
+                global_metadata = self.get_global_metadata()
+                encode_message(g, global_metadata)
                 for i in range(self.num_passes):
                     fwd_comm_node = None
 
@@ -504,6 +530,8 @@ class Text2ChakraConverter:
         for npu_id in range(self.num_npus):
             output_filename = "%s.%d.et" % (self.output_filename, npu_id)
             with open(output_filename, "wb") as g:
+                global_metadata = self.get_global_metadata()
+                encode_message(g, global_metadata)
                 for i in range(self.num_passes):
                     fwd_comp_node = None
 
