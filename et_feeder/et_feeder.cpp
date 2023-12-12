@@ -54,7 +54,13 @@ void ETFeeder::pushBackIssuableNode(uint64_t node_id) {
 }
 
 shared_ptr<ETFeederNode> ETFeeder::lookupNode(uint64_t node_id) {
-  return dep_graph_[node_id];
+  try {
+    return dep_graph_.at(node_id);
+  } catch (const std::out_of_range& e) {
+    std::cerr << "looking for node_id=" << node_id
+              << " in dep graph, however, not loaded yet" << std::endl;
+    throw(e);
+  }
 }
 
 void ETFeeder::freeChildrenNodes(uint64_t node_id) {
