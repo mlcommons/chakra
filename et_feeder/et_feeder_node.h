@@ -47,21 +47,22 @@ class ETFeederNode {
   std::vector<std::shared_ptr<ETFeederNode>> children_vec_{};
   std::vector<uint64_t> dep_unresolved_parent_ids_{};
 
-  uint64_t id_;
-  std::string name_;
-  bool is_cpu_op_;
-  uint64_t runtime_;
-  uint64_t num_ops_;
-  uint32_t tensor_loc_;
-  uint64_t tensor_size_;
-  ChakraProtoMsg::CollectiveCommType comm_type_;
-  uint32_t involved_dim_size_;
+  uint64_t id_ = 0ul;
+  std::string name_ = "";
+  bool is_cpu_op_ = false;
+  uint64_t runtime_ = 0ul;
+  uint64_t num_ops_ = 0ul;
+  uint32_t tensor_loc_ = 0u;
+  uint64_t tensor_size_ = 0ul;
+  ChakraProtoMsg::CollectiveCommType comm_type_ =
+      ChakraProtoMsg::CollectiveCommType::BROADCAST;
+  uint32_t involved_dim_size_ = 0u;
   std::vector<bool> involved_dim_;
-  uint32_t comm_priority_;
-  uint64_t comm_size_;
-  uint32_t comm_src_;
-  uint32_t comm_dst_;
-  uint32_t comm_tag_;
+  uint32_t comm_priority_ = 0u;
+  uint64_t comm_size_ = 0ul;
+  uint32_t comm_src_ = 0u;
+  uint32_t comm_dst_ = 0u;
+  uint32_t comm_tag_ = 0u;
 };
 
 } // namespace Chakra
