@@ -18,6 +18,11 @@ class ETFeederNode {
   std::vector<uint64_t> getDepUnresolvedParentIDs();
   void setDepUnresolvedParentIDs(
       std::vector<uint64_t> const& dep_unresolved_parent_ids);
+  void releaseParent(const uint64_t& parent_id);
+  const std::unordered_set<uint64_t>& getUnreleasedParents();
+  const auto& data_deps();
+  const auto& ctrl_deps();
+  const std::unordered_set<uint64_t>& all_deps();
 
   uint64_t id();
   std::string name();
@@ -46,6 +51,9 @@ class ETFeederNode {
   std::unordered_set<std::shared_ptr<ETFeederNode>> children_set_{};
   std::vector<std::shared_ptr<ETFeederNode>> children_vec_{};
   std::vector<uint64_t> dep_unresolved_parent_ids_{};
+  std::unordered_set<uint64_t> unreleased_parent_ids_{};
+
+  std::unordered_set<uint64_t> all_deps_{};
 
   uint64_t id_;
   std::string name_;
