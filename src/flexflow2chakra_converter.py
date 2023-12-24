@@ -6,7 +6,7 @@ import pydot
 from typing import Any
 
 from chakra.third_party.utils.protolib import encodeMessage as encode_message
-from chakra.et_def.et_def_pb2 import (
+from chakra.et_def_pb2 import (
     Node as ChakraNode,
     AttributeProto as ChakraAttr,
     COMP_NODE,

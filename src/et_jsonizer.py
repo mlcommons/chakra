@@ -8,8 +8,7 @@ from chakra.third_party.utils.protolib import (
     openFileRd as open_file_rd,
     decodeMessage as decode_message
 )
-
-from chakra.et_def.et_def_pb2 import (
+from chakra.et_def_pb2 import (
     GlobalMetadata,
     Node as ChakraNode,
 )

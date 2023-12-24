@@ -9,7 +9,7 @@ from enum import Enum
 from typing import Any, Dict, List
 
 from chakra.third_party.utils.protolib import encodeMessage as encode_message
-from chakra.et_def.et_def_pb2 import (
+from chakra.et_def_pb2 import (
     GlobalMetadata,
     Node as ChakraNode,
     AttributeProto as ChakraAttr,

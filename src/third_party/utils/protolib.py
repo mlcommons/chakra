@@ -91,8 +91,7 @@ def openFileRd(in_file):
         except IOError:
             proto_in = open(in_file, 'rb')
     except IOError:
-        print("Failed to open ", in_file, " for reading")
-        exit(-1)
+        raise FileNotFoundError("Failed to open ", in_file, " for reading")
     return proto_in
 
 def _DecodeVarint32(in_file):

@@ -12,7 +12,7 @@ jobs:
           version: 1.0
       - run: sudo apt install -y graphviz
       - uses: lukka/get-cmake@latest
-      - run: protoc et_def.proto --proto_path et_def --cpp_out et_def
+      - run: protoc et_def.proto --proto_path src --cpp_out src
       - uses: actions/setup-python@v2
         with:
           python-version: 3.7
@@ -23,10 +23,10 @@ jobs:
       - run: conda install pytorch
       - run: pip install fbgemm-gpu-cpu
       - run: pip install .
-      - run: python3 -m chakra.et_generator.et_generator --num_npus 1
+      - run: python3 -m chakra.et_generator --num_npus 1
       - run: |
-          python3 -m chakra.et_visualizer.et_visualizer --help
+          python3 -m chakra.et_visualizer --help
           for f in *.et
           do
-              python3 -m chakra.et_visualizer.et_visualizer --input_filename ${f} --output_filename "${f%.*}".dot
+              python3 -m chakra.et_visualizer --input_filename ${f} --output_filename "${f%.*}".dot
           done

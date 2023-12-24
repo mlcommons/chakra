@@ -19,13 +19,8 @@ Documentation = "https://github.com/mlcommons/chakra/README.md"
 Repository = "https://github.com/mlcommons/chakra.git"
 
 [tool.setuptools.package-dir]
-"chakra.et_def" = "et_def"
-"chakra.et_converter" = "et_converter"
-"chakra.et_visualizer" = "et_visualizer"
-"chakra.timeline_visualizer" = "timeline_visualizer"
-"chakra.et_generator" = "utils/et_generator"
-"chakra.et_jsonizer" = "utils/et_jsonizer"
-"chakra.third_party.utils" = "third_party/utils"
+"chakra" = "src"
+"chakra.third_party.utils" = "src/third_party/utils"
 
 [tool.setuptools.package-data]
 "chakra.et_def" = ["et_def_pb2.pyi", "et_def.proto"]
