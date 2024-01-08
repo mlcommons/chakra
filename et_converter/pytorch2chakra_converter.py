@@ -382,6 +382,8 @@ class PyTorch2ChakraConverter:
         for node in nodes:
             if "[pytorch|profiler|execution_graph|thread]" in node["name"]:
                 root_nids.append(node["id"])
+            elif "[pytorch|profiler|execution_trace|thread]" in node["name"]:
+                root_nids.append(node["id"])
         if not root_nids:
             raise ValueError("Cannot find a root NID")
         return root_nids
