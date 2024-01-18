@@ -221,6 +221,8 @@ class PyTorch2ChakraConverter:
 
         self.identify_data_dependency()
 
+        self.identify_cyclic_dependencies()
+
         self.write_chakra_et()
 
         self.close_chakra_execution_trace()
@@ -755,6 +757,58 @@ class PyTorch2ChakraConverter:
                         if (parent_nid not in child_node.data_deps)\
                                 and (parent_nid < child_nid):
                             child_node.data_deps.append(parent_nid)
+
+    def identify_cyclic_dependencies(self) -> None:
+        """
+        Identifies if there are any cyclic dependencies among Chakra nodes.
+
+        This method checks for cycles in the graph of Chakra nodes using a
+        depth-first search (DFS) algorithm. It logs an error message and raises
+        an exception if a cycle is detected, ensuring the graph is a Directed
+        Acyclic Graph (DAG).
+
+        Raises:
+            Exception: If a cyclic dependency is detected among the Chakra nodes.
+        """
+        visited = set()
+        stack = set()
+
+        def dfs(node_id: int, path: List[int]) -> bool:
+            """
+            Depth-first search to detect cycles.
+
+            Args:
+                node_id (int): The node ID to start the DFS from.
+                path (List[int]): The path traversed so far, for tracing the cycle.
+
+            Returns:
+                bool: True if a cycle is detected, False otherwise.
+            """
+            if node_id in stack:
+                cycle_nodes = " -> ".join(
+                    [self.chakra_nodes[n].name for n in path + [node_id]]
+                )
+                self.logger.error(f"Cyclic dependency detected: {cycle_nodes}")
+                return True
+            if node_id in visited:
+                return False
+
+            visited.add(node_id)
+            stack.add(node_id)
+            path.append(node_id)
+            for child_id in self.chakra_nodes[node_id].data_deps:
+                if dfs(child_id, path.copy()):
+                    return True
+            stack.remove(node_id)
+            path.pop()
+            return False
+
+        for node_id in self.chakra_nodes:
+            if dfs(node_id, []):
+                raise Exception(
+                    f"Cyclic dependency detected starting from node "
+                    f"{self.chakra_nodes[node_id].name}"
+                )
 
     def write_chakra_et(self) -> None:
         """
