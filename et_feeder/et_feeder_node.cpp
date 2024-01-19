@@ -34,6 +34,14 @@ ETFeederNode::ETFeederNode(std::shared_ptr<ChakraProtoMsg::Node> node) {
       assign_attr_val(node, i, (void*)(&comm_tag_));
     }
   }
+
+  for (const auto& parent_id : node->data_deps())
+    this->all_deps_.emplace(parent_id);
+  for (const auto& parent_id : node->ctrl_deps())
+    this->all_deps_.emplace(parent_id);
+
+  for (const auto& parent_id : this->all_deps_)
+    this->unreleased_parent_ids_.emplace(parent_id);
 }
 
 shared_ptr<ChakraProtoMsg::Node> ETFeederNode::getChakraNode() {
@@ -65,6 +73,26 @@ vector<uint64_t> ETFeederNode::getDepUnresolvedParentIDs() {
 void ETFeederNode::setDepUnresolvedParentIDs(
     vector<uint64_t> const& dep_unresolved_parent_ids) {
   dep_unresolved_parent_ids_ = dep_unresolved_parent_ids;
+}
+
+void ETFeederNode::releaseParent(const uint64_t& parent_id) {
+  this->unreleased_parent_ids_.erase(parent_id);
+}
+
+const std::unordered_set<uint64_t>& ETFeederNode::getUnreleasedParents() {
+  return this->unreleased_parent_ids_;
+}
+
+const auto& ETFeederNode::data_deps() {
+  return this->getChakraNode()->data_deps();
+}
+
+const auto& ETFeederNode::ctrl_deps() {
+  return this->getChakraNode()->ctrl_deps();
+}
+
+const std::unordered_set<uint64_t>& ETFeederNode::all_deps() {
+  return this->all_deps_;
 }
 
 void ETFeederNode::assign_attr_val(
