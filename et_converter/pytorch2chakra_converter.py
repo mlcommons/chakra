@@ -95,7 +95,6 @@ class PyTorch2ChakraConverter:
         pytorch_cpu_node_id_gpu_node_map (Dict[int, List[int]]): Map of PyTorch
             CPU node IDs to GPU node IDs.
         chakra_nodes (Dict[int, Any]): Map of Chakra node IDs to nodes.
-        phase_end_nids (List[int]): List of node IDs for phase dependencies.
         input_storage_id_nid_map (Dict[int, int]): Map of input storage IDs to node IDs.
         output_storage_id_nid_map (Dict[int, int]): Map of output storage IDs to node IDs.
         input_tensor_id_nid_map (Dict[int, int]): Map of input tensor IDs to node IDs.
@@ -140,9 +139,6 @@ class PyTorch2ChakraConverter:
         self.pytorch_cpu_node_id_gpu_node_map = {}
         self.chakra_nodes = {}
 
-        # Initialize lists for phase dependencies and data dependency maps
-        self.phase_end_nids = []
-
         # Map of input storage IDs to node IDs:
         # This dictionary tracks which nodes are consuming tensors based on their
         # storage ID, establishing a link between tensor storage and node consumption.
@@ -175,8 +171,6 @@ class PyTorch2ChakraConverter:
         self.load_pytorch_execution_traces()
 
         self.open_chakra_execution_trace()
-
-        self.construct_phase_end_nids()
 
         self.split_cpu_nodes_with_gpu_child()
 
@@ -213,11 +207,6 @@ class PyTorch2ChakraConverter:
 
                 for data_dep_pytorch_node in pytorch_node.data_deps:
                     chakra_node.data_deps.append(data_dep_pytorch_node.id)
-
-                dep_nid = self.get_prev_phase_end_nid(chakra_node)
-                if (dep_nid != -1) and (dep_nid not in chakra_node.data_deps):
-                    chakra_node.data_deps.append(dep_nid)
->>>>>>> a4155fe (et_converter: Refactor PyTorch2ChakraConverter)
 
         self.identify_data_dependency()
 
@@ -343,57 +332,6 @@ class PyTorch2ChakraConverter:
             self.logger.error(err_msg)
             raise Exception(err_msg)
 
-    def construct_phase_end_nids(self) -> None:
-        """
-        Identifies the dependencies between phases in the execution trace.
-
-        Uses a depth-first search (DFS) approach starting from phase root nodes to find
-        the largest Node ID (NID) in each phase for dependency tracking.
-        """
-        self.logger.info("Constructing phase end node IDs.")
-        for node in self.pytorch_nodes.values():
-            if self.is_phase_root_op(node):
-                largest_nid_within_phase = self.dfs(node)
-                if largest_nid_within_phase != -1:
-                    self.phase_end_nids.append(largest_nid_within_phase)
-        self.phase_end_nids.sort()
-
-    def is_phase_root_op(self, node: PyTorchNode) -> bool:
-        """
-        Determines if a node is a root node of a phase.
-
-        Args:
-            node (PyTorchNode): The node to be checked.
-
-        Returns:
-            bool: True if the node is a root node of a phase, False otherwise.
-        """
-        return node.parent in self.pytorch_root_nids
-
-    def dfs(self, node: PyTorchNode) -> int:
-        """
-        Performs a depth-first search to find the largest Node ID (NID) in a subtree.
-
-        Explores the subtree of the given node to find the largest NID among CPU operation nodes.
-
-        Args:
-            node (PyTorchNode): The node from which the search starts.
-
-        Returns:
-            int: The largest NID found in the subtree, or -1 if no CPU operation node is found.
-        """
-        if node.get_op_type() == PyTorchNodeType.GPU_OP:
-            return -1
-        elif node.get_op_type() == PyTorchNodeType.CPU_OP:
-            return node.id
-        else:  # PyTorchNodeType.LABEL or any other type
-            largest_nid = -1
-            for child_node in node.children:
-                largest_nid = max(largest_nid, self.dfs(child_node))
-            return largest_nid
-
-        self.pytorch_nodes = updated_pytorch_nodes
-
     def split_cpu_nodes_with_gpu_child(self) -> None:
         """
         Decomposes CPU nodes with GPU child nodes to model execution overlap
@@ -438,8 +376,6 @@ class PyTorch2ChakraConverter:
                 updated_pytorch_nodes[updated_gpu_node.id] = updated_gpu_node
 
         self.pytorch_nodes = updated_pytorch_nodes
-
-        self.update_phase_end_nids()
 
     def _split_cpu_node(
         self, cpu_node: PyTorchNode, gpu_node: PyTorchNode
@@ -504,27 +440,6 @@ class PyTorch2ChakraConverter:
                           f"Duration: {cpu_node_second.dur}.")
 
         return cpu_node_first, cpu_node_second, gpu_node
-
-    def update_phase_end_nids(self) -> None:
-        """
-        Updates the phase end node IDs with the largest new node ID assigned
-        during the splitting of CPU nodes with GPU children. Utilizes the
-        get_assigned_ids function from UniqueIdAssigner to find all new IDs and
-        selects the largest one for each original node ID.
-
-        This ensures that the phase end boundaries are correctly maintained after
-        splitting the nodes.
-        """
-        self.logger.info(
-            "Updating phase end node IDs with the largest new IDs after node splitting."
-        )
-        updated_phase_end_nids = []
-        for node_id in self.phase_end_nids:
-            assigned_ids = self.id_assigner.get_assigned_ids(node_id)
-            if assigned_ids:
-                updated_phase_end_nids.append(max(assigned_ids))
-        updated_phase_end_nids.sort()
-        self.phase_end_nids = updated_phase_end_nids
 
     def update_input_tensor_map(self, nid: int, inputs: List[List[int]]) -> None:
         """
@@ -672,35 +587,6 @@ class PyTorch2ChakraConverter:
             err_msg = "No NCCL node associated with the given PyTorch node."
             self.logger.error(err_msg)
             raise ValueError(err_msg)
-
-    def get_prev_phase_end_nid(self, node: ChakraNode) -> int:
-        """
-        Returns the Node ID (NID) of the latest node of the previous phase for
-        the given ChakraNode.
-
-        This method is used to find the closest but smaller value from
-        phase_end_nids compared to the given node's ID. It helps in
-        determining the dependencies between different phases in the trace.
-
-        Args:
-            node (ChakraNode): The node to find the previous phase dependency for.
-
-        Returns:
-            int: NID of the latest node of the previous phase, or -1 if none.
-        """
-        self.logger.debug(
-            f"Finding previous inter-phase dependency for node ID {node.id}."
-        )
-        index = bisect.bisect_left(self.phase_end_nids, node.id)
-
-        if index == 0:
-            # All elements in the list are greater than node.id;
-            # no element satisfies the condition.
-            return -1
-        else:
-            # The element at index-1 will be the closest, smaller value
-            # compared to node.id.
-            return self.phase_end_nids[index - 1]
 
     def identify_data_dependency(self) -> None:
         """
