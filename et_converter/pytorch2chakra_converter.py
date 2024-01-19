@@ -8,7 +8,6 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from chakra.third_party.utils.protolib import encodeMessage as encode_message
 from chakra.et_converter.pytorch_node import PyTorchNodeType, PyTorchNode
-from chakra.et_converter.pytorch_tensor import PyTorchTensor, list_to_pytorch_tensor
 from chakra.et_def.et_def_pb2 import (
     GlobalMetadata,
     Node as ChakraNode,
@@ -95,10 +94,6 @@ class PyTorch2ChakraConverter:
         pytorch_cpu_node_id_gpu_node_map (Dict[int, List[int]]): Map of PyTorch
             CPU node IDs to GPU node IDs.
         chakra_nodes (Dict[int, Any]): Map of Chakra node IDs to nodes.
-        input_storage_id_nid_map (Dict[int, int]): Map of input storage IDs to node IDs.
-        output_storage_id_nid_map (Dict[int, int]): Map of output storage IDs to node IDs.
-        input_tensor_id_nid_map (Dict[int, int]): Map of input tensor IDs to node IDs.
-        output_tensor_id_nid_map (Dict[int, int]): Map of output tensor IDs to node IDs.
     """
 
     def __init__(
@@ -139,29 +134,6 @@ class PyTorch2ChakraConverter:
         self.pytorch_cpu_node_id_gpu_node_map = {}
         self.chakra_nodes = {}
 
-        # Map of input storage IDs to node IDs:
-        # This dictionary tracks which nodes are consuming tensors based on their
-        # storage ID, establishing a link between tensor storage and node consumption.
-        self.input_storage_id_nid_map = {}
-
-        # Map of output storage IDs to node IDs:
-        # Similar to input_storage_id_nid_map, but this tracks the production of
-        # tensors by nodes, associating tensor storage IDs with the nodes that
-        # produce them.
-        self.output_storage_id_nid_map = {}
-
-        # Map of input tensor IDs to node IDs:
-        # This dictionary is used when storage IDs are not applicable. It tracks
-        # which nodes are consuming tensors by using tensor IDs, creating a link
-        # between tensor IDs and the nodes that consume them.
-        self.input_tensor_id_nid_map = {}
-
-        # Map of output tensor IDs to node IDs:
-        # Similar to input_tensor_id_nid_map, but for tracking the output of tensors
-        # from nodes. It associates tensor IDs with the nodes that output them,
-        # used when storage IDs are not available.
-        self.output_tensor_id_nid_map = {}
-
     def convert(self) -> None:
         """
         Converts PyTorch execution traces into the Chakra format. Orchestrates
@@ -176,12 +148,8 @@ class PyTorch2ChakraConverter:
 
         for pytorch_nid, pytorch_node in self.pytorch_nodes.items():
             if pytorch_node.is_cpu_op():
-                self.update_input_tensor_map(pytorch_node.id, pytorch_node.inputs)
-                self.update_output_tensor_map(pytorch_node.id, pytorch_node.outputs)
-
                 if pytorch_node.child_gpu:
                     pytorch_gpu_node = pytorch_node.child_gpu
-                    self.update_input_tensor_map(pytorch_gpu_node.id, pytorch_gpu_node.inputs)
                     # Ignoring GPU->CPU dependencies for now since it creates unwanted dependencies.
 
                 chakra_node = self.convert_to_chakra_node(pytorch_node)
@@ -206,8 +174,6 @@ class PyTorch2ChakraConverter:
 
                 for data_dep_pytorch_node in pytorch_node.data_deps:
                     chakra_node.data_deps.append(data_dep_pytorch_node.id)
-
-        self.identify_data_dependency()
 
         self.identify_cyclic_dependencies()
 
@@ -440,60 +406,6 @@ class PyTorch2ChakraConverter:
 
         return cpu_node_first, cpu_node_second, gpu_node
 
-    def update_input_tensor_map(self, nid: int, inputs: List[List[int]]) -> None:
-        """
-        Updates input_storage_id_nid_map and input_tensor_id_nid_map with input
-        tensor information.
-
-        Each dictionary is populated with mappings between storage ID (or tensor ID)
-        and node IDs. For example, if node 0 takes tensor 10 as an input, a new
-        mapping will be created like this `10: [0]`.
-
-        Args:
-            nid (int): Node ID associated with the input tensors.
-            inputs (List[List[int]]): List of input tensor data.
-        """
-        for i in inputs:
-            tensor = list_to_pytorch_tensor(i)
-            if tensor.is_valid():
-                if tensor.has_valid_storage_id():
-                    storage_id = tensor.storage_id
-                    self.input_storage_id_nid_map.setdefault(
-                        storage_id, []
-                    ).append(nid)
-                else:
-                    tensor_id = tensor.tensor_id
-                    self.input_tensor_id_nid_map.setdefault(
-                        tensor_id, []
-                    ).append(nid)
-
-    def update_output_tensor_map(self, nid: int, outputs: List[List[int]]) -> None:
-        """
-        Updates output_storage_id_nid_map and output_tensor_id_nid_map with output
-        tensor information.
-
-        Each dictionary is populated with mappings between storage ID (or tensor ID)
-        and node IDs.  For example, if node 0 produces tensor 10 as an output,
-        a new mapping will be created like this `10: [0]`.
-
-        Args:
-            nid (int): Node ID associated with the output tensors.
-            outputs (List[List[int]]): List of output tensor data.
-        """
-        for o in outputs:
-            tensor = list_to_pytorch_tensor(o)
-            if tensor.is_valid():
-                if tensor.has_valid_storage_id():
-                    storage_id = tensor.storage_id
-                    self.output_storage_id_nid_map.setdefault(
-                        storage_id, []
-                    ).append(nid)
-                else:
-                    tensor_id = tensor.tensor_id
-                    self.output_tensor_id_nid_map.setdefault(
-                        tensor_id, []
-                    ).append(nid)
-
     def convert_to_chakra_node(self, pytorch_node: PyTorchNode) -> ChakraNode:
         """
         Converts a PyTorchNode to a ChakraNode.
@@ -553,62 +465,6 @@ class PyTorch2ChakraConverter:
         elif (pytorch_node.op_schema != "") or pytorch_node.outputs:
             return COMP_NODE
         return INVALID_NODE
-
-    def identify_data_dependency(self) -> None:
-        """
-        Identifies data dependencies between nodes using tensor input/output
-        relationships.
-
-        Determines the relationships based on whether the tensors use storage IDs
-        or tensor IDs.
-        """
-        self.logger.info("Identifying data dependencies among nodes.")
-        self.identify_data_dependency_with_storage_id()
-        self.identify_data_dependency_with_tensor_id()
-
-    def identify_data_dependency_with_storage_id(self) -> None:
-        """
-        Identifies data dependency between nodes based on storage IDs.
-
-        Uses the mapping of input and output tensors to their storage IDs to
-        establish dependencies.
-        """
-        self.logger.info("Identifying data dependencies using storage IDs.")
-        self.update_data_dependencies(
-                self.input_storage_id_nid_map,
-                self.output_storage_id_nid_map)
-
-    def identify_data_dependency_with_tensor_id(self) -> None:
-        """
-        Identifies data dependency between nodes based on tensor IDs.
-
-        Establishes dependencies using tensor IDs for tensors without valid
-        storage IDs.
-        """
-        self.logger.info("Identifying data dependencies using tensor IDs.")
-        self.update_data_dependencies(
-                self.input_tensor_id_nid_map,
-                self.output_tensor_id_nid_map)
-
-    def update_data_dependencies(self, input_map: Dict[int, List[int]],
-                                 output_map: Dict[int, List[int]]) -> None:
-        """
-        Updates data dependencies for nodes based on input and output tensor maps.
-
-        Args:
-            input_map (Dict[int, List[int]]): Map of input tensor IDs to node IDs.
-            output_map (Dict[int, List[int]]): Map of output tensor IDs to node IDs.
-        """
-        self.logger.debug("Updating data dependencies for nodes.")
-        for input_id, child_nids in input_map.items():
-            if input_id in output_map:
-                parent_nids = output_map[input_id]
-                for child_nid in child_nids:
-                    for parent_nid in parent_nids:
-                        child_node = self.chakra_nodes[child_nid]
-                        if (parent_nid not in child_node.data_deps)\
-                                and (parent_nid < child_nid):
-                            child_node.data_deps.append(parent_nid)
 
     def identify_cyclic_dependencies(self) -> None:
         """
