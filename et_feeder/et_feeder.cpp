@@ -144,17 +144,21 @@ void ETFeeder::readNextWindow() {
   }
   uint32_t num_read = 0;
   do {
-    shared_ptr<ETFeederNode> new_node = readNode();
-    if (new_node == nullptr) {
-      et_complete_ = true;
-      break;
+    if (this->et_complete_) {
+      // graph read finished, but still nodes unresolved
+      // which means the graph is broken
+      assert(false);
     }
-
-    addNode(new_node);
-    ++num_read;
-
+    for (uint32_t num_read = 0; num_read < this->window_size_; num_read++) {
+      std::shared_ptr<ETFeederNode> new_node = readNode();
+      if (new_node == nullptr) {
+        et_complete_ = true;
+        break;
+      }
+      addNode(new_node);
+    }
     resolveDep();
-  } while ((num_read < window_size_) || (dep_unresolved_node_set_.size() != 0));
+  } while (dep_unresolved_node_set_.size() != 0);
 
   for (auto node_id_node : dep_graph_) {
     uint64_t node_id = node_id_node.first;
