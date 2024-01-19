@@ -38,6 +38,15 @@ class UniqueIdAssigner:
         self.next_id = 0
         self.original_to_assigned_ids: Dict[int, List[int]] = {}
 
+    def set_next_id(self, next_id: int) -> None:
+        """
+        Sets the starting next unique ID.
+
+        Args:
+            next_id (int): The starting next unique ID to set.
+        """
+        self.next_id = next_id
+
     def assign_unique_id(self, original_id: int) -> int:
         """
         Generates and tracks a new unique ID for each call for a given original ID.
@@ -147,11 +156,8 @@ class PyTorch2ChakraConverter:
         self.split_cpu_nodes_with_gpu_child()
 
         for pytorch_nid, pytorch_node in self.pytorch_nodes.items():
-            if pytorch_node.is_cpu_op():
-                if pytorch_node.child_gpu:
-                    pytorch_gpu_node = pytorch_node.child_gpu
-                    # Ignoring GPU->CPU dependencies for now since it creates unwanted dependencies.
-
+            if (pytorch_node.get_op_type() == PyTorchNodeType.CPU_OP)\
+            or (pytorch_node.get_op_type() == PyTorchNodeType.LABEL):
                 chakra_node = self.convert_to_chakra_node(pytorch_node)
                 self.chakra_nodes[chakra_node.id] = chakra_node
 
@@ -169,11 +175,11 @@ class PyTorch2ChakraConverter:
                                        bool_list={"values": [True]*self.num_dims})
                         ])
 
-                    chakra_gpu_node.data_deps.append(chakra_node.id)
                     self.chakra_nodes[chakra_gpu_node.id] = chakra_gpu_node
 
-                for data_dep_pytorch_node in pytorch_node.data_deps:
-                    chakra_node.data_deps.append(data_dep_pytorch_node.id)
+        root_nodes = [node for node in self.chakra_nodes.values() if self.is_root_node(node)]
+        for root_node in root_nodes:
+            self.convert_ctrl_dep_to_data_dep(root_node)
 
         self.identify_cyclic_dependencies()
 
@@ -196,6 +202,7 @@ class PyTorch2ChakraConverter:
             with open(self.input_filename, "r") as pytorch_et:
                 pytorch_et_data = json.load(pytorch_et)
             self._parse_and_instantiate_nodes(pytorch_et_data)
+            self.id_assigner.set_next_id(max(self.pytorch_nodes.keys()) + 1)
         except IOError as e:
             self.logger.error(f"Error opening file {self.input_filename}: {e}")
             raise Exception(f"Could not open file {self.input_filename}")
@@ -329,21 +336,17 @@ class PyTorch2ChakraConverter:
                 updated_pytorch_nodes[new_cpu_node_id] = cpu_node
             else:
                 gpu_node = cpu_node.child_gpu
-                if gpu_node.ts >= (cpu_node.ts + cpu_node.dur):
-                    err_msg = f"Inconsistent timestamps for CPU node {cpu_node.id} and its GPU child"
-                    self.logger.error(err_msg)
-                    raise ValueError(err_msg)
-
                 cpu_node_first, cpu_node_second, updated_gpu_node =\
-                        self._split_cpu_node(cpu_node, gpu_node)
-                updated_pytorch_nodes[cpu_node_first.id] = cpu_node_first
-                updated_pytorch_nodes[cpu_node_second.id] = cpu_node_second
-                updated_pytorch_nodes[updated_gpu_node.id] = updated_gpu_node
+                        self._split_cpu_node(cpu_node, gpu_node, updated_pytorch_nodes)
+                updated_pytorch_nodes[cpu_node_first.id] = copy.deepcopy(cpu_node_first)
+                updated_pytorch_nodes[cpu_node_second.id] = copy.deepcopy(cpu_node_second)
+                updated_pytorch_nodes[updated_gpu_node.id] = copy.deepcopy(updated_gpu_node)
 
         self.pytorch_nodes = updated_pytorch_nodes
 
     def _split_cpu_node(
-        self, cpu_node: PyTorchNode, gpu_node: PyTorchNode
+        self, cpu_node: PyTorchNode, gpu_node: PyTorchNode,
+        updated_pytorch_nodes: Dict[int, PyTorchNode]
     ) -> Tuple[PyTorchNode, PyTorchNode, PyTorchNode]:
         """
         Splits a CPU node based on the GPU node's timestamp.
@@ -351,9 +354,11 @@ class PyTorch2ChakraConverter:
         Args:
             cpu_node (PyTorchNode): Original CPU node to be split.
             gpu_node (PyTorchNode): GPU node dictating the split.
+            updated_pytorch_nodes (Dict[int, PyTorchNode]): Updated PyTorch nodes.
 
         Returns:
-            Tuple[PyTorchNode, PyTorchNode, PyTorchNode]: Two split nodes and the updated GPU node.
+            Tuple[PyTorchNode, PyTorchNode, PyTorchNode]: Two split nodes and
+            the updated GPU node.
 
         Raises:
             ValueError: For inconsistencies in the timestamps of the nodes.
@@ -368,9 +373,7 @@ class PyTorch2ChakraConverter:
         cpu_node_first.id = self.id_assigner.assign_unique_id(cpu_node.id)
         cpu_node_first.ts = cpu_node.ts
         cpu_node_first.dur = gpu_node.ts - cpu_node.ts
-        cpu_node_first.set_child_gpu = gpu_node
-        for child_node in cpu_node_first.children:
-            child_node.parent = cpu_node_first.id
+        cpu_node_first.set_child_gpu(gpu_node)
         if cpu_node_first.ts >= gpu_node.ts or cpu_node_first.dur <= 0:
             err_msg = (f"Invalid timestamps for the first split CPU node derived from {original_cpu_info}\n"
                        f"\tFirst Split CPU Node Timestamp: {cpu_node_first.ts}, \n"
@@ -379,20 +382,27 @@ class PyTorch2ChakraConverter:
             self.logger.error(err_msg)
             raise ValueError(err_msg)
 
+        if cpu_node.parent in self.pytorch_nodes:
+            self._update_parent_node_children(self.pytorch_nodes, cpu_node, cpu_node_first)
+        elif cpu_node.parent in updated_pytorch_nodes:
+            self._update_parent_node_children(updated_pytorch_nodes, cpu_node, cpu_node_first)
+
         self.logger.debug(f"First Split CPU Node ID {cpu_node_first.id} ({cpu_node_first.name}), "
                           f"Duration: {cpu_node_first.dur}")
 
         gpu_node_id = self.id_assigner.assign_unique_id(gpu_node.id)
         gpu_node.id = gpu_node_id
+        gpu_node.parent = cpu_node_first.id
 
         cpu_node_second = copy.deepcopy(cpu_node)
         cpu_node_second.id = self.id_assigner.assign_unique_id(cpu_node.id)
         cpu_node_second.ts = gpu_node.ts
         cpu_node_second.dur = cpu_node.dur - (gpu_node.ts - cpu_node.ts)
         cpu_node_second.set_child_gpu(None)
-        cpu_node_second.add_data_dep(cpu_node_first)
-        for child_node in cpu_node_second.children:
+        cpu_node_second.parent = cpu_node_first.id
+        for child_node in cpu_node.children:
             child_node.parent = cpu_node_second.id
+            cpu_node_second.add_child(child_node)
         if cpu_node_second.ts <= cpu_node_first.ts or cpu_node_second.dur <= 0:
             err_msg = (f"Invalid timestamps for the second split CPU node derived from {original_cpu_info}\n"
                        f"\tFirst Split Timestamp: {cpu_node_first.ts}, \n"
@@ -404,7 +414,31 @@ class PyTorch2ChakraConverter:
         self.logger.debug(f"Second Split CPU Node ID {cpu_node_second.id} ({cpu_node_second.name}), "
                           f"Duration: {cpu_node_second.dur}.")
 
+        cpu_node_first.add_child(cpu_node_second)
+        cpu_node_first.add_child(gpu_node)
+
         return cpu_node_first, cpu_node_second, gpu_node
+
+    def _update_parent_node_children(self, parent_node_dict: Dict[int, PyTorchNode],
+                                     cpu_node: PyTorchNode,
+                                     cpu_node_first: PyTorchNode) -> None:
+        """
+        Updates the children of the parent node in the given dictionary.
+
+        This method removes the original CPU node from the parent's children list
+        and adds the first split node.
+
+        Args:
+            parent_node_dict (Dict[int, PyTorchNode]): Dictionary containing the
+            parent node.
+            cpu_node (PyTorchNode): Original CPU node being split.
+            cpu_node_first (PyTorchNode): First split node to add to the parent's
+            children.
+        """
+        parent_node = parent_node_dict[cpu_node.parent]
+        parent_node.children = [child for child in parent_node.children
+                                if child.id != cpu_node.id]
+        parent_node.children.extend([cpu_node_first])
 
     def convert_to_chakra_node(self, pytorch_node: PyTorchNode) -> ChakraNode:
         """
@@ -465,6 +499,110 @@ class PyTorch2ChakraConverter:
         elif (pytorch_node.op_schema != "") or pytorch_node.outputs:
             return COMP_NODE
         return INVALID_NODE
+
+    def is_root_node(self, node):
+        """
+        Determines whether a given node is a root node in the execution trace.
+
+        In the context of PyTorch execution traces, root nodes are the starting
+        points of execution graphs or execution traces. These nodes typically do
+        not have parent nodes and act as the original sources of execution flow.
+        This method identifies such root nodes based on their names. Specifically,
+        nodes with names indicating they are part of the PyTorch execution graph or
+        execution trace threads are considered root nodes.
+
+        Args:
+            node (ChakraNode): The node to be evaluated.
+
+        Returns:
+            bool: True if the node is a root node, False otherwise.
+        """
+        if node.name in ["[pytorch|profiler|execution_graph|thread]",
+                         "[pytorch|profiler|execution_trace|thread]"]:
+            return True
+
+    def convert_ctrl_dep_to_data_dep(self, chakra_node: ChakraNode) -> None:
+        """
+        Traverses nodes based on control dependencies (parent nodes) and encodes
+        data dependencies appropriately. This method is crucial for converting the
+        dependency structure from PyTorch execution traces to Chakra execution
+        traces. In PyTorch traces, control dependencies are represented by a
+        parent field in each node, denoting the parent node ID. This structure
+        indicates which functions (operators) are called by a particular operator.
+
+        In contrast, Chakra execution traces, while retaining control dependencies
+        for compatibility, primarily rely on data dependencies to represent
+        relationships between nodes. Data dependencies in Chakra are more broadly
+        defined compared to those in PyTorch, where they are implicitly encoded in
+        tensor input-output relationships. In Chakra, data dependencies are explicit
+        and represent a general dependency between nodes.
+
+        To convert PyTorch's control dependencies to Chakra's data dependencies, a
+        Depth-First Search (DFS) is performed. The DFS traversal starts from a given
+        Chakra node, traversing through its children (based on control
+        dependencies). During traversal, data dependencies are encoded by linking
+        nodes that have been visited in sequence. These dependencies form a chain,
+        mirroring the function call order from the PyTorch trace.
+
+        Special attention is given to the types of nodes involved. CPU and label
+        nodes (non-GPU) in PyTorch can only depend on other CPU or label nodes.
+        However, GPU nodes can depend on any type of node. Thus, while traversing,
+        if a GPU node is encountered, it can establish a data dependency with the
+        last visited node of any type. For CPU and label nodes, the dependency is
+        only established with the last visited non-GPU node. This distinction
+        ensures that the converted dependencies accurately reflect the execution
+        dynamics of the original PyTorch trace within the Chakra framework.
+
+        Args:
+            chakra_node (ChakraNode): The starting node for the traversal and
+            dependency processing.
+        """
+        visited = set()
+        stack = [chakra_node]
+        last_visited_non_gpu = None
+        last_visited_any = None
+
+        while stack:
+            current_node = stack.pop()
+            if current_node.id in visited:
+                continue
+
+            visited.add(current_node.id)
+
+            # Determine the operator type of the current node
+            pytorch_node = self.pytorch_nodes.get(current_node.id)
+            if pytorch_node:
+                node_op_type = pytorch_node.get_op_type()
+
+                if node_op_type == PyTorchNodeType.GPU_OP:
+                    # GPU operators can depend on any type of operator
+                    if last_visited_any:
+                        if last_visited_any.id not in current_node.data_deps:
+                            current_node.data_deps.append(last_visited_any.id)
+                            self.logger.debug(
+                                f"GPU Node ID {current_node.id} now has a data "
+                                f"dependency on Node ID {last_visited_any.id}"
+                            )
+                    last_visited_any = current_node
+                else:
+                    # CPU operators depend on non-GPU operators
+                    if last_visited_non_gpu:
+                        if last_visited_non_gpu.id not in current_node.data_deps:
+                            current_node.data_deps.append(last_visited_non_gpu.id)
+                            self.logger.debug(
+                                f"CPU Node ID {current_node.id} now has a data "
+                                f"dependency on non-GPU Node ID "
+                                f"{last_visited_non_gpu.id}"
+                            )
+                    last_visited_non_gpu = current_node
+                    last_visited_any = current_node
+
+                # Add children to the stack
+                children_chakra_ids = [child.id for child in pytorch_node.children]
+                for child_chakra_id in sorted(children_chakra_ids, reverse=True):
+                    child_chakra_node = self.chakra_nodes.get(child_chakra_id)
+                    if child_chakra_node and child_chakra_node.id not in visited:
+                        stack.append(child_chakra_node)
 
     def identify_cyclic_dependencies(self) -> None:
         """
