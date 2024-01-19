@@ -192,12 +192,11 @@ class PyTorch2ChakraConverter:
                     chakra_gpu_node = self.convert_to_chakra_node(pytorch_gpu_node)
 
                     if chakra_node.type == COMM_COLL_NODE:
-                        pytorch_nccl_node = self.get_nccl_node(pytorch_node)
                         chakra_gpu_node.attr.extend([
                             ChakraAttr(name="comm_type",
-                                       int64_val=pytorch_nccl_node.collective_comm_type),
+                                       int64_val=pytorch_gpu_node.collective_comm_type),
                             ChakraAttr(name="comm_size",
-                                       int64_val=pytorch_nccl_node.comm_size),
+                                       int64_val=pytorch_gpu_node.comm_size),
                             ChakraAttr(name="involved_dim",
                                        bool_list={"values": [True]*self.num_dims})
                         ])
@@ -554,39 +553,6 @@ class PyTorch2ChakraConverter:
         elif (pytorch_node.op_schema != "") or pytorch_node.outputs:
             return COMP_NODE
         return INVALID_NODE
-
-    def get_nccl_node(self, node: PyTorchNode) -> PyTorchNode:
-        """
-        Returns a PyTorch NCCL node for a given Chakra CPU node.
-
-        Critical for identifying communication type and size in communication nodes.
-        There are two primary cases to consider: when the given node is a parent
-        of a record_param_comms node or a NCCL node.
-
-        Args:
-            node (PyTorchNode): The parent node for which the NCCL node is needed.
-
-        Returns:
-            PyTorchNode: The corresponding NCCL node.
-
-        Raises:
-            ValueError: If no corresponding NCCL node is found.
-        """
-        self.logger.debug(f"Retrieving NCCL node for PyTorch node ID {node.id}.")
-        if node.record_param_comms_node:
-            record_param_comms_node = node.record_param_comms_node
-            if record_param_comms_node.nccl_node:
-                return record_param_comms_node.nccl_node
-            else:
-                err_msg = "No NCCL node found in the record_param_comms node."
-                self.logger.error(err_msg)
-                raise ValueError(err_msg)
-        elif node.nccl_node:
-            return node.nccl_node
-        else:
-            err_msg = "No NCCL node associated with the given PyTorch node."
-            self.logger.error(err_msg)
-            raise ValueError(err_msg)
 
     def identify_data_dependency(self) -> None:
         """
