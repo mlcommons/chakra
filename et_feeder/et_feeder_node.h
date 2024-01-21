@@ -49,7 +49,7 @@ class ETFeederNode {
 
   uint64_t id_;
   std::string name_;
-  bool is_cpu_op_;
+  uint32_t is_cpu_op_;
   uint64_t runtime_;
   uint64_t num_ops_;
   uint32_t tensor_loc_;
