@@ -181,6 +181,8 @@ class PyTorch2ChakraConverter:
         for root_node in root_nodes:
             self.convert_ctrl_dep_to_data_dep(root_node)
 
+        self.remove_dangling_nodes()
+
         self.identify_cyclic_dependencies()
 
         self.write_chakra_et()
@@ -603,6 +605,27 @@ class PyTorch2ChakraConverter:
                     child_chakra_node = self.chakra_nodes.get(child_chakra_id)
                     if child_chakra_node and child_chakra_node.id not in visited:
                         stack.append(child_chakra_node)
+
+    def remove_dangling_nodes(self) -> None:
+        """
+        Removes any dangling nodes from the chakra_nodes dictionary.
+        A node is considered dangling if it has no parents and no children.
+        """
+        parent_ids = set()
+        for node in self.chakra_nodes.values():
+            parent_ids.update(node.data_deps)
+
+        dangling_nodes = []
+        for node_id, node in list(self.chakra_nodes.items()):
+            if node_id not in parent_ids and not node.data_deps:
+                dangling_nodes.append(node)
+                del self.chakra_nodes[node_id]
+                del self.pytorch_nodes[node_id]
+
+        if dangling_nodes:
+            self.logger.info(f"Identified and removed {len(dangling_nodes)} dangling nodes:")
+            for node in dangling_nodes:
+                self.logger.info(f" - Node ID {node.id}: {node.name}")
 
     def identify_cyclic_dependencies(self) -> None:
         """
