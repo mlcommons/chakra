@@ -437,6 +437,17 @@ class PyTorchNode:
         """
         self.node_data["dur"] = value
 
+    @property
+    def inter_thread_dep(self) -> Optional[int]:
+        """
+        Returns the inter-thread dependency value of the node, if available.
+
+        Returns:
+            Optional[int]: The inter-thread dependency value or None if not
+                           available.
+        """
+        return self.node_data.get("inter_thread_dep")
+
     def has_ts(self) -> bool:
         """
         Checks if the node has a timestamp field.

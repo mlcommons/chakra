@@ -555,6 +555,13 @@ class PyTorch2ChakraConverter:
         ensures that the converted dependencies accurately reflect the execution
         dynamics of the original PyTorch trace within the Chakra framework.
 
+        Furthermore, inter-thread dependencies are explicitly encoded in the Chakra
+        execution traces. This feature allows for the representation of dependencies
+        across different CPU threads, which are observed in Kineto traces via
+        chrome://tracing. These dependencies are crucial for understanding the
+        interaction between CPU threads and ensuring accurate modeling and analysis
+        of concurrent operations within the Chakra framework.
+
         Args:
             chakra_node (ChakraNode): The starting node for the traversal and
             dependency processing.
@@ -587,6 +594,14 @@ class PyTorch2ChakraConverter:
                             )
                     last_visited_any = current_node
                 else:
+                    if pytorch_node.inter_thread_dep:
+                        for id in self.id_assigner.get_assigned_ids(pytorch_node.inter_thread_dep):
+                            current_node.data_deps.append(id)
+                            self.logger.debug(
+                                f"CPU Node ID {current_node.id} now has an inter-thread data "
+                                f"dependency on Node ID {id}"
+                            )
+
                     # CPU operators depend on non-GPU operators
                     if last_visited_non_gpu:
                         if last_visited_non_gpu.id not in current_node.data_deps:
