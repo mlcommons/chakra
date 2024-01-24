@@ -555,6 +555,11 @@ class PyTorch2ChakraConverter:
         ensures that the converted dependencies accurately reflect the execution
         dynamics of the original PyTorch trace within the Chakra framework.
 
+        Additionally, this method enforces sequential dependencies between GPU
+        operators within the same stream. It ensures that the execution order of
+        GPU operators is preserved in the Chakra trace, reflecting the sequential
+        execution within the same GPU stream in the original PyTorch trace.
+
         Furthermore, inter-thread dependencies are explicitly encoded in the Chakra
         execution traces. This feature allows for the representation of dependencies
         across different CPU threads, which are observed in Kineto traces via
@@ -566,10 +571,11 @@ class PyTorch2ChakraConverter:
             chakra_node (ChakraNode): The starting node for the traversal and
             dependency processing.
         """
-        visited = set()
-        stack = [chakra_node]
-        last_visited_non_gpu = None
-        last_visited_any = None
+        visited: Set[int] = set()
+        stack: List[ChakraNode] = [chakra_node]
+        last_visited_non_gpu: Optional[ChakraNode] = None
+        last_visited_any: Optional[ChakraNode] = None
+        last_gpu_in_stream: Dict[int, ChakraNode] = {}
 
         while stack:
             current_node = stack.pop()
@@ -580,46 +586,56 @@ class PyTorch2ChakraConverter:
 
             # Determine the operator type of the current node
             pytorch_node = self.pytorch_nodes.get(current_node.id)
-            if pytorch_node:
-                node_op_type = pytorch_node.get_op_type()
+            if not pytorch_node:
+                continue
 
-                if node_op_type == PyTorchNodeType.GPU_OP:
-                    # GPU operators can depend on any type of operator
-                    if last_visited_any:
-                        if last_visited_any.id not in current_node.data_deps:
-                            current_node.data_deps.append(last_visited_any.id)
-                            self.logger.debug(
-                                f"GPU Node ID {current_node.id} now has a data "
-                                f"dependency on Node ID {last_visited_any.id}"
-                            )
-                    last_visited_any = current_node
-                else:
-                    if pytorch_node.inter_thread_dep:
-                        for id in self.id_assigner.get_assigned_ids(pytorch_node.inter_thread_dep):
+            node_op_type = pytorch_node.get_op_type()
+
+            if node_op_type == PyTorchNodeType.GPU_OP:
+                if last_visited_any:
+                    if last_visited_any.id not in current_node.data_deps:
+                        current_node.data_deps.append(last_visited_any.id)
+                        self.logger.debug(
+                            f"GPU Node ID {current_node.id} now has a data "
+                            f"dependency on Node ID {last_visited_any.id}"
+                        )
+
+                stream_id = pytorch_node.stream
+                if stream_id in last_gpu_in_stream:
+                    if last_gpu_in_stream[stream_id].id not in current_node.data_deps:
+                        current_node.data_deps.append(last_gpu_in_stream[stream_id].id)
+                        self.logger.debug(
+                            f"GPU Node ID {current_node.id} in stream {stream_id} now has a data "
+                            f"dependency on GPU Node ID {last_gpu_in_stream[stream_id].id} in the same stream."
+                        )
+                last_gpu_in_stream[stream_id] = current_node
+                last_visited_any = current_node
+            else:
+                if pytorch_node.inter_thread_dep:
+                    for id in self.id_assigner.get_assigned_ids(pytorch_node.inter_thread_dep):
+                        if id not in current_node.data_deps:
                             current_node.data_deps.append(id)
                             self.logger.debug(
                                 f"CPU Node ID {current_node.id} now has an inter-thread data "
                                 f"dependency on Node ID {id}"
                             )
 
-                    # CPU operators depend on non-GPU operators
-                    if last_visited_non_gpu:
-                        if last_visited_non_gpu.id not in current_node.data_deps:
-                            current_node.data_deps.append(last_visited_non_gpu.id)
-                            self.logger.debug(
-                                f"CPU Node ID {current_node.id} now has a data "
-                                f"dependency on non-GPU Node ID "
-                                f"{last_visited_non_gpu.id}"
-                            )
-                    last_visited_non_gpu = current_node
-                    last_visited_any = current_node
+                if last_visited_non_gpu:
+                    if last_visited_non_gpu.id not in current_node.data_deps:
+                        current_node.data_deps.append(last_visited_non_gpu.id)
+                        self.logger.debug(
+                            f"CPU Node ID {current_node.id} now has a data "
+                            f"dependency on non-GPU Node ID {last_visited_non_gpu.id}"
+                        )
+                last_visited_non_gpu = current_node
+                last_visited_any = current_node
 
-                # Add children to the stack
-                children_chakra_ids = [child.id for child in pytorch_node.children]
-                for child_chakra_id in sorted(children_chakra_ids, reverse=True):
-                    child_chakra_node = self.chakra_nodes.get(child_chakra_id)
-                    if child_chakra_node and child_chakra_node.id not in visited:
-                        stack.append(child_chakra_node)
+            # Add children to the stack
+            children_chakra_ids = [child.id for child in pytorch_node.children]
+            for child_chakra_id in sorted(children_chakra_ids, reverse=True):
+                child_chakra_node = self.chakra_nodes.get(child_chakra_id)
+                if child_chakra_node and child_chakra_node.id not in visited:
+                    stack.append(child_chakra_node)
 
     def remove_dangling_nodes(self) -> None:
         """

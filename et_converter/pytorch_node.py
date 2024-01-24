@@ -448,6 +448,10 @@ class PyTorchNode:
         """
         return self.node_data.get("inter_thread_dep")
 
+    @property
+    def stream(self) -> int:
+        return self.node_data["stream"]
+
     def has_ts(self) -> bool:
         """
         Checks if the node has a timestamp field.
