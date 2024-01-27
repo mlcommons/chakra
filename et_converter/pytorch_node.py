@@ -573,33 +573,6 @@ class PyTorchNode:
             comm_size += type_size * shape_size
         return comm_size
 
-    @property
-    def collective_comm_type(self) -> int:
-        """
-        Returns the collective communication type of the node.
-
-        Raises:
-            ValueError: If the communication type is not found in the mapping.
-
-        Returns:
-            int: The collective communication type of the node.
-        """
-        comm_type_mapping = {
-            "all_reduce": ALL_REDUCE,
-            "all_to_all": ALL_TO_ALL,
-            "all_gather": ALL_GATHER,
-            "reduce_scatter": REDUCE_SCATTER,
-            "broadcast": BROADCAST,
-            "AllReduce": ALL_REDUCE,
-            "Broadcast": BROADCAST,
-            # TODO: Add more cases
-        }
-        for key, value in comm_type_mapping.items():
-            if key in self.node_data["name"]:
-                return value
-
-        raise ValueError("Communication type not found in mapping.")
-
     @staticmethod
     def get_data_type_size(data_type: str) -> int:
         """

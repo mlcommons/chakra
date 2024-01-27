@@ -166,9 +166,10 @@ class PyTorch2ChakraConverter:
                     chakra_gpu_node = self.convert_to_chakra_node(pytorch_gpu_node)
 
                     if chakra_node.type == COMM_COLL_NODE:
+                        collective_comm_type = self.get_collective_comm_type(pytorch_node.name)
                         chakra_gpu_node.attr.extend([
                             ChakraAttr(name="comm_type",
-                                       int64_val=pytorch_gpu_node.collective_comm_type),
+                                       int64_val=collective_comm_type),
                             ChakraAttr(name="comm_size",
                                        int64_val=pytorch_gpu_node.comm_size),
                             ChakraAttr(name="involved_dim",
@@ -501,6 +502,37 @@ class PyTorch2ChakraConverter:
         elif (pytorch_node.op_schema != "") or pytorch_node.outputs:
             return COMP_NODE
         return INVALID_NODE
+
+    def get_collective_comm_type(self, name: str) -> int:
+        """
+        Returns the collective communication type of the node.
+
+        Args:
+            name (str): The name of the node.
+
+        Raises:
+            ValueError: If the communication type is not found in the mapping.
+
+        Returns:
+            int: The collective communication type of the node.
+        """
+        comm_type_mapping = {
+            "all_reduce": ALL_REDUCE,
+            "all_to_all": ALL_TO_ALL,
+            "all_gather": ALL_GATHER,
+            "reduce_scatter": REDUCE_SCATTER,
+            "broadcast": BROADCAST,
+            "AllReduce": ALL_REDUCE,
+            "Broadcast": BROADCAST,
+            # Additional cases can be added here
+        }
+
+        for key, value in comm_type_mapping.items():
+            if key.lower() in name.lower():
+                return value
+
+        raise ValueError(f"'{name}' not found in collective communication mapping. "
+                         "Please add this collective communication name to the mapping.")
 
     def is_root_node(self, node):
         """
