@@ -103,6 +103,11 @@ class PyTorch2ChakraConverter:
         pytorch_cpu_node_id_gpu_node_map (Dict[int, List[int]]): Map of PyTorch
             CPU node IDs to GPU node IDs.
         chakra_nodes (Dict[int, Any]): Map of Chakra node IDs to nodes.
+        parent_to_children_map (Dict[int, List[int]]): Map of Chakra parent node
+                                                       IDs to their child node
+                                                       IDs. Used to simulate
+                                                       execution based on data
+                                                       dependencies.
     """
 
     def __init__(
@@ -142,6 +147,8 @@ class PyTorch2ChakraConverter:
         # Initialize node mapping dictionaries
         self.pytorch_cpu_node_id_gpu_node_map = {}
         self.chakra_nodes = {}
+
+        self.parent_to_children_map = {}
 
     def convert(self) -> None:
         """
@@ -184,11 +191,15 @@ class PyTorch2ChakraConverter:
 
         self.remove_dangling_nodes()
 
+        self.update_parent_to_children_map()
+
         self.identify_cyclic_dependencies()
 
         self.write_chakra_et()
 
         self.close_chakra_execution_trace()
+
+        self.simulate_execution()
 
     def load_pytorch_execution_traces(self) -> None:
         """
@@ -690,6 +701,18 @@ class PyTorch2ChakraConverter:
             for node in dangling_nodes:
                 self.logger.info(f" - Node ID {node.id}: {node.name}")
 
+    def update_parent_to_children_map(self) -> None:
+        """
+        Updates the parent_to_children_map based on the data dependencies of each node.
+        This map is used to efficiently simulate node execution based on data dependencies.
+        """
+        for node_id, node in self.chakra_nodes.items():
+            for dep_id in node.data_deps:
+                # Ensure the dependency is registered as a parent of the current node
+                if dep_id not in self.parent_to_children_map:
+                    self.parent_to_children_map[dep_id] = []
+                self.parent_to_children_map[dep_id].append(node_id)
+
     def identify_cyclic_dependencies(self) -> None:
         """
         Identifies if there are any cyclic dependencies among Chakra nodes.
@@ -801,3 +824,85 @@ class PyTorch2ChakraConverter:
         self.logger.info("Closing Chakra execution trace file.")
         if self.chakra_et and not self.chakra_et.closed:
             self.chakra_et.close()
+
+    def simulate_execution(self) -> None:
+        """
+        Simulates the execution of Chakra nodes based on data dependencies.
+
+        This method considers both CPU and GPU nodes. Nodes are issued for
+        execution based on the readiness determined by dependency resolution.
+        A simplistic global clock is used to model the execution time.
+        """
+        self.logger.info("Simulating execution of Chakra nodes based on data "
+                         "dependencies.")
+
+        # Initialize queues for ready CPU and GPU nodes
+        ready_cpu_nodes = [
+            (node_id, self.chakra_nodes[node_id])
+            for node_id in self.chakra_nodes
+            if not self.chakra_nodes[node_id].data_deps and
+               not self.pytorch_nodes[node_id].is_gpu_op()
+        ]
+        ready_gpu_nodes = [
+            (node_id, self.chakra_nodes[node_id])
+            for node_id in self.chakra_nodes
+            if not self.chakra_nodes[node_id].data_deps and
+               self.pytorch_nodes[node_id].is_gpu_op()
+        ]
+        ready_cpu_nodes.sort(key=lambda x: x[1].id)
+        ready_gpu_nodes.sort(key=lambda x: x[1].id)
+
+        issued_nodes: Set[int] = set()
+        current_cpu_node: Optional[Tuple[int, int]] = None
+        current_gpu_node: Optional[Tuple[int, int]] = None
+
+        current_time: int = 0  # Simulated global clock in microseconds
+
+        while any([ready_cpu_nodes, ready_gpu_nodes, current_cpu_node,
+                   current_gpu_node]):
+            if ready_cpu_nodes and not current_cpu_node:
+                cpu_node_id, cpu_node = ready_cpu_nodes.pop(0)
+                current_cpu_node = (cpu_node_id, current_time)
+                issued_nodes.add(cpu_node_id)
+                self.logger.info(
+                    f"Issuing CPU Node ID {cpu_node_id} ({cpu_node.name}) at "
+                    f"{current_time}us with duration {cpu_node.duration_micros}us"
+                )
+
+            if ready_gpu_nodes and not current_gpu_node:
+                gpu_node_id, gpu_node = ready_gpu_nodes.pop(0)
+                current_gpu_node = (gpu_node_id, current_time)
+                issued_nodes.add(gpu_node_id)
+                self.logger.info(
+                    f"Issuing GPU Node ID {gpu_node_id} ({gpu_node.name}) at "
+                    f"{current_time}us with duration {gpu_node.duration_micros}us"
+                )
+
+            current_time += 1
+
+            if current_cpu_node and current_time - current_cpu_node[1] >= \
+                    self.chakra_nodes[current_cpu_node[0]].duration_micros:
+                self.logger.info(f"CPU Node ID {current_cpu_node[0]} completed "
+                                 f"at {current_time}us")
+                current_cpu_node = None
+
+            if current_gpu_node and current_time - current_gpu_node[1] >= \
+                    self.chakra_nodes[current_gpu_node[0]].duration_micros:
+                self.logger.info(f"GPU Node ID {current_gpu_node[0]} completed "
+                                 f"at {current_time}us")
+                current_gpu_node = None
+
+            for node_id in list(issued_nodes):
+                children_ids = self.parent_to_children_map.get(node_id, [])
+                for child_id in children_ids:
+                    child_node = self.chakra_nodes[child_id]
+                    child_node.data_deps.remove(node_id)
+                    if not child_node.data_deps:
+                        if not self.pytorch_nodes[child_id].is_gpu_op():
+                            ready_cpu_nodes.append((child_id, child_node))
+                        else:
+                            ready_gpu_nodes.append((child_id, child_node))
+
+            issued_nodes.clear()
+
+        self.logger.info("Simulation of Chakra node execution completed.")
