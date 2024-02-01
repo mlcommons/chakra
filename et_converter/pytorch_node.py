@@ -53,7 +53,9 @@ class PyTorchNode:
             f"PyTorchNode("
             f"id={self.id}, name={self.name}, "
             f"op_type={self.get_op_type()}, "
-            f"timestamp={self.ts}, duration={self.dur})"
+            f"timestamp={self.ts}, "
+            f"inclusive_duration={self.inclusive_dur}, "
+            f"exclusive_duration={self.exclusive_dur})"
         )
 
     @property
@@ -418,24 +420,44 @@ class PyTorchNode:
         self.node_data["cat"] = value
 
     @property
-    def dur(self) -> int:
+    def inclusive_dur(self) -> int:
         """
-        Returns the duration of the node.
+        Returns the inclusive duration of the node.
 
         Returns:
-            int: The duration of the node.
+            int: The inclusive duration of the node.
         """
-        return self.node_data["dur"]
+        return self.node_data["inclusive_dur"]
 
-    @dur.setter
-    def dur(self, value: int) -> None:
+    @inclusive_dur.setter
+    def inclusive_dur(self, value: int) -> None:
         """
-        Sets the duration of the node.
+        Sets the inclusive duration of the node.
 
         Args:
-            value (int): The new duration of the node.
+            value (int): The new inclusive duration of the node.
         """
-        self.node_data["dur"] = value
+        self.node_data["inclusive_dur"] = value
+
+    @property
+    def exclusive_dur(self) -> int:
+        """
+        Returns the exclusive duration of the node.
+
+        Returns:
+            int: The exclusive duration of the node.
+        """
+        return self.node_data.get("exclusive_dur", 0)
+
+    @exclusive_dur.setter
+    def exclusive_dur(self, value: int) -> None:
+        """
+        Sets the exclusive duration of the node.
+
+        Args:
+            value (int): The new exclusive duration of the node.
+        """
+        self.node_data["exclusive_dur"] = value
 
     @property
     def inter_thread_dep(self) -> Optional[int]:
@@ -477,7 +499,7 @@ class PyTorchNode:
         Returns:
             bool: True if the node has a duration field, False otherwise.
         """
-        return "dur" in self.node_data
+        return "inclusive_dur" in self.node_data
 
     def get_op_type(self) -> PyTorchNodeType:
         """

@@ -349,12 +349,24 @@ class PyTorch2ChakraConverter:
                     child_node.parent = cpu_node.id
                 updated_pytorch_nodes[new_cpu_node_id] = cpu_node
             else:
-                gpu_node = cpu_node.child_gpu
-                cpu_node_first, cpu_node_second, updated_gpu_node =\
-                        self._split_cpu_node(cpu_node, gpu_node, updated_pytorch_nodes)
-                updated_pytorch_nodes[cpu_node_first.id] = copy.deepcopy(cpu_node_first)
-                updated_pytorch_nodes[cpu_node_second.id] = copy.deepcopy(cpu_node_second)
-                updated_pytorch_nodes[updated_gpu_node.id] = copy.deepcopy(updated_gpu_node)
+                if cpu_node.exclusive_dur > 1:
+                    gpu_node = cpu_node.child_gpu
+                    cpu_node_first, cpu_node_second, updated_gpu_node =\
+                            self._split_cpu_node(cpu_node, gpu_node, updated_pytorch_nodes)
+                    updated_pytorch_nodes[cpu_node_first.id] = copy.deepcopy(cpu_node_first)
+                    updated_pytorch_nodes[cpu_node_second.id] = copy.deepcopy(cpu_node_second)
+                    updated_pytorch_nodes[updated_gpu_node.id] = copy.deepcopy(updated_gpu_node)
+                else:
+                    new_cpu_node_id = self.id_assigner.assign_unique_id(cpu_node.id)
+                    cpu_node.id = new_cpu_node_id
+                    for child_node in cpu_node.children:
+                        child_node.parent = cpu_node.id
+                    updated_pytorch_nodes[new_cpu_node_id] = cpu_node
+
+                    gpu_node = cpu_node.child_gpu
+                    gpu_node.parent = new_cpu_node_id
+                    new_gpu_node_id = self.id_assigner.assign_unique_id(gpu_node.id)
+                    updated_pytorch_nodes[new_gpu_node_id] = gpu_node
 
         self.pytorch_nodes = updated_pytorch_nodes
 
@@ -378,21 +390,24 @@ class PyTorch2ChakraConverter:
             ValueError: For inconsistencies in the timestamps of the nodes.
         """
         original_cpu_info = f"Original CPU Node ID {cpu_node.id} ({cpu_node.name}), " \
-                            f"Duration: {cpu_node.dur}."
+                            f"Inclusive Duration: {cpu_node.inclusive_dur}, " \
+                            f"Exclusive Duration: {cpu_node.exclusive_dur}."
         self.logger.debug(original_cpu_info)
         self.logger.debug(f"GPU Node ID {gpu_node.id} ({gpu_node.name}), "
-                          f"Duration: {gpu_node.dur}.")
+                          f"Inclusive Duration: {gpu_node.inclusive_dur}, "
+                          f"Exclusive Duration: {gpu_node.exclusive_dur}.")
 
         cpu_node_first = copy.deepcopy(cpu_node)
         cpu_node_first.id = self.id_assigner.assign_unique_id(cpu_node.id)
         cpu_node_first.ts = cpu_node.ts
-        cpu_node_first.dur = gpu_node.ts - cpu_node.ts
+        cpu_node_first.exclusive_dur = int(cpu_node.exclusive_dur / 2)
         cpu_node_first.set_child_gpu(gpu_node)
-        if cpu_node_first.ts >= gpu_node.ts or cpu_node_first.dur <= 0:
+        if cpu_node_first.ts >= gpu_node.ts or cpu_node_first.inclusive_dur <= 0:
             err_msg = (f"Invalid timestamps for the first split CPU node derived from {original_cpu_info}\n"
                        f"\tFirst Split CPU Node Timestamp: {cpu_node_first.ts}, \n"
                        f"\tGPU Node Timestamp: {gpu_node.ts}, \n"
-                       f"\tFirst Split CPU Node Duration: {cpu_node_first.dur}.")
+                       f"\tFirst Split CPU Node Inclusive Duration: {cpu_node_first.inclusive_dur}, \n"
+                       f"\tFirst Split CPU Node Exclusive Duration: {cpu_node_first.exclusive_dur}.")
             self.logger.error(err_msg)
             raise ValueError(err_msg)
 
@@ -402,7 +417,8 @@ class PyTorch2ChakraConverter:
             self._update_parent_node_children(updated_pytorch_nodes, cpu_node, cpu_node_first)
 
         self.logger.debug(f"First Split CPU Node ID {cpu_node_first.id} ({cpu_node_first.name}), "
-                          f"Duration: {cpu_node_first.dur}")
+                          f"Inclusive Duration: {cpu_node_first.inclusive_dur}, "
+                          f"Exclusive Duration: {cpu_node_first.exclusive_dur}.")
 
         gpu_node_id = self.id_assigner.assign_unique_id(gpu_node.id)
         gpu_node.id = gpu_node_id
@@ -411,22 +427,24 @@ class PyTorch2ChakraConverter:
         cpu_node_second = copy.deepcopy(cpu_node)
         cpu_node_second.id = self.id_assigner.assign_unique_id(cpu_node.id)
         cpu_node_second.ts = gpu_node.ts
-        cpu_node_second.dur = cpu_node.dur - (gpu_node.ts - cpu_node.ts)
+        cpu_node_second.exclusive_dur = int(cpu_node.exclusive_dur / 2)
         cpu_node_second.set_child_gpu(None)
         cpu_node_second.parent = cpu_node_first.id
         for child_node in cpu_node.children:
             child_node.parent = cpu_node_second.id
             cpu_node_second.add_child(child_node)
-        if cpu_node_second.ts <= cpu_node_first.ts or cpu_node_second.dur <= 0:
+        if cpu_node_second.ts <= cpu_node_first.ts or cpu_node_second.inclusive_dur <= 0:
             err_msg = (f"Invalid timestamps for the second split CPU node derived from {original_cpu_info}\n"
                        f"\tFirst Split Timestamp: {cpu_node_first.ts}, \n"
                        f"\tSecond Split Timestamp: {cpu_node_second.ts}, \n"
-                       f"\tSecond Split Duration: {cpu_node_second.dur}.")
+                       f"\tSecond Split Inclusive Duration: {cpu_node_second.inclusive_dur}, "
+                       f"\tSecond Split Exclusive Duration: {cpu_node_second.exclusive_dur}.")
             self.logger.error(err_msg)
             raise ValueError(err_msg)
 
         self.logger.debug(f"Second Split CPU Node ID {cpu_node_second.id} ({cpu_node_second.name}), "
-                          f"Duration: {cpu_node_second.dur}.")
+                          f"Inclusive Duration: {cpu_node_second.inclusive_dur}, "
+                          f"Exclusive Duration: {cpu_node_second.exclusive_dur}.")
 
         cpu_node_first.add_child(cpu_node_second)
         cpu_node_first.add_child(gpu_node)
@@ -472,7 +490,7 @@ class PyTorch2ChakraConverter:
         chakra_node.type = self.get_chakra_node_type_from_pytorch_node(pytorch_node)
         if pytorch_node.parent in self.chakra_nodes:
             chakra_node.ctrl_deps.append(pytorch_node.parent)
-        chakra_node.duration_micros = pytorch_node.dur if pytorch_node.has_dur() else 0
+        chakra_node.duration_micros = pytorch_node.exclusive_dur
         chakra_node.inputs.values = str(pytorch_node.inputs)
         chakra_node.inputs.shapes = str(pytorch_node.input_shapes)
         chakra_node.inputs.types = str(pytorch_node.input_types)
