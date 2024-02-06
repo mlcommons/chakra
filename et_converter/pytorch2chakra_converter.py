@@ -524,13 +524,9 @@ class PyTorch2ChakraConverter:
             "ncclKernel" in pytorch_node.name or "ncclDevKernel" in pytorch_node.name
         ):
             return COMM_COLL_NODE
-        elif pytorch_node.is_gpu_op():
-            return COMP_NODE
         elif ("c10d::" in pytorch_node.name) or ("nccl:" in pytorch_node.name):
             return COMM_COLL_NODE
-        elif (pytorch_node.op_schema != "") or pytorch_node.outputs:
-            return COMP_NODE
-        return INVALID_NODE
+        return COMP_NODE
 
     def get_collective_comm_type(self, name: str) -> int:
         """
