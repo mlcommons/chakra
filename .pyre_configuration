@@ -1,0 +1,7 @@
+{
+  "source_directories": [
+    "timeline_visualizer",
+    "et_converter"
+  ],
+  "search_path": []
+}
