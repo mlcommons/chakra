@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 
-import bisect
 import copy
 import json
 import logging
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from chakra.third_party.utils.protolib import encodeMessage as encode_message
 from chakra.et_converter.pytorch_node import PyTorchNodeType, PyTorchNode
@@ -12,7 +11,6 @@ from chakra.et_def.et_def_pb2 import (
     GlobalMetadata,
     Node as ChakraNode,
     AttributeProto as ChakraAttr,
-    INVALID_NODE,
     COMP_NODE,
     COMM_COLL_NODE,
     ALL_REDUCE,
@@ -164,7 +162,7 @@ class PyTorch2ChakraConverter:
 
         for pytorch_nid, pytorch_node in self.pytorch_nodes.items():
             if (pytorch_node.get_op_type() == PyTorchNodeType.CPU_OP)\
-            or (pytorch_node.get_op_type() == PyTorchNodeType.LABEL):
+                    or (pytorch_node.get_op_type() == PyTorchNodeType.LABEL):
                 chakra_node = self.convert_to_chakra_node(pytorch_node)
                 self.chakra_nodes[chakra_node.id] = chakra_node
 
@@ -180,8 +178,7 @@ class PyTorch2ChakraConverter:
                             ChakraAttr(name="comm_size",
                                        int64_val=pytorch_gpu_node.comm_size),
                             ChakraAttr(name="involved_dim",
-                                       bool_list={"values": [True]*self.num_dims})
-                        ])
+                                       bool_list={"values": [True] * self.num_dims})])
 
                     self.chakra_nodes[chakra_gpu_node.id] = chakra_gpu_node
 
@@ -352,7 +349,7 @@ class PyTorch2ChakraConverter:
                 if cpu_node.exclusive_dur > 1:
                     gpu_node = cpu_node.child_gpu
                     cpu_node_first, cpu_node_second, updated_gpu_node =\
-                            self._split_cpu_node(cpu_node, gpu_node, updated_pytorch_nodes)
+                        self._split_cpu_node(cpu_node, gpu_node, updated_pytorch_nodes)
                     updated_pytorch_nodes[cpu_node_first.id] = copy.deepcopy(cpu_node_first)
                     updated_pytorch_nodes[cpu_node_second.id] = copy.deepcopy(cpu_node_second)
                     updated_pytorch_nodes[updated_gpu_node.id] = copy.deepcopy(updated_gpu_node)
@@ -855,13 +852,13 @@ class PyTorch2ChakraConverter:
             (node_id, self.chakra_nodes[node_id])
             for node_id in self.chakra_nodes
             if not self.chakra_nodes[node_id].data_deps and
-               not self.pytorch_nodes[node_id].is_gpu_op()
+            not self.pytorch_nodes[node_id].is_gpu_op()
         ]
         ready_gpu_nodes = [
             (node_id, self.chakra_nodes[node_id])
             for node_id in self.chakra_nodes
             if not self.chakra_nodes[node_id].data_deps and
-               self.pytorch_nodes[node_id].is_gpu_op()
+            self.pytorch_nodes[node_id].is_gpu_op()
         ]
         ready_cpu_nodes.sort(key=lambda x: x[1].id)
         ready_gpu_nodes.sort(key=lambda x: x[1].id)

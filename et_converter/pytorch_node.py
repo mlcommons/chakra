@@ -3,14 +3,6 @@
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from chakra.et_def.et_def_pb2 import (
-    ALL_REDUCE,
-    ALL_GATHER,
-    BROADCAST,
-    ALL_TO_ALL,
-    REDUCE_SCATTER,
-)
-
 
 class PyTorchNodeType(Enum):
     CPU_OP = 1
