@@ -17,33 +17,31 @@ from chakra.et_def.et_def_pb2 import (
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Execution Trace Jsonizer"
+        description="Converts Chakra execution trace to JSON format."
     )
     parser.add_argument(
         "--input_filename",
         type=str,
-        default=None,
         required=True,
-        help="Input Chakra execution trace filename"
+        help="Specifies the input filename of the Chakra execution trace."
     )
     parser.add_argument(
         "--output_filename",
         type=str,
-        default=None,
         required=True,
-        help="Output filename"
+        help="Specifies the output filename for the JSON data."
     )
     args = parser.parse_args()
 
-    et = open_file_rd(args.input_filename)
+    execution_trace = open_file_rd(args.input_filename)
     node = ChakraNode()
-    with open(args.output_filename, 'w') as f:
-        gm = GlobalMetadata()
-        decode_message(et, gm)
-        f.write(MessageToJson(gm))
-        while decode_message(et, node):
-            f.write(MessageToJson(node))
-    et.close()
+    with open(args.output_filename, 'w') as file:
+        global_metadata = GlobalMetadata()
+        decode_message(execution_trace, global_metadata)
+        file.write(MessageToJson(global_metadata))
+        while decode_message(execution_trace, node):
+            file.write(MessageToJson(node))
+    execution_trace.close()
 
 
 if __name__ == "__main__":
