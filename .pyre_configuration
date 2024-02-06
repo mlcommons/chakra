@@ -3,5 +3,5 @@
     "timeline_visualizer",
     "et_converter"
   ],
-  "search_path": []
+  "search_path": ["/opt/hostedtoolcache/Python/3.8.18/x64/lib/python3.8/site-packages"]
 }

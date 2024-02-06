@@ -1,0 +1,27 @@
+name: Python Linting
+
+on: [push, pull_request]
+
+jobs:
+  lint-and-format:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.8'
+
+    - name: Install dependencies
+      run: |
+        pip install flake8
+        pip install pyre-check
+        pip install .
+
+    - name: Run Flake8
+      run: flake8 .
+
+    - name: Run Pyre Check
+      run: pyre check
