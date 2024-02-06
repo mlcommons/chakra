@@ -4,6 +4,7 @@ import argparse
 
 from chakra.third_party.utils.protolib import encodeMessage as encode_message
 from chakra.et_def.et_def_pb2 import (
+    NodeType as ChakraNodeType,
     Node as ChakraNode,
     DoubleList,
     FloatList,
@@ -35,7 +36,7 @@ from chakra.et_def.et_def_pb2 import (
 
 NODE_ID = 0
 
-def get_node(node_name: str, node_type: int) -> ChakraNode:
+def get_node(node_name: str, node_type: ChakraNodeType) -> ChakraNode:
     global NODE_ID
     node = ChakraNode()
     node.id = NODE_ID
