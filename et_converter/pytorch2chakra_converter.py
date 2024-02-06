@@ -19,6 +19,8 @@ from chakra.et_def.et_def_pb2 import (
     BROADCAST,
     ALL_TO_ALL,
     REDUCE_SCATTER,
+    SEND,
+    RECV
 )
 
 
@@ -549,6 +551,8 @@ class PyTorch2ChakraConverter:
             "broadcast": BROADCAST,
             "AllReduce": ALL_REDUCE,
             "Broadcast": BROADCAST,
+            "send": SEND,
+            "recv": RECV,
             # Additional cases can be added here
         }
 
