@@ -6,6 +6,7 @@ from io import TextIOWrapper
 from typing import Any, List
 from chakra.third_party.utils.protolib import encodeMessage as encode_message
 from chakra.et_def.et_def_pb2 import (
+    NodeType,
     Node,
     AttributeProto as ChakraAttr,
     COMP_NODE,
@@ -92,7 +93,7 @@ class Text2ChakraConverter:
     def get_node(
         self,
         name: str,
-        node_type: int
+        node_type: NodeType
     ) -> Any:
         node = Node()
         node.id = self.next_node_id

@@ -3,12 +3,13 @@
 import copy
 import json
 import logging
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Set
 
+from .pytorch_node import PyTorchNodeType, PyTorchNode
 from chakra.third_party.utils.protolib import encodeMessage as encode_message
-from chakra.et_converter.pytorch_node import PyTorchNodeType, PyTorchNode
 from chakra.et_def.et_def_pb2 import (
     GlobalMetadata,
+    NodeType as ChakraNodeType,
     Node as ChakraNode,
     AttributeProto as ChakraAttr,
     COMP_NODE,
@@ -88,6 +89,7 @@ class PyTorch2ChakraConverter:
     Attributes:
         input_filename (str): Input file name containing PyTorch execution trace.
         output_filename (str): Output file name for the converted Chakra trace.
+        chakra_et(IO[bytes]): File handle for the Chakra execution trace output file.
         num_dims (int): Number of dimensions involved in the conversion process.
         logger (logging.Logger): Logger for logging information during conversion.
         id_assigner (UniqueIdAssigner): Object to manage unique ID assignments.
@@ -127,6 +129,7 @@ class PyTorch2ChakraConverter:
         """
         self.input_filename = input_filename
         self.output_filename = output_filename
+        self.chakra_et = None
         self.num_dims = num_dims
         self.logger = logger
         self.id_assigner = UniqueIdAssigner()
@@ -507,7 +510,7 @@ class PyTorch2ChakraConverter:
         ])
         return chakra_node
 
-    def get_chakra_node_type_from_pytorch_node(self, pytorch_node: PyTorchNode) -> int:
+    def get_chakra_node_type_from_pytorch_node(self, pytorch_node: PyTorchNode) -> ChakraNodeType:
         """
         Determines the Chakra node type from a PyTorch node.
 

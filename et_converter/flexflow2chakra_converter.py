@@ -7,6 +7,7 @@ from typing import Any
 
 from chakra.third_party.utils.protolib import encodeMessage as encode_message
 from chakra.et_def.et_def_pb2 import (
+    NodeType as ChakraNodeType,
     Node as ChakraNode,
     AttributeProto as ChakraAttr,
     COMP_NODE,
@@ -60,7 +61,7 @@ class FlexFlow2ChakraConverter:
         except Exception:
             raise ValueError(f"Cannot retrieve name from \"{label}\"")
 
-    def get_node_type(self, ff_node: Any) -> int:
+    def get_node_type(self, ff_node: Any) -> ChakraNodeType:
         label = self.get_label(ff_node)
         try:
             node_type = label.split("|")[3].strip()
@@ -137,7 +138,7 @@ class FlexFlow2ChakraConverter:
             src_id = int(edge.get_source().replace("node", ""))
             dst_id = int(edge.get_destination().replace("node", ""))
             ck_node = self.node_id_node_dict[dst_id]
-            ck_node.parent.append(src_id)
+            ck_node.data_deps.append(src_id)
             num_ff_edges += 1
         self.logger.info(f"Converted {num_ff_nodes} nodes and {num_ff_edges} edges")
 
@@ -198,10 +199,10 @@ class FlexFlow2ChakraConverter:
                         total_comm_nodes += 1
 
                         # transfer dependencies
-                        for parent_node_id in ck_node.parent:
+                        for parent_node_id in ck_node.data_deps:
                             parent_node = self.node_id_node_dict[parent_node_id]
                             if self.node_id_npu_id_dict[parent_node.id] == npu_id:
-                                ck_comm_node.parent.append(parent_node_id)
+                                ck_comm_node.data_deps.append(parent_node_id)
 
                         npu_id_node_id_node_dict[npu_id].update({node_id: ck_comm_node})
             self.logger.info(f"NPU[{npu_id}]: {per_npu_comp_nodes} compute nodes and {per_npu_comm_nodes} communication nodes")
