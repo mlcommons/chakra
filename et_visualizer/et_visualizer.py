@@ -26,7 +26,7 @@ def escape_label(label: str) -> str:
         str: The escaped label string.
     """
     # Define special characters to escape
-    special_chars = "{}()<>\[\]|&-"
+    special_chars = "{}()<>\\[\\]|&-"
     # Escape special characters
     return re.sub(f"([{special_chars}])", r"\\\1", label)
 
