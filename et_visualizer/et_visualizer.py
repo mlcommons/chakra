@@ -3,6 +3,7 @@
 import argparse
 import graphviz
 import networkx as nx
+import re
 
 from chakra.third_party.utils.protolib import (
     openFileRd as open_file_rd,
@@ -12,6 +13,22 @@ from chakra.et_def.et_def_pb2 import (
     GlobalMetadata,
     Node,
 )
+
+
+def escape_label(label: str) -> str:
+    """
+    Escapes special characters in labels for graph rendering.
+
+    Args:
+        label (str): The original label string.
+
+    Returns:
+        str: The escaped label string.
+    """
+    # Define special characters to escape
+    special_chars = "{}()<>\[\]|&-"
+    # Escape special characters
+    return re.sub(f"([{special_chars}])", r"\\\1", label)
 
 
 def main() -> None:
@@ -43,8 +60,9 @@ def main() -> None:
         f = graphviz.Digraph()
         decode_message(et, gm)
         while decode_message(et, node):
+            escaped_label = escape_label(node.name)
             f.node(name=f"{node.id}",
-                   label=f"{node.name}",
+                   label=escaped_label,
                    id=str(node.id),
                    shape="record")
 
