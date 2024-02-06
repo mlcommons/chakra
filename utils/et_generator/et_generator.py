@@ -26,8 +26,6 @@ from chakra.et_def.et_def_pb2 import (
     MEM_LOAD_NODE,
     MEM_STORE_NODE,
     COMP_NODE,
-    COMM_SEND_NODE,
-    COMM_RECV_NODE,
     COMM_COLL_NODE,
     ALL_REDUCE,
     ALL_TO_ALL,
@@ -116,11 +114,11 @@ def one_metadata_node_all_types(num_npus: int) -> None:
             node.attr.append(ChakraAttr(name="bool_list", bool_list=bool_list))
 
             node.attr.append(ChakraAttr(name="string", string_val="12345", doc_string="string"))
-            string_list = StringList(values=[str(12345+i) for i in range(10)])
+            string_list = StringList(values=[str(12345 + i) for i in range(10)])
             node.attr.append(ChakraAttr(name="string_list", string_list=string_list))
 
             node.attr.append(ChakraAttr(name="bytes", bytes_val=bytes("12345", "utf-8")))
-            bytes_list = BytesList(values=[bytes(str(12345+i), "utf-8") for i in range(10)])
+            bytes_list = BytesList(values=[bytes(str(12345 + i), "utf-8") for i in range(10)])
             node.attr.append(ChakraAttr(name="bytes_list", bytes_list=bytes_list))
 
             encode_message(et, node)

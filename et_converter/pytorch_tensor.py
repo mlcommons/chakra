@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from typing import Any, List
+from typing import List
 
 
 class PyTorchTensor:
