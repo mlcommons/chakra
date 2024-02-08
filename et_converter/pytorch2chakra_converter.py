@@ -90,7 +90,6 @@ class PyTorch2ChakraConverter:
         input_filename (str): Input file name containing PyTorch execution trace.
         output_filename (str): Output file name for the converted Chakra trace.
         chakra_et(IO[bytes]): File handle for the Chakra execution trace output file.
-        num_dims (int): Number of dimensions involved in the conversion process.
         logger (logging.Logger): Logger for logging information during conversion.
         id_assigner (UniqueIdAssigner): Object to manage unique ID assignments.
         pytorch_schema (Optional[str]): Schema info of the PyTorch trace.
@@ -114,7 +113,6 @@ class PyTorch2ChakraConverter:
         self,
         input_filename: str,
         output_filename: str,
-        num_dims: int,
         logger: logging.Logger
     ) -> None:
         """
@@ -124,13 +122,11 @@ class PyTorch2ChakraConverter:
         Args:
             input_filename (str): Name of the input file containing PyTorch execution trace.
             output_filename (str): Name of the output file for the converted Chakra trace.
-            num_dims (int): Number of dimensions involved in the conversion process.
             logger (logging.Logger): Logger for logging information during the conversion.
         """
         self.input_filename = input_filename
         self.output_filename = output_filename
         self.chakra_et = None
-        self.num_dims = num_dims
         self.logger = logger
         self.id_assigner = UniqueIdAssigner()
         self.initialize_attributes()
@@ -179,9 +175,7 @@ class PyTorch2ChakraConverter:
                             ChakraAttr(name="comm_type",
                                        int64_val=collective_comm_type),
                             ChakraAttr(name="comm_size",
-                                       int64_val=pytorch_gpu_node.comm_size),
-                            ChakraAttr(name="involved_dim",
-                                       bool_list={"values": [True] * self.num_dims})])
+                                       int64_val=pytorch_gpu_node.comm_size)])
 
                     self.chakra_nodes[chakra_gpu_node.id] = chakra_gpu_node
 

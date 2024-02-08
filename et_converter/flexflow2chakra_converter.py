@@ -20,13 +20,11 @@ class FlexFlow2ChakraConverter:
         self,
         input_filename: str,
         output_filename: str,
-        num_dims: int,
         npu_frequency: int,
         logger: logging.Logger
     ) -> None:
         self.input_filename = input_filename
         self.output_filename = output_filename
-        self.num_dims = num_dims
         self.num_cycles_per_sec = npu_frequency * 1_000 * 1_000
         self.logger = logger
         self.node_id_npu_id_dict = {}

@@ -52,12 +52,6 @@ def main() -> None:
         required=True,
         help="Output Chakra execution trace filename")
     parser.add_argument(
-        "--num_dims",
-        type=int,
-        default=None,
-        required=True,
-        help="Number of dimensions in the network topology")
-    parser.add_argument(
         "--num_npus",
         type=int,
         default=None,
@@ -90,7 +84,6 @@ def main() -> None:
             converter = Text2ChakraConverter(
                 args.input_filename,
                 args.output_filename,
-                args.num_dims,
                 args.num_npus,
                 args.num_passes,
                 logger)
@@ -99,7 +92,6 @@ def main() -> None:
             converter = FlexFlow2ChakraConverter(
                 args.input_filename,
                 args.output_filename,
-                args.num_dims,
                 args.npu_frequency,
                 logger)
             converter.convert()
@@ -107,7 +99,6 @@ def main() -> None:
             converter = PyTorch2ChakraConverter(
                 args.input_filename,
                 args.output_filename,
-                args.num_dims,
                 logger)
             converter.convert()
         else:
