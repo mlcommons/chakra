@@ -22,12 +22,6 @@ ETFeederNode::ETFeederNode(std::shared_ptr<ChakraProtoMsg::Node> node) {
     } else if (attr_name == "comm_type") {
       this->comm_type_ =
           static_cast<ChakraProtoMsg::CollectiveCommType>(attr.int64_val());
-    } else if (attr_name == "involved_dim") {
-      this->involved_dim_.clear();
-      for (const bool val : attr.bool_list().values()) {
-        this->involved_dim_.push_back(val);
-      }
-      this->involved_dim_size_ = this->involved_dim_.size();
     } else if (attr_name == "comm_priority") {
       this->comm_priority_ = static_cast<uint32_t>(attr.int32_val());
     } else if (attr_name == "comm_size") {
@@ -107,14 +101,6 @@ uint64_t ETFeederNode::tensor_size() {
 
 ChakraProtoMsg::CollectiveCommType ETFeederNode::comm_type() {
   return comm_type_;
-}
-
-uint32_t ETFeederNode::involved_dim_size() {
-  return involved_dim_size_;
-}
-
-bool ETFeederNode::involved_dim(int i) {
-  return involved_dim_[i];
 }
 
 uint32_t ETFeederNode::comm_priority() {
