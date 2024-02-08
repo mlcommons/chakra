@@ -28,7 +28,6 @@ $ python -m chakra.et_converter.et_converter\
     --input_filename <input_filename>\
     --output_filename <output_filename>\
     --num_npus <num_npus>\
-    --num_dims <num_dims>\
     --num_passes <num_passes>
 ```
 
@@ -38,8 +37,7 @@ $ python -m chakra.et_converter.et_converter\
     --input_type FlexFlow\
     --input_filename <input_filename>\
     --output_filename <output_filename>\
-    --npu_frequency <npu_frequency>\
-    --num_dims <num_dims>
+    --npu_frequency <npu_frequency>
 ```
 
 ### PyTorch Execution Graphs
@@ -47,8 +45,7 @@ $ python -m chakra.et_converter.et_converter\
 $ python -m chakra.et_converter.et_converter\
     --input_type PyTorch\
     --input_filename <input_filename>\
-    --output_filename <output_filename>\
-    --num_dims <num_dims>
+    --output_filename <output_filename>
 ```
 
 ## Execution Trace Generator (et_generator)
@@ -57,16 +54,15 @@ A user can define a new function in the generator to generate new synthetic exec
 You can follow the commands below to run the generator.
 ```shell
 $ python -m chakra.et_generator.et_generator\
-    --num_npus <num_npus>\
-    --num_dims <num_dims>
+    --num_npus <num_npus>
 ```
 
 ## Execution Trace Visualizer (et_visualizer)
 This tool visualizes a given execution trace (ET) by converting the ET to a graph in various supported formats: PDF, Graphviz (dot), or GraphML.
 The output format is determined by the file extension (postfix) of the output filename.
 For PDF and Graphviz formats, use ".pdf" and ".dot" extensions respectively.
-For GraphML, suitable for visualizing large-scale graphs, use the ".graphml" extension. 
-The PDF and Graphviz formats are generated using the Graphviz library, while the GraphML format is generated using the NetworkX library. 
+For GraphML, suitable for visualizing large-scale graphs, use the ".graphml" extension.
+The PDF and Graphviz formats are generated using the Graphviz library, while the GraphML format is generated using the NetworkX library.
 Graphviz files can be visualized with a Graphviz viewer such as https://dreampuf.github.io/GraphvizOnline/.
 For visualizing GraphML files, you can use Gephi (https://gephi.org/).
 
@@ -125,8 +121,7 @@ $ ./build/astra_analytical/build.sh -c
 
 $ cd extern/graph_frontend/chakra/
 $ python -m chakra.et_generator.et_generator\
-    --num_npus <num_npus>\
-    --num_dims <num_dims>
+    --num_npus <num_npus>
 
 $ cd -
 $ ./run.sh
