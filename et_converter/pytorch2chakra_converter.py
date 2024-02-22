@@ -106,7 +106,7 @@ class PyTorch2ChakraConverter:
         parent_to_children_map (Dict[int, List[int]]): Map of Chakra parent node
                                                        IDs to their child node
                                                        IDs. Used to simulate
-                                                       execution based on data
+                                                       execution based on control
                                                        dependencies.
     """
 
@@ -187,7 +187,7 @@ class PyTorch2ChakraConverter:
 
         root_nodes = [node for node in self.chakra_nodes.values() if self.is_root_node(node)]
         for root_node in root_nodes:
-            self.convert_ctrl_dep_to_data_dep(root_node)
+            self.convert_parent_child_relationship_to_ctrl_dep(root_node)
 
         self.remove_dangling_nodes()
 
@@ -488,8 +488,6 @@ class PyTorch2ChakraConverter:
         chakra_node.id = pytorch_node.id
         chakra_node.name = pytorch_node.name
         chakra_node.type = self.get_chakra_node_type_from_pytorch_node(pytorch_node)
-        if pytorch_node.parent in self.chakra_nodes:
-            chakra_node.ctrl_deps.append(pytorch_node.parent)
         chakra_node.duration_micros = pytorch_node.exclusive_dur
         chakra_node.inputs.values = str(pytorch_node.inputs)
         chakra_node.inputs.shapes = str(pytorch_node.input_shapes)
@@ -499,6 +497,7 @@ class PyTorch2ChakraConverter:
         chakra_node.outputs.types = str(pytorch_node.output_types)
         chakra_node.attr.extend([
             ChakraAttr(name="rf_id", int64_val=pytorch_node.rf_id),
+            ChakraAttr(name="parent", int64_val=pytorch_node.parent),
             ChakraAttr(name="fw_parent", int64_val=pytorch_node.fw_parent),
             ChakraAttr(name="seq_id", int64_val=pytorch_node.seq_id),
             ChakraAttr(name="scope", int64_val=pytorch_node.scope),
@@ -580,33 +579,32 @@ class PyTorch2ChakraConverter:
                          "[pytorch|profiler|execution_trace|thread]"]:
             return True
 
-    def convert_ctrl_dep_to_data_dep(self, chakra_node: ChakraNode) -> None:
+    def convert_parent_child_relationship_to_ctrl_dep(self, chakra_node: ChakraNode) -> None:
         """
-        Traverses nodes based on control dependencies (parent nodes) and encodes
-        data dependencies appropriately. This method is crucial for converting the
-        dependency structure from PyTorch execution traces to Chakra execution
-        traces. In PyTorch traces, control dependencies are represented by a
-        parent field in each node, denoting the parent node ID. This structure
-        indicates which functions (operators) are called by a particular operator.
+        Traverses nodes based on parent-child relationships in PyTorch execution
+        traces and encodes control dependencies appropriately. This method is
+        crucial for converting the dependency structure from PyTorch execution
+        traces to Chakra execution traces. In PyTorch traces, control dependencies
+        are represented by a parent field in each node, denoting the parent node ID.
+        This structure indicates which functions (operators) are called by a particular
+        operator.
 
-        In contrast, Chakra execution traces, while retaining control dependencies
-        for compatibility, primarily rely on data dependencies to represent
-        relationships between nodes. Data dependencies in Chakra are more broadly
-        defined compared to those in PyTorch, where they are implicitly encoded in
-        tensor input-output relationships. In Chakra, data dependencies are explicit
-        and represent a general dependency between nodes.
+        In contrast, Chakra execution traces, while retaining parent-child
+        relationships for compatibility, primarily rely on control dependencies
+        to represent relationships between nodes. In Chakra, control dependencies
+        are explicit and represent a general dependency between nodes.
 
-        To convert PyTorch's control dependencies to Chakra's data dependencies, a
-        Depth-First Search (DFS) is performed. The DFS traversal starts from a given
-        Chakra node, traversing through its children (based on control
-        dependencies). During traversal, data dependencies are encoded by linking
-        nodes that have been visited in sequence. These dependencies form a chain,
-        mirroring the function call order from the PyTorch trace.
+        To convert PyTorch's parent-child relationships to Chakra's control dependencies,
+        a Depth-First Search (DFS) is performed. The DFS traversal starts from a given
+        Chakra node, traversing through its children (based on parent-child relationships).
+        During traversal, control dependencies are encoded by linking nodes that
+        have been visited in sequence. These dependencies form a chain, mirroring
+        the function call order from the PyTorch trace.
 
         Special attention is given to the types of nodes involved. CPU and label
         nodes (non-GPU) in PyTorch can only depend on other CPU or label nodes.
         However, GPU nodes can depend on any type of node. Thus, while traversing,
-        if a GPU node is encountered, it can establish a data dependency with the
+        if a GPU node is encountered, it can establish a control dependency with the
         last visited node of any type. For CPU and label nodes, the dependency is
         only established with the last visited non-GPU node. This distinction
         ensures that the converted dependencies accurately reflect the execution
@@ -650,19 +648,19 @@ class PyTorch2ChakraConverter:
 
             if node_op_type == PyTorchNodeType.GPU_OP:
                 if last_visited_any:
-                    if last_visited_any.id not in current_node.data_deps:
-                        current_node.data_deps.append(last_visited_any.id)
+                    if last_visited_any.id not in current_node.ctrl_deps:
+                        current_node.ctrl_deps.append(last_visited_any.id)
                         self.logger.debug(
-                            f"GPU Node ID {current_node.id} now has a data "
+                            f"GPU Node ID {current_node.id} now has a control "
                             f"dependency on Node ID {last_visited_any.id}"
                         )
 
                 stream_id = pytorch_node.stream
                 if stream_id in last_gpu_in_stream:
-                    if last_gpu_in_stream[stream_id].id not in current_node.data_deps:
-                        current_node.data_deps.append(last_gpu_in_stream[stream_id].id)
+                    if last_gpu_in_stream[stream_id].id not in current_node.ctrl_deps:
+                        current_node.ctrl_deps.append(last_gpu_in_stream[stream_id].id)
                         self.logger.debug(
-                            f"GPU Node ID {current_node.id} in stream {stream_id} now has a data "
+                            f"GPU Node ID {current_node.id} in stream {stream_id} now has a control "
                             f"dependency on GPU Node ID {last_gpu_in_stream[stream_id].id} in the same stream."
                         )
                 last_gpu_in_stream[stream_id] = current_node
@@ -670,18 +668,18 @@ class PyTorch2ChakraConverter:
             else:
                 if pytorch_node.inter_thread_dep:
                     for id in self.id_assigner.get_assigned_ids(pytorch_node.inter_thread_dep):
-                        if id not in current_node.data_deps:
-                            current_node.data_deps.append(id)
+                        if id not in current_node.ctrl_deps:
+                            current_node.ctrl_deps.append(id)
                             self.logger.debug(
-                                f"CPU Node ID {current_node.id} now has an inter-thread data "
+                                f"CPU Node ID {current_node.id} now has an inter-thread control "
                                 f"dependency on Node ID {id}"
                             )
 
                 if last_visited_non_gpu:
-                    if last_visited_non_gpu.id not in current_node.data_deps:
-                        current_node.data_deps.append(last_visited_non_gpu.id)
+                    if last_visited_non_gpu.id not in current_node.ctrl_deps:
+                        current_node.ctrl_deps.append(last_visited_non_gpu.id)
                         self.logger.debug(
-                            f"CPU Node ID {current_node.id} now has a data "
+                            f"CPU Node ID {current_node.id} now has a control "
                             f"dependency on non-GPU Node ID {last_visited_non_gpu.id}"
                         )
                 last_visited_non_gpu = current_node
@@ -701,11 +699,11 @@ class PyTorch2ChakraConverter:
         """
         parent_ids = set()
         for node in self.chakra_nodes.values():
-            parent_ids.update(node.data_deps)
+            parent_ids.update(node.ctrl_deps)
 
         dangling_nodes = []
         for node_id, node in list(self.chakra_nodes.items()):
-            if node_id not in parent_ids and not node.data_deps:
+            if node_id not in parent_ids and not node.ctrl_deps:
                 dangling_nodes.append(node)
                 del self.chakra_nodes[node_id]
                 del self.pytorch_nodes[node_id]
@@ -721,7 +719,7 @@ class PyTorch2ChakraConverter:
         This map is used to efficiently simulate node execution based on data dependencies.
         """
         for node_id, node in self.chakra_nodes.items():
-            for dep_id in node.data_deps:
+            for dep_id in node.ctrl_deps:
                 # Ensure the dependency is registered as a parent of the current node
                 if dep_id not in self.parent_to_children_map:
                     self.parent_to_children_map[dep_id] = []
@@ -765,7 +763,7 @@ class PyTorch2ChakraConverter:
             visited.add(node_id)
             stack.add(node_id)
             path.append(node_id)
-            for child_id in self.chakra_nodes[node_id].data_deps:
+            for child_id in self.chakra_nodes[node_id].ctrl_deps:
                 if dfs(child_id, path.copy()):
                     return True
             stack.remove(node_id)
@@ -841,26 +839,26 @@ class PyTorch2ChakraConverter:
 
     def simulate_execution(self) -> None:
         """
-        Simulates the execution of Chakra nodes based on data dependencies.
+        Simulates the execution of Chakra nodes based on control dependencies.
 
         This method considers both CPU and GPU nodes. Nodes are issued for
         execution based on the readiness determined by dependency resolution.
         A simplistic global clock is used to model the execution time.
         """
-        self.logger.info("Simulating execution of Chakra nodes based on data "
+        self.logger.info("Simulating execution of Chakra nodes based on control "
                          "dependencies.")
 
         # Initialize queues for ready CPU and GPU nodes
         ready_cpu_nodes = [
             (node_id, self.chakra_nodes[node_id])
             for node_id in self.chakra_nodes
-            if not self.chakra_nodes[node_id].data_deps and
+            if not self.chakra_nodes[node_id].ctrl_deps and
             not self.pytorch_nodes[node_id].is_gpu_op()
         ]
         ready_gpu_nodes = [
             (node_id, self.chakra_nodes[node_id])
             for node_id in self.chakra_nodes
-            if not self.chakra_nodes[node_id].data_deps and
+            if not self.chakra_nodes[node_id].ctrl_deps and
             self.pytorch_nodes[node_id].is_gpu_op()
         ]
         ready_cpu_nodes.sort(key=lambda x: x[1].id)
@@ -910,8 +908,8 @@ class PyTorch2ChakraConverter:
                 children_ids = self.parent_to_children_map.get(node_id, [])
                 for child_id in children_ids:
                     child_node = self.chakra_nodes[child_id]
-                    child_node.data_deps.remove(node_id)
-                    if not child_node.data_deps:
+                    child_node.ctrl_deps.remove(node_id)
+                    if not child_node.ctrl_deps:
                         if not self.pytorch_nodes[child_id].is_gpu_op():
                             ready_cpu_nodes.append((child_id, child_node))
                         else:
