@@ -677,6 +677,16 @@ class PyTorch2ChakraConverter:
                                 f"dependency on Node ID {id}"
                             )
 
+                if pytorch_node.sync_dep:
+                    for orig_id in pytorch_node.sync_dep:
+                        for id in self.id_assigner.get_assigned_ids(orig_id):
+                            if id not in current_node.data_deps:
+                                current_node.data_deps.append(id)
+                                self.logger.debug(
+                                    f"Node ID {current_node.id} now has an synchronization "
+                                    f"dependency on Node ID {id}"
+                                )
+
                 if last_visited_non_gpu:
                     if last_visited_non_gpu.id not in current_node.data_deps:
                         current_node.data_deps.append(last_visited_non_gpu.id)

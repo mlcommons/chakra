@@ -463,6 +463,17 @@ class PyTorchNode:
         return self.node_data.get("inter_thread_dep")
 
     @property
+    def sync_dep(self) -> Optional[List[int]]:
+        """
+        Returns the synchronization dependency value of the node, if available.
+
+        Returns:
+            Optional[int]: The synchronization dependency value or None if not
+                           available.
+        """
+        return self.node_data.get("sync_dep")
+
+    @property
     def stream(self) -> int:
         return self.node_data["stream"]
 
