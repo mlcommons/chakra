@@ -31,7 +31,7 @@ class PyTorchNode:
         self.node_data = node_data
         self.data_deps: List['PyTorchNode'] = []
         self.children: List['PyTorchNode'] = []
-        self.child_gpu: Optional['PyTorchNode'] = None
+        self.gpu_children: List['PyTorchNode'] = []
         self.record_param_comms_node: Optional['PyTorchNode'] = None
         self.nccl_node: Optional['PyTorchNode'] = None
 
@@ -419,7 +419,9 @@ class PyTorchNode:
         Returns:
             int: The inclusive duration of the node.
         """
-        return self.node_data["inclusive_dur"]
+        if "inclusive_dur" in self.node_data:
+            return self.node_data["inclusive_dur"]
+        return 0
 
     @inclusive_dur.setter
     def inclusive_dur(self, value: int) -> None:
@@ -543,14 +545,14 @@ class PyTorchNode:
         """
         self.children.append(child_node)
 
-    def set_child_gpu(self, child_gpu_node: Optional['PyTorchNode']) -> None:
+    def add_gpu_child(self, gpu_child_node: 'PyTorchNode') -> None:
         """
-        Sets a child GPU node for this node.
+        Adds a child GPU node for this node.
 
         Args:
-            child_gpu_node (Optional[PyTorchNode]): The child GPU node to be set.
+            gpu_child_node (Optional[PyTorchNode]): The child GPU node to be added.
         """
-        self.child_gpu = child_gpu_node
+        self.gpu_children.append(gpu_child_node)
 
     def is_record_param_comms_op(self) -> bool:
         """

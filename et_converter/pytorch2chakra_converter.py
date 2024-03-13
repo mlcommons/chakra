@@ -169,8 +169,7 @@ class PyTorch2ChakraConverter:
                 chakra_node = self.convert_to_chakra_node(pytorch_node)
                 self.chakra_nodes[chakra_node.id] = chakra_node
 
-                if pytorch_node.child_gpu:
-                    pytorch_gpu_node = pytorch_node.child_gpu
+                for pytorch_gpu_node in pytorch_node.gpu_children:
                     chakra_gpu_node = self.convert_to_chakra_node(pytorch_gpu_node)
 
                     if chakra_node.type == COMM_COLL_NODE:
@@ -273,7 +272,7 @@ class PyTorch2ChakraConverter:
                 parent_node.add_child(pytorch_node)
 
                 if pytorch_node.is_gpu_op():
-                    parent_node.set_child_gpu(pytorch_node)
+                    parent_node.add_gpu_child(pytorch_node)
 
                 if pytorch_node.is_record_param_comms_op():
                     parent_node.record_param_comms_node = pytorch_node
@@ -341,136 +340,114 @@ class PyTorch2ChakraConverter:
         """
         self.logger.info("Decomposing CPU nodes with GPU child nodes.")
         updated_pytorch_nodes: Dict[int, PyTorchNode] = {}
-        for cpu_node in self.pytorch_nodes.values():
-            if cpu_node.child_gpu is None:
-                new_cpu_node_id = self.id_assigner.assign_unique_id(cpu_node.id)
-                cpu_node.id = new_cpu_node_id
-                for child_node in cpu_node.children:
-                    child_node.parent = cpu_node.id
-                updated_pytorch_nodes[new_cpu_node_id] = cpu_node
-            else:
-                if cpu_node.exclusive_dur > 1:
-                    gpu_node = cpu_node.child_gpu
-                    cpu_node_first, cpu_node_second, updated_gpu_node =\
-                        self._split_cpu_node(cpu_node, gpu_node, updated_pytorch_nodes)
-                    updated_pytorch_nodes[cpu_node_first.id] = copy.deepcopy(cpu_node_first)
-                    updated_pytorch_nodes[cpu_node_second.id] = copy.deepcopy(cpu_node_second)
-                    updated_pytorch_nodes[updated_gpu_node.id] = copy.deepcopy(updated_gpu_node)
+        for pytorch_node in self.pytorch_nodes.values():
+            if pytorch_node.is_cpu_op():
+                cpu_node = pytorch_node
+                gpu_children = cpu_node.gpu_children
+                if gpu_children:
+                    if cpu_node.exclusive_dur > 1:
+                        split_nodes = self._split_cpu_node(cpu_node, gpu_children)
+                        updated_pytorch_nodes.update(split_nodes)
+                    else:
+                        new_cpu_id = self.id_assigner.assign_unique_id(cpu_node.id)
+                        cpu_node.id = new_cpu_id
+                        updated_pytorch_nodes[new_cpu_id] = cpu_node
+                        for child in cpu_node.children:
+                            new_child_id = self.id_assigner.assign_unique_id(child.id)
+                            child.id = new_child_id
+                            child.parent = new_cpu_id
+                            updated_pytorch_nodes[new_child_id] = gpu_child
                 else:
-                    new_cpu_node_id = self.id_assigner.assign_unique_id(cpu_node.id)
-                    cpu_node.id = new_cpu_node_id
-                    for child_node in cpu_node.children:
-                        child_node.parent = cpu_node.id
-                    updated_pytorch_nodes[new_cpu_node_id] = cpu_node
-
-                    gpu_node = cpu_node.child_gpu
-                    gpu_node.parent = new_cpu_node_id
-                    new_gpu_node_id = self.id_assigner.assign_unique_id(gpu_node.id)
-                    updated_pytorch_nodes[new_gpu_node_id] = gpu_node
+                    new_id = self.id_assigner.assign_unique_id(cpu_node.id)
+                    cpu_node.id = new_id
+                    for child in cpu_node.children:
+                        child.parent = new_id
+                    updated_pytorch_nodes[new_id] = cpu_node
+            elif not pytorch_node.is_gpu_op():
+                new_id = self.id_assigner.assign_unique_id(pytorch_node.id)
+                pytorch_node.id = new_id
+                for child in pytorch_node.children:
+                    child.parent = new_id
+                updated_pytorch_nodes[new_id] = pytorch_node
 
         self.pytorch_nodes = updated_pytorch_nodes
 
     def _split_cpu_node(
-        self, cpu_node: PyTorchNode, gpu_node: PyTorchNode,
-        updated_pytorch_nodes: Dict[int, PyTorchNode]
-    ) -> Tuple[PyTorchNode, PyTorchNode, PyTorchNode]:
+        self,
+        cpu_node: PyTorchNode,
+        gpu_children: List[PyTorchNode]
+    ) -> Dict[int, PyTorchNode]:
         """
-        Splits a CPU node based on the GPU node's timestamp.
-
-        Args:
-            cpu_node (PyTorchNode): Original CPU node to be split.
-            gpu_node (PyTorchNode): GPU node dictating the split.
-            updated_pytorch_nodes (Dict[int, PyTorchNode]): Updated PyTorch nodes.
-
-        Returns:
-            Tuple[PyTorchNode, PyTorchNode, PyTorchNode]: Two split nodes and
-            the updated GPU node.
-
-        Raises:
-            ValueError: For inconsistencies in the timestamps of the nodes.
+        Splits a CPU node based on overlaps with GPU children. It correctly assigns
+        the nearest preceding CPU node as the parent for each GPU child. It ensures
+        non-GPU children of the original CPU node are preserved and added to the
+        last part of the split CPU node.
         """
-        original_cpu_info = f"Original CPU Node ID {cpu_node.id} ({cpu_node.name}), " \
-                            f"Inclusive Duration: {cpu_node.inclusive_dur}, " \
-                            f"Exclusive Duration: {cpu_node.exclusive_dur}."
-        self.logger.debug(original_cpu_info)
-        self.logger.debug(f"GPU Node ID {gpu_node.id} ({gpu_node.name}), "
-                          f"Inclusive Duration: {gpu_node.inclusive_dur}, "
-                          f"Exclusive Duration: {gpu_node.exclusive_dur}.")
+        updated_nodes = {}
+        original_end_ts = cpu_node.ts + cpu_node.exclusive_dur
 
-        cpu_node_first = copy.deepcopy(cpu_node)
-        cpu_node_first.id = self.id_assigner.assign_unique_id(cpu_node.id)
-        cpu_node_first.ts = cpu_node.ts
-        cpu_node_first.exclusive_dur = int(cpu_node.exclusive_dur / 2)
-        cpu_node_first.set_child_gpu(gpu_node)
-        if cpu_node_first.ts >= gpu_node.ts or cpu_node_first.inclusive_dur <= 0:
-            err_msg = (f"Invalid timestamps for the first split CPU node derived from {original_cpu_info}\n"
-                       f"\tFirst Split CPU Node Timestamp: {cpu_node_first.ts}, \n"
-                       f"\tGPU Node Timestamp: {gpu_node.ts}, \n"
-                       f"\tFirst Split CPU Node Inclusive Duration: {cpu_node_first.inclusive_dur}, \n"
-                       f"\tFirst Split CPU Node Exclusive Duration: {cpu_node_first.exclusive_dur}.")
-            self.logger.error(err_msg)
-            raise ValueError(err_msg)
+        # Preserving non-GPU children of the original CPU node
+        non_gpu_children = [child for child in cpu_node.children if child not in gpu_children]
 
-        if cpu_node.parent in self.pytorch_nodes:
-            self._update_parent_node_children(self.pytorch_nodes, cpu_node, cpu_node_first)
-        elif cpu_node.parent in updated_pytorch_nodes:
-            self._update_parent_node_children(updated_pytorch_nodes, cpu_node, cpu_node_first)
+        split_points = sorted(set(gpu_child.ts for gpu_child in gpu_children if gpu_child.ts < original_end_ts))
+        last_split_end = cpu_node.ts
+        last_cpu_part_id = None
 
-        self.logger.debug(f"First Split CPU Node ID {cpu_node_first.id} ({cpu_node_first.name}), "
-                          f"Inclusive Duration: {cpu_node_first.inclusive_dur}, "
-                          f"Exclusive Duration: {cpu_node_first.exclusive_dur}.")
+        for split_ts in split_points:
+            split_duration = split_ts - last_split_end
+            if split_duration > 0:
+                new_cpu_part = copy.deepcopy(cpu_node)
+                new_part_id = self.id_assigner.assign_unique_id(cpu_node.id)
+                new_cpu_part.id = new_part_id
+                new_cpu_part.ts = last_split_end
+                new_cpu_part.exclusive_dur = split_duration
+                new_cpu_part.inclusive_dur = split_duration
+                new_cpu_part.parent = cpu_node.parent if last_cpu_part_id is None else last_cpu_part_id
+                new_cpu_part.children = []
+                new_cpu_part.gpu_children = []
 
-        gpu_node_id = self.id_assigner.assign_unique_id(gpu_node.id)
-        gpu_node.id = gpu_node_id
-        gpu_node.parent = cpu_node_first.id
+                updated_nodes[new_part_id] = new_cpu_part
+                last_cpu_part_id = new_part_id
+                last_split_end = split_ts
 
-        cpu_node_second = copy.deepcopy(cpu_node)
-        cpu_node_second.id = self.id_assigner.assign_unique_id(cpu_node.id)
-        cpu_node_second.ts = gpu_node.ts
-        cpu_node_second.exclusive_dur = int(cpu_node.exclusive_dur / 2)
-        cpu_node_second.set_child_gpu(None)
-        cpu_node_second.parent = cpu_node_first.id
-        for child_node in cpu_node.children:
-            child_node.parent = cpu_node_second.id
-            cpu_node_second.add_child(child_node)
-        if cpu_node_second.ts <= cpu_node_first.ts or cpu_node_second.inclusive_dur <= 0:
-            err_msg = (f"Invalid timestamps for the second split CPU node derived from {original_cpu_info}\n"
-                       f"\tFirst Split Timestamp: {cpu_node_first.ts}, \n"
-                       f"\tSecond Split Timestamp: {cpu_node_second.ts}, \n"
-                       f"\tSecond Split Inclusive Duration: {cpu_node_second.inclusive_dur}, "
-                       f"\tSecond Split Exclusive Duration: {cpu_node_second.exclusive_dur}.")
-            self.logger.error(err_msg)
-            raise ValueError(err_msg)
+        # Creating the final part if necessary
+        if last_split_end < original_end_ts:
+            final_part_duration = original_end_ts - last_split_end
+            final_cpu_part = copy.deepcopy(cpu_node)
+            final_part_id = self.id_assigner.assign_unique_id(cpu_node.id)
+            final_cpu_part.id = final_part_id
+            final_cpu_part.ts = last_split_end
+            final_cpu_part.exclusive_dur = final_part_duration
+            final_cpu_part.inclusive_dur = final_part_duration
+            final_cpu_part.parent = last_cpu_part_id if last_cpu_part_id else cpu_node.parent
+            final_cpu_part.children = []
+            final_cpu_part.gpu_children = []
 
-        self.logger.debug(f"Second Split CPU Node ID {cpu_node_second.id} ({cpu_node_second.name}), "
-                          f"Inclusive Duration: {cpu_node_second.inclusive_dur}, "
-                          f"Exclusive Duration: {cpu_node_second.exclusive_dur}.")
+            updated_nodes[final_part_id] = final_cpu_part
+            last_cpu_part_id = final_part_id
 
-        cpu_node_first.add_child(cpu_node_second)
-        cpu_node_first.add_child(gpu_node)
+        # Adding non-GPU children to the last split of the CPU node
+        if last_cpu_part_id:
+            updated_nodes[last_cpu_part_id].children.extend(non_gpu_children)
 
-        return cpu_node_first, cpu_node_second, gpu_node
+        # Assigning GPU children to the closest CPU part
+        for gpu_child in gpu_children:
+            closest_cpu_parent_id = max(
+                [id for id, node in updated_nodes.items() if node.ts < gpu_child.ts],
+                key=lambda id: updated_nodes[id].ts,
+                default=cpu_node.parent
+            )
 
-    def _update_parent_node_children(self, parent_node_dict: Dict[int, PyTorchNode],
-                                     cpu_node: PyTorchNode,
-                                     cpu_node_first: PyTorchNode) -> None:
-        """
-        Updates the children of the parent node in the given dictionary.
+            gpu_child.parent = closest_cpu_parent_id
+            new_gpu_id = self.id_assigner.assign_unique_id(gpu_child.id)
+            gpu_child.id = new_gpu_id
+            updated_nodes[new_gpu_id] = gpu_child
 
-        This method removes the original CPU node from the parent's children list
-        and adds the first split node.
+            # Add GPU child to the nearest CPU part's GPU children list
+            updated_nodes[closest_cpu_parent_id].children.append(gpu_child)
+            updated_nodes[closest_cpu_parent_id].gpu_children.append(gpu_child)
 
-        Args:
-            parent_node_dict (Dict[int, PyTorchNode]): Dictionary containing the
-            parent node.
-            cpu_node (PyTorchNode): Original CPU node being split.
-            cpu_node_first (PyTorchNode): First split node to add to the parent's
-            children.
-        """
-        parent_node = parent_node_dict[cpu_node.parent]
-        parent_node.children = [child for child in parent_node.children
-                                if child.id != cpu_node.id]
-        parent_node.children.extend([cpu_node_first])
+        return updated_nodes
 
     def convert_to_chakra_node(self, pytorch_node: PyTorchNode) -> ChakraNode:
         """
@@ -708,7 +685,8 @@ class PyTorch2ChakraConverter:
             if node_id not in parent_ids and not node.data_deps:
                 dangling_nodes.append(node)
                 del self.chakra_nodes[node_id]
-                del self.pytorch_nodes[node_id]
+                if node_id in self.pytorch_nodes:
+                    del self.pytorch_nodes[node_id]
 
         if dangling_nodes:
             self.logger.info(f"Identified and removed {len(dangling_nodes)} dangling nodes:")
