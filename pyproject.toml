@@ -32,3 +32,10 @@ Repository = "https://github.com/mlcommons/chakra.git"
 
 [tool.setuptools.dynamic]
 version = {file = ["VERSION"]}
+
+[project.scripts]
+chakra_converter = "chakra.et_converter.et_converter:main"
+chakra_visualizer = "chakra.et_visualizer.et_visualizer:main"
+chakra_timeline_visualizer = "chakra.et_timeline_visualizer.et_timeline_visualizer:main"
+chakra_generator = "chakra.et_generator.et_generator:main"
+chakra_jsonizer = "chakra.et_jsonizer.et_jsonizer:main"
