@@ -32,6 +32,8 @@ ETFeederNode::ETFeederNode(std::shared_ptr<ChakraProtoMsg::Node> node) {
       this->comm_dst_ = static_cast<uint32_t>(attr.int32_val());
     } else if (attr_name == "comm_tag") {
       this->comm_tag_ = static_cast<uint32_t>(attr.int32_val());
+    } else {
+      this->other_attrs_.emplace(attr_name, attr);
     }
   }
 }
@@ -65,6 +67,20 @@ vector<uint64_t> ETFeederNode::getDepUnresolvedParentIDs() {
 void ETFeederNode::setDepUnresolvedParentIDs(
     vector<uint64_t> const& dep_unresolved_parent_ids) {
   dep_unresolved_parent_ids_ = dep_unresolved_parent_ids;
+}
+
+const ChakraProtoMsg::AttributeProto& ETFeederNode::get_other_attr(
+    const string& attr_name) const {
+  if (this->has_other_attr(attr_name))
+    return this->other_attrs_.at(attr_name);
+  throw std::runtime_error(
+      "Asked for attr \"" + attr_name + "\" from node " +
+      std::to_string(this->id_) + ", which do not exist");
+}
+
+bool ETFeederNode::has_other_attr(const string& attr_name) const {
+  const auto& item = this->other_attrs_.find(attr_name);
+  return item != this->other_attrs_.end();
 }
 
 uint64_t ETFeederNode::id() {

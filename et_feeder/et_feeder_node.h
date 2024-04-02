@@ -19,6 +19,10 @@ class ETFeederNode {
   void setDepUnresolvedParentIDs(
       std::vector<uint64_t> const& dep_unresolved_parent_ids);
 
+  const ChakraProtoMsg::AttributeProto& get_other_attr(
+      const std::string& attr_name) const;
+  bool has_other_attr(const std::string& attr_name) const;
+
   uint64_t id();
   std::string name();
   bool is_cpu_op();
@@ -44,6 +48,8 @@ class ETFeederNode {
   std::unordered_set<std::shared_ptr<ETFeederNode>> children_set_{};
   std::vector<std::shared_ptr<ETFeederNode>> children_vec_{};
   std::vector<uint64_t> dep_unresolved_parent_ids_{};
+  std::unordered_map<std::string, const ChakraProtoMsg::AttributeProto&>
+      other_attrs_{};
 
   uint64_t id_;
   std::string name_;
