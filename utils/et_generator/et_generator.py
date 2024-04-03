@@ -50,10 +50,6 @@ def get_comm_type_attr(comm_type: int) -> ChakraAttr:
     return ChakraAttr(name="comm_type", int64_val=comm_type)
 
 
-def get_involved_dim_attr(num_dims: int) -> ChakraAttr:
-    return ChakraAttr(name="involved_dim", bool_list=BoolList(values=[True] * num_dims))
-
-
 def one_metadata_node_all_types(num_npus: int) -> None:
     for npu_id in range(num_npus):
         output_filename = f"one_metadata_node_all_types.{npu_id}.et"
@@ -196,7 +192,7 @@ def two_comp_nodes_dependent(num_npus: int, runtime: int) -> None:
             encode_message(et, child_node)
 
 
-def one_comm_coll_node_allreduce(num_npus: int, num_dims: int, comm_size: int) -> None:
+def one_comm_coll_node_allreduce(num_npus: int, comm_size: int) -> None:
     for npu_id in range(num_npus):
         output_filename = f"one_comm_coll_node_allreduce.{npu_id}.et"
         with open(output_filename, "wb") as et:
@@ -206,12 +202,10 @@ def one_comm_coll_node_allreduce(num_npus: int, num_dims: int, comm_size: int) -
             node.attr.append(ChakraAttr(name="is_cpu_op", bool_val=False))
             node.attr.append(get_comm_type_attr(ALL_REDUCE))
             node.attr.append(ChakraAttr(name="comm_size", uint64_val=comm_size))
-            attr = get_involved_dim_attr(num_dims)
-            node.attr.append(attr)
             encode_message(et, node)
 
 
-def one_comm_coll_node_alltoall(num_npus: int, num_dims: int, comm_size: int) -> None:
+def one_comm_coll_node_alltoall(num_npus: int, comm_size: int) -> None:
     for npu_id in range(num_npus):
         output_filename = f"one_comm_coll_node_alltoall.{npu_id}.et"
         with open(output_filename, "wb") as et:
@@ -221,12 +215,10 @@ def one_comm_coll_node_alltoall(num_npus: int, num_dims: int, comm_size: int) ->
             node.attr.append(ChakraAttr(name="is_cpu_op", bool_val=False))
             node.attr.append(get_comm_type_attr(ALL_TO_ALL))
             node.attr.append(ChakraAttr(name="comm_size", uint64_val=comm_size))
-            attr = get_involved_dim_attr(num_dims)
-            node.attr.append(attr)
             encode_message(et, node)
 
 
-def one_comm_coll_node_allgather(num_npus: int, num_dims: int, comm_size: int) -> None:
+def one_comm_coll_node_allgather(num_npus: int, comm_size: int) -> None:
     for npu_id in range(num_npus):
         output_filename = f"one_comm_coll_node_allgather.{npu_id}.et"
         with open(output_filename, "wb") as et:
@@ -236,12 +228,10 @@ def one_comm_coll_node_allgather(num_npus: int, num_dims: int, comm_size: int) -
             node.attr.append(ChakraAttr(name="is_cpu_op", bool_val=False))
             node.attr.append(get_comm_type_attr(ALL_GATHER))
             node.attr.append(ChakraAttr(name="comm_size", uint64_val=comm_size))
-            attr = get_involved_dim_attr(num_dims)
-            node.attr.append(attr)
             encode_message(et, node)
 
 
-def one_comm_coll_node_reducescatter(num_npus: int, num_dims: int, comm_size: int) -> None:
+def one_comm_coll_node_reducescatter(num_npus: int, comm_size: int) -> None:
     for npu_id in range(num_npus):
         output_filename = f"one_comm_coll_node_reducescatter.{npu_id}.et"
         with open(output_filename, "wb") as et:
@@ -251,8 +241,6 @@ def one_comm_coll_node_reducescatter(num_npus: int, num_dims: int, comm_size: in
             node.attr.append(ChakraAttr(name="is_cpu_op", bool_val=False))
             node.attr.append(get_comm_type_attr(REDUCE_SCATTER))
             node.attr.append(ChakraAttr(name="comm_size", uint64_val=comm_size))
-            attr = get_involved_dim_attr(num_dims)
-            node.attr.append(attr)
             encode_message(et, node)
 
 
@@ -265,12 +253,6 @@ def main() -> None:
         type=int,
         default=64,
         help="Number of NPUs"
-    )
-    parser.add_argument(
-        "--num_dims",
-        type=int,
-        default=2,
-        help="Number of dimensions in the network topology"
     )
     parser.add_argument(
         "--default_runtime",
@@ -301,10 +283,10 @@ def main() -> None:
     two_comp_nodes_independent(args.num_npus, args.default_runtime)
     two_comp_nodes_dependent(args.num_npus, args.default_runtime)
 
-    one_comm_coll_node_allreduce(args.num_npus, args.num_dims, args.default_comm_size)
-    one_comm_coll_node_alltoall(args.num_npus, args.num_dims, args.default_comm_size)
-    one_comm_coll_node_allgather(args.num_npus, args.num_dims, args.default_comm_size)
-    one_comm_coll_node_reducescatter(args.num_npus, args.num_dims, args.default_comm_size)
+    one_comm_coll_node_allreduce(args.num_npus, args.default_comm_size)
+    one_comm_coll_node_alltoall(args.num_npus, args.default_comm_size)
+    one_comm_coll_node_allgather(args.num_npus, args.default_comm_size)
+    one_comm_coll_node_reducescatter(args.num_npus, args.default_comm_size)
 
 
 if __name__ == "__main__":
