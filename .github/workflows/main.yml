@@ -40,3 +40,15 @@ jobs:
         run: |
           go install github.com/nilslice/protolock/cmd/protolock@latest
           protolock
+      - name: Check broken compatibility and update version
+        run: |
+            python3 version.py
+            echo "RELEASE_TAG=$(cat VERSION)" >> $GITHUB_ENV
+            git config user.name github-actions
+            git config user.email github-actions@github.com
+            git add VERSION
+            git add proto.lock
+            git commit -m "Updates VERSION"
+            git tag -d v$(RELEASE_TAG) || true
+            git tag -a v$(RELEASE_TAG) -m "Release ${RELEASE_TAG}"
+            git push -o ci.skip
