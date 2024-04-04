@@ -52,3 +52,15 @@ jobs:
             git tag -d v$(RELEASE_TAG) || true
             git tag -a v$(RELEASE_TAG) -m "Release ${RELEASE_TAG}"
             git push -o ci.skip
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          release_name: Release ${{ env.RELEASE_TAG }}
+          body: |
+            Release ${{ env.RELEASE_TAG }}
+          draft: false
+          prerelease: false
