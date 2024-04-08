@@ -194,6 +194,12 @@ class TraceLinker:
         kineto_ac2g_f_ops (Dict[str, KinetoOperator]): Final ops for CPU to GPU.
         kineto_cpu_launcher_ops (Dict[str, KinetoOperator]): CPU launcher ops.
         kineto_gpu_ops (List[KinetoOperator]): GPU operators.
+        kineto_process_start_time (int): Start time of the process, based on the
+            earliest operator timestamp.
+        kineto_process_end_time (int): End time of the process, based on the
+            latest operator timestamp.
+        kineto_thread_info (Dict[int, Tuple[int, int]]): Information about threads,
+            mapping thread IDs to a tuple of start and end times.
         kineto_ev_idx_to_kineto_op_map (Dict[str, KinetoOperator]): Mapping from
             event index to KinetoOperator instances.
         pytorch_op_id_to_kineto_ops_map (Dict[int, List[KinetoOperator]]):
@@ -228,6 +234,9 @@ class TraceLinker:
         self.kineto_ac2g_f_ops: Dict[str, KinetoOperator] = {}
         self.kineto_cpu_launcher_ops: Dict[str, KinetoOperator] = {}
         self.kineto_gpu_ops: List[KinetoOperator] = []
+        self.kineto_process_start_time: int = 0
+        self.kineto_process_end_time: int = 0
+        self.kineto_thread_info: Dict[int, Tuple[int, int]] = {}
         self.kineto_ev_idx_to_kineto_op_map: Dict[str, KinetoOperator] = {}
         self.pytorch_op_id_to_kineto_ops_map: Dict[int, List[KinetoOperator]] = {}
         self.pytorch_op_id_to_inclusive_dur_map: Dict[int, int] = {}
@@ -300,7 +309,7 @@ class TraceLinker:
             key=lambda op: op.timestamp
         )
 
-        self.categorize_kineto_ops(sorted_kineto_ops)
+        self.categorize_and_track_kineto_ops(sorted_kineto_ops)
         self.construct_kineto_ev_idx_map()
         self.calculate_exclusive_dur()
 
@@ -309,7 +318,7 @@ class TraceLinker:
                     f"and {len(self.kineto_gpu_ops)} GPU ops.")
         self.logger.info("Kineto Trace loaded successfully.")
 
-    def categorize_kineto_ops(self, kineto_ops: List[KinetoOperator]) -> None:
+    def categorize_and_track_kineto_ops(self, kineto_ops: List[KinetoOperator]) -> None:
         """
         Categorizes Kineto operators based on their properties and assigns them to
         corresponding groups for CPU, GPU, and other operations.
@@ -317,6 +326,11 @@ class TraceLinker:
         Args:
             kineto_ops (List[KinetoOperator]): List of Kineto operators to categorize.
         """
+        self.logger.info("Categorizing Kineto operators and calculating timing boundaries.")
+        process_start_time = sys.maxsize
+        process_end_time = 0
+        thread_info = {}
+
         for op in kineto_ops:
             if op.is_valid("cpu_op") or op.is_valid("user_annotation"):
                 self.kineto_ops.append(op)
@@ -332,6 +346,20 @@ class TraceLinker:
             elif op.is_valid("kernel") or op.is_valid("gpu_memcpy"):
                 self.kineto_gpu_ops.append(op)
                 self.logger.debug(f"Added GPU op: {op.name}")
+
+            # Update timing boundaries
+            if op.tid is not None:
+                process_start_time = min(process_start_time, op.timestamp)
+                process_end_time = max(process_end_time, op.timestamp + op.inclusive_dur)
+                thread_start_end = thread_info.setdefault(op.tid, [sys.maxsize, 0])
+                thread_start_end[0] = min(thread_start_end[0], op.timestamp)
+                thread_start_end[1] = max(thread_start_end[1], op.timestamp + op.inclusive_dur)
+
+        # Apply collected timing info
+        self.kineto_process_start_time = process_start_time
+        self.kineto_process_end_time = process_end_time
+        self.kineto_thread_info = thread_info
+        self.logger.info("Kineto operators categorized and timing boundaries calculated.")
 
     def construct_kineto_ev_idx_map(self) -> None:
         """
@@ -595,129 +623,60 @@ class TraceLinker:
 
     def add_thread_and_process_annotations(self) -> None:
         """
-        Adds thread and process annotations to Kineto operators. These annotations
-        are essential as they are present in PyTorch Execution Traces but missing
-        in Kineto Traces. This method aligns Kineto operators with PyTorch ET nodes
-        by considering thread IDs, ensuring compatibility and completeness of
-        trace data for analysis.
+        Adds thread and process annotations to Kineto operators based on
+        previously tracked timing information. These annotations are crucial
+        for aligning Kineto operators with PyTorch ET nodes, ensuring
+        completeness and compatibility of trace data for analysis. This method
+        uses the process start and end times, as well as thread start and end
+        times, collected during the categorization process to insert
+        appropriate annotations directly into the Kineto operators list.
         """
-        kineto_op_per_thread = {}
-        process_end_time = -1
+        self.logger.info(
+            "Adding process and thread annotations to Kineto operators."
+        )
 
-        for i, op in enumerate(self.kineto_ops):
-            if op.tid is not None:
-                if op.tid not in kineto_op_per_thread:
-                    kineto_op_per_thread[op.tid] = {
-                        "ts": op.timestamp,
-                        "end_ts": op.timestamp + op.inclusive_dur,
-                        "index": i
-                    }
-                else:
-                    kineto_op_per_thread[op.tid]["end_ts"] = max(
-                        kineto_op_per_thread[op.tid]["end_ts"],
-                        op.timestamp + op.inclusive_dur
-                    )
-
-                process_end_time = max(process_end_time, op.timestamp + op.inclusive_dur)
-
-        self.insert_process_annotation_op(process_end_time)
-        self.insert_thread_annotation_ops(kineto_op_per_thread)
-
-    def insert_process_annotation_op(self, end_time: int) -> None:
-        """
-        Inserts a process annotation operator at the beginning of the Kineto
-        operators list. This annotation marks the start and end of the overall
-        process in the trace.
-
-        Args:
-            end_time (int): End time of the last operator in the process.
-        """
-        self.logger.debug("Adding process annotation op with name %s and ts %d",
-                          EXECUTION_TRACE_PROCESS_ANNOTATION,
-                          self.kineto_ops[0].timestamp)
+        # Insert process annotation operator. This operator represents the
+        # overall time span of the trace process.
         process_annotation_op = KinetoOperator({
             "name": EXECUTION_TRACE_PROCESS_ANNOTATION,
-            "ts": self.kineto_ops[0].timestamp,
-            "inclusive_dur": end_time - self.kineto_ops[0].timestamp,
-            "exclusive_dur": 0
+            "ts": self.kineto_process_start_time,
+            "inclusive_dur": self.kineto_process_end_time - self.kineto_process_start_time,
+            "exclusive_dur": 0  # Process exclusive duration not applicable
         })
         self.kineto_ops.insert(0, process_annotation_op)
+        self.logger.debug(
+            "Process annotation added with start time {} and duration {}."
+            .format(self.kineto_process_start_time,
+                    self.kineto_process_end_time - self.kineto_process_start_time)
+        )
 
-    def insert_thread_annotation_ops(self, thread_info: Dict[int, Dict[str, int]]) -> None:
-        """
-        Inserts thread annotation operators into the Kineto operators list.
-        These annotations represent the start and inclusive duration of operations
-        in a specific thread. While an exclusive duration is calculated to acknowledge
-        overlaps, it is set to zero in the final annotation. This is to avoid
-        constraining the execution schedule to the original trace, allowing more
-        flexibility in analyzing dependencies without being bound by specific
-        execution timings.
-
-        Args:
-            thread_info (Dict[int, Dict[str, int]]): Information about threads,
-                including start and end times.
-        """
-        sorted_threads = dict(sorted(thread_info.items(),
-                                     key=lambda x: x[1]["index"]))
-        for index, (tid, info) in enumerate(sorted_threads.items()):
-            start_ts = info["ts"]
-            end_ts = info["end_ts"]
+        # Insert thread annotation operators for each thread. These annotations
+        # are crucial for understanding thread-level execution within the trace.
+        for tid, (start_ts, end_ts) in self.kineto_thread_info.items():
             inclusive_dur = end_ts - start_ts
-            calculated_exclusive_dur = self.calculate_non_overlapping_duration(tid, start_ts, end_ts)
-
-            self.logger.debug("Adding thread annotation op with tid %d, name %s, ts %d, "
-                              "inclusive_dur %d. Exclusive duration calculated as %d, "
-                              "but set to 0 in annotation for flexibility.",
-                              tid, EXECUTION_TRACE_THREAD_ANNOTATION, start_ts,
-                              inclusive_dur, calculated_exclusive_dur)
             thread_annotation_op = KinetoOperator({
                 "name": EXECUTION_TRACE_THREAD_ANNOTATION,
                 "ts": start_ts,
                 "inclusive_dur": inclusive_dur,
-                "exclusive_dur": 0  # Setting exclusive duration to 0
+                # Exclusive duration is set to zero in the final annotation.
+                # This is to avoid constraining the execution schedule to the
+                # original trace, allowing more flexibility in analyzing
+                # dependencies without being bound by specific execution timings.
+                "exclusive_dur": 0
             })
-            self.kineto_ops.insert(index + 1 + info["index"], thread_annotation_op)
-
-    def calculate_non_overlapping_duration(self, tid: int, start_ts: int, end_ts: int) -> int:
-        """
-        Calculates the non-overlapping duration for a given thread and time range.
-
-        Args:
-            tid (int): Thread ID.
-            start_ts (int): Start timestamp.
-            end_ts (int): End timestamp.
-
-        Returns:
-            int: Non-overlapping duration.
-        """
-        if tid not in self.kineto_ops_by_tid:
-            return end_ts - start_ts
-
-        sorted_ops = sorted(self.kineto_ops_by_tid[tid],
-                            key=lambda op: (op.timestamp, op.inclusive_dur))
-        non_overlapping_duration = end_ts - start_ts
-        child_durations = []
-
-        for op in sorted_ops:
-            if op.timestamp >= end_ts or (op.timestamp + op.inclusive_dur) <= start_ts:
-                continue  # Skip non-overlapping operators
-
-            # Calculate overlap
-            overlap_start = max(start_ts, op.timestamp)
-            overlap_end = min(end_ts, op.timestamp + op.inclusive_dur)
-
-            # Ensure this overlap hasn't been subtracted already
-            new_overlap = True
-            for (start, end) in child_durations:
-                if overlap_start >= start and overlap_end <= end:
-                    new_overlap = False
-                    break
-
-            if new_overlap:
-                non_overlapping_duration -= (overlap_end - overlap_start)
-                child_durations.append((overlap_start, overlap_end))
-
-        return non_overlapping_duration
+            # Find the correct position to insert the thread annotation
+            position = next(
+                (i for i, op in enumerate(self.kineto_ops)
+                 if op.tid == tid and op.timestamp >= start_ts), None
+            )
+            if position is not None:
+                self.kineto_ops.insert(position, thread_annotation_op)
+            else:
+                self.kineto_ops.append(thread_annotation_op)
+            self.logger.debug(
+                "Thread {} annotation added with start time {} and duration {}."
+                .format(tid, start_ts, inclusive_dur)
+            )
 
     def map_pytorch_to_kineto_ops(self) -> None:
         """
