@@ -188,6 +188,7 @@ class TraceLinker:
         kineto_file (str): Path to the Kineto trace file.
         pytorch_ops (List[PyTorchOperator]): PyTorch operators from ET trace.
         kineto_ops (List[KinetoOperator]): Kineto operators from the trace.
+        kineto_ops_by_tid (Dict[int, List[KinetoOperator]]): Operators grouped by thread ID.
         kineto_ac2g_s_ops (Dict[str, KinetoOperator]): Start ops for CPU to GPU.
         kineto_ac2g_f_ops (Dict[str, KinetoOperator]): Final ops for CPU to GPU.
         kineto_cpu_launcher_ops (Dict[str, KinetoOperator]): CPU launcher ops.
@@ -221,6 +222,7 @@ class TraceLinker:
         self.kineto_file = kineto_file
         self.pytorch_ops: List[PyTorchOperator] = []
         self.kineto_ops: List[KinetoOperator] = []
+        self.kineto_ops_by_tid: Dict[int, List[KinetoOperator]] = {}
         self.kineto_ac2g_s_ops: Dict[str, KinetoOperator] = {}
         self.kineto_ac2g_f_ops: Dict[str, KinetoOperator] = {}
         self.kineto_cpu_launcher_ops: Dict[str, KinetoOperator] = {}
@@ -317,6 +319,7 @@ class TraceLinker:
         for op in kineto_ops:
             if op.is_valid("cpu_op") or op.is_valid("user_annotation"):
                 self.kineto_ops.append(op)
+                self.kineto_ops_by_tid.setdefault(op.tid, []).append(op)
                 self.logger.debug(f"Added CPU or user annotation op: {op.name}")
             elif op.is_valid("ac2g", phase="s"):
                 self._add_op_to_dict(op, self.kineto_ac2g_s_ops, "id")
@@ -350,10 +353,7 @@ class TraceLinker:
         """
         self.logger.info("Calculating exclusive durations for Kineto operators.")
 
-        # Group operators by their thread ID (tid).
-        ops_by_tid = self.group_ops_by_thread()
-
-        for tid, ops in ops_by_tid.items():
+        for tid, ops in self.kineto_ops_by_tid.items():
             sorted_ops = sorted(ops, key=lambda op: (op.timestamp, op.inclusive_dur))
             for i, op in enumerate(sorted_ops):
                 exclusive_dur = op.inclusive_dur
@@ -464,24 +464,9 @@ class TraceLinker:
                              microseconds, used to define group boundaries.
         """
         self.logger.info("Enforcing inter-thread order in Kineto traces.")
-        ops_by_tid = self.group_ops_by_thread()
-        for tid, ops in ops_by_tid.items():
+        for tid, ops in self.kineto_ops_by_tid.items():
             self.logger.debug(f"Processing thread {tid} for inter-thread order.")
-            self.identify_and_link_groups(ops, ops_by_tid, tid, threshold)
-
-    def group_ops_by_thread(self) -> Dict[int, List[KinetoOperator]]:
-        """
-        Groups Kineto operators by thread ID for further processing.
-
-        Returns:
-            Dict[int, List[KinetoOperator]]: Operators grouped by thread ID.
-        """
-        self.logger.debug("Grouping Kineto operators by thread ID.")
-        ops_by_tid: Dict[int, List[KinetoOperator]] = {}
-        for op in self.kineto_ops:
-            if op.tid is not None:
-                ops_by_tid.setdefault(op.tid, []).append(op)
-        return ops_by_tid
+            self.identify_and_link_groups(ops, self.kineto_ops_by_tid, tid, threshold)
 
     def identify_and_link_groups(
         self,
@@ -693,12 +678,11 @@ class TraceLinker:
         Returns:
             int: Non-overlapping duration.
         """
-        ops_by_tid = self.group_ops_by_thread()
-
-        if tid not in ops_by_tid:
+        if tid not in self.kineto_ops_by_tid:
             return end_ts - start_ts
 
-        sorted_ops = sorted(ops_by_tid[tid], key=lambda op: (op.timestamp, op.inclusive_dur))
+        sorted_ops = sorted(self.kineto_ops_by_tid[tid],
+                            key=lambda op: (op.timestamp, op.inclusive_dur))
         non_overlapping_duration = end_ts - start_ts
         child_durations = []
 
