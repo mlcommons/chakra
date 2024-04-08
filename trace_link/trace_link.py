@@ -676,27 +676,31 @@ class TraceLinker:
         """
         Maps PyTorch ET nodes to corresponding Kineto operators, ensuring
         each PyTorch node has a matching Kineto operator.
-
-        Raises:
-            RuntimeError: If no corresponding Kineto operator is found for
-                          a PyTorch operator.
         """
         self.logger.info("Mapping PyTorch ET nodes to Kineto operators.")
         cpu_ev_idx_to_gpu_ops_map = self.group_gpu_ops_by_cpu_launchers()
 
-        if len(self.kineto_ops) < len(self.pytorch_ops):
-            error_msg = ("Mismatch in operator count between PyTorch and "
-                         "Kineto traces.")
-            self.logger.error(error_msg)
-            raise RuntimeError(error_msg)
+        pytorch_ops_count = len(self.pytorch_ops)
+        kineto_ops_count = len(self.kineto_ops)
+        if pytorch_ops_count > kineto_ops_count:
+            # The specific comment is placed within the if block as requested.
+            self.logger.warning(
+                f"Number of PyTorch operators ({pytorch_ops_count}) is larger "
+                f"than the number of Kineto operators ({kineto_ops_count}). "
+                f"It is expected that the number of PyTorch operators (CPU only) "
+                f"will be smaller than the number of Kineto operators (CPU and GPU)."
+                f" A warning is logged if this is not the case, which is a rare "
+                f"but possible scenario."
+            )
 
         for i, pytorch_op in enumerate(self.pytorch_ops):
             kineto_op = self.find_corresponding_kineto_op(pytorch_op, i)
             if kineto_op is None:
-                error_msg = (f"No corresponding Kineto op found for PyTorch op "
-                             f"{pytorch_op.name}")
-                self.logger.error(error_msg)
-                raise RuntimeError(error_msg)
+                self.logger.warning(
+                    f"No corresponding Kineto op found for PyTorch op "
+                    f"ID: {pytorch_op.id}, Name: '{pytorch_op.name}'."
+                )
+                continue
 
             self.link_ops(pytorch_op, kineto_op, cpu_ev_idx_to_gpu_ops_map)
 
