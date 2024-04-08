@@ -516,7 +516,7 @@ class TraceLinker:
         ts = self.get_start_timestamp_for_gpu_op(kineto_gpu_op)
         kineto_gpu_op.timestamp = ts
 
-        parent_cpu_op = self.find_closest_op(self.kineto_ops, ts)
+        parent_cpu_op = self.find_closest_op(kineto_gpu_op, self.kineto_ops, ts)
         if not parent_cpu_op:
             self.logger.warning(
                 f"No parent CPU operator found for GPU operator '{kineto_gpu_op.name}' "
@@ -547,13 +547,16 @@ class TraceLinker:
             return self.kineto_ac2g_f_ops[kineto_gpu_op.external_id].timestamp
         raise RuntimeError(f"No valid timestamp found for GPU operator: {kineto_gpu_op.name}")
 
-    def find_closest_op(self, kineto_ops: List[KinetoOperator],
+    def find_closest_op(self,
+                        kineto_gpu_op: KinetoOperator,
+                        kineto_ops: List[KinetoOperator],
                         ts: int) -> Optional[KinetoOperator]:
         """
         Finds the Kineto operator that is closest in start time to a given timestamp
         and has a duration that covers the timestamp.
 
         Args:
+            kineto_gpu_op (KinetoOperator): The GPU operator being compared.
             kineto_ops (List[KinetoOperator]): List of Kineto operators.
             ts (int): The timestamp to compare against.
 
@@ -564,11 +567,13 @@ class TraceLinker:
         closest_op = None
 
         for op in kineto_ops:
-            if (op.timestamp < ts) and \
-               ((op.timestamp + op.duration) > ts) and \
-               (op.timestamp > closest_start):
-                closest_start = op.timestamp
-                closest_op = op
+            if (op.timestamp < ts) and (op.timestamp > closest_start):
+                if "nccl" in kineto_gpu_op.name and "nccl" in op.name:
+                    closest_start = op.timestamp
+                    closest_op = op
+                elif "nccl" not in kineto_gpu_op.name:
+                    closest_start = op.timestamp
+                    closest_op = op
 
         return closest_op
 
