@@ -33,7 +33,10 @@ class KinetoOperator:
         external_id (Optional[str]): External ID associated with the operator.
         ev_idx (Optional[str]): Event index associated with the operator.
         tid (Optional[int]): Thread ID associated with the operator.
+        pytorch_op (Optional[PyTorchOperator]): Associated PyTorch operator.
         parent_pytorch_op_id (Optional[int]): ID of the parent PyTorch operator.
+        inter_thread_dep (Optional[int]): ID of the latest CPU node from other
+            threads before the gap.
     """
 
     def __init__(self, kineto_op: Dict[str, Any]) -> None:
@@ -53,7 +56,9 @@ class KinetoOperator:
         self.external_id = None
         self.ev_idx = None
         self.tid = kineto_op.get("tid")
+        self.pytorch_op: Optional[PyTorchOperator] = None
         self.parent_pytorch_op_id = None
+        self.inter_thread_dep: Optional[int] = None
 
         if "args" in kineto_op:
             self.external_id = kineto_op["args"].get("External id")
@@ -180,10 +185,14 @@ class TraceLinker:
         kineto_ac2g_f_ops (Dict[str, KinetoOperator]): Final ops for CPU to GPU.
         kineto_cpu_launcher_ops (Dict[str, KinetoOperator]): CPU launcher ops.
         kineto_gpu_ops (List[KinetoOperator]): GPU operators.
+        kineto_ev_idx_to_kineto_op_map (Dict[str, KinetoOperator]): Mapping from
+            event index to KinetoOperator instances.
         pytorch_op_id_to_kineto_ops_map (Dict[int, List[KinetoOperator]]):
             Map from PyTorch op IDs to Kineto GPU ops.
         pytorch_op_id_to_duration_map (Dict[int, int]): Duration map for PyTorch ops.
         pytorch_op_id_to_timestamp_map (Dict[int, int]): Timestamp map for PyTorch ops.
+        pytorch_op_id_to_inter_thread_dep_map (Dict[int, int]): Mapping of PyTorch
+            operator IDs to IDs of latest CPU node from other threads before the gap.
         id_assigner (UniqueIdAssigner): Assigns unique IDs to operators.
         pytorch_et_plus_data (Optional[Dict]): PyTorch ET plus data.
         logger (logging.Logger): Logger for the class.
@@ -208,9 +217,11 @@ class TraceLinker:
         self.kineto_ac2g_f_ops: Dict[str, KinetoOperator] = {}
         self.kineto_cpu_launcher_ops: Dict[str, KinetoOperator] = {}
         self.kineto_gpu_ops: List[KinetoOperator] = []
+        self.kineto_ev_idx_to_kineto_op_map: Dict[str, KinetoOperator] = {}
         self.pytorch_op_id_to_kineto_ops_map: Dict[int, List[KinetoOperator]] = {}
         self.pytorch_op_id_to_duration_map: Dict[int, int] = {}
         self.pytorch_op_id_to_timestamp_map: Dict[int, int] = {}
+        self.pytorch_op_id_to_inter_thread_dep_map: Dict[int, int] = {}
         self.id_assigner = UniqueIdAssigner()
         self.pytorch_et_plus_data: Optional[Dict] = None
         self.logger = logging.getLogger(__name__)
@@ -278,6 +289,7 @@ class TraceLinker:
         )
 
         self.categorize_kineto_ops(sorted_kineto_ops)
+        self.construct_kineto_ev_idx_map()
 
         self.logger.info(f"Processed Kineto trace with {len(self.kineto_ops)} CPU ops, "
                     f"{len(self.kineto_cpu_launcher_ops)} CPU launcher ops, "
@@ -307,6 +319,15 @@ class TraceLinker:
                 self.kineto_gpu_ops.append(op)
                 self.logger.debug(f"Added GPU op: {op.name}")
 
+    def construct_kineto_ev_idx_map(self) -> None:
+        """
+        Constructs a map from ev_idx to KinetoOperator instances.
+        """
+        for op in self.kineto_ops:
+            ev_idx = op.ev_idx
+            if ev_idx is not None:
+                self.kineto_ev_idx_to_kineto_op_map[ev_idx] = op
+
     def _add_op_to_dict(self, op: KinetoOperator, target_dict: Dict,
                         *keys: str) -> None:
         """
@@ -331,6 +352,124 @@ class TraceLinker:
             value = value[key]
 
         target_dict[value] = op
+
+    def enforce_inter_thread_order(self, threshold: int = 1000) -> None:
+        """
+        Enforces order between groups of operators in different threads. In
+        Kineto traces with multiple threads, operators are executed in turns,
+        creating groups. This function identifies these groups by detecting
+        significant gaps in execution within each thread. It then establishes
+        dependencies between these groups across different threads, ensuring
+        the final Chakra execution traces reflect inter-thread dependencies
+        realistically.
+
+        An isolated group is formed when there's a significant gap in execution
+        within a thread. Each new group relies on the last CPU operator from
+        other threads, enforcing order and dependency across threads.
+
+        Args:
+            threshold (int): Threshold for significant gap detection in
+                             microseconds, used to define group boundaries.
+        """
+        self.logger.info("Enforcing inter-thread order in Kineto traces.")
+        ops_by_tid = self.group_ops_by_thread()
+        for tid, ops in ops_by_tid.items():
+            self.logger.debug(f"Processing thread {tid} for inter-thread order.")
+            self.identify_and_link_groups(ops, ops_by_tid, tid, threshold)
+
+    def group_ops_by_thread(self) -> Dict[int, List[KinetoOperator]]:
+        """
+        Groups Kineto operators by thread ID for further processing.
+
+        Returns:
+            Dict[int, List[KinetoOperator]]: Operators grouped by thread ID.
+        """
+        self.logger.debug("Grouping Kineto operators by thread ID.")
+        ops_by_tid: Dict[int, List[KinetoOperator]] = {}
+        for op in self.kineto_ops:
+            if op.tid is not None:
+                ops_by_tid.setdefault(op.tid, []).append(op)
+        return ops_by_tid
+
+    def identify_and_link_groups(
+        self,
+        ops: List[KinetoOperator],
+        ops_by_tid: Dict[int, List[KinetoOperator]],
+        current_tid: int,
+        threshold: int
+    ) -> None:
+        """
+        Identifies groups within a thread based on significant gaps in execution
+        and links them with the last CPU operator from other threads before the
+        group's start. This enforces order and dependencies across threads,
+        reflecting realistic inter-thread execution dynamics in the trace.
+
+        Args:
+            ops (List[KinetoOperator]): Operators within the current thread.
+            ops_by_tid (Dict[int, List[KinetoOperator]]): Operators grouped by
+                                                          thread ID.
+            current_tid (int): The current thread ID being processed.
+            threshold (int): Threshold in microseconds for identifying significant
+                             gaps as new groups.
+        """
+        sorted_ops = sorted(ops, key=lambda op: op.timestamp)
+        last_cpu_node_ev_idx = None
+
+        for i, op in enumerate(sorted_ops):
+            if i == 0 or (sorted_ops[i].timestamp -
+                          (sorted_ops[i - 1].timestamp +
+                           sorted_ops[i - 1].inclusive_dur)) > threshold:
+                last_cpu_node_ev_idx = \
+                    self.find_last_cpu_node_before_timestamp(
+                        ops_by_tid, current_tid, op.timestamp)
+
+                self.logger.debug(
+                    f"New group identified in thread {current_tid} starting at {op}")
+
+            if last_cpu_node_ev_idx is not None:
+                op.inter_thread_dep = last_cpu_node_ev_idx
+
+    def find_last_cpu_node_before_timestamp(
+        self,
+        ops_by_tid: Dict[int, List[KinetoOperator]],
+        exclude_tid: int,
+        timestamp: int
+    ) -> Optional[int]:
+        """
+        Finds the last CPU node ID before a given timestamp in threads other
+        than the excluded one. This ID is used to establish dependencies
+        between groups across threads.
+
+        Args:
+            ops_by_tid (Dict[int, List[KinetoOperator]]): Operators grouped by
+                                                          thread ID.
+            exclude_tid (int): Thread ID to exclude from the search.
+            timestamp (int): Timestamp to compare against.
+
+        Returns:
+            Optional[int]: The ID of the last CPU node found, or None if not found.
+        """
+        self.logger.debug(
+            f"Finding last CPU node before timestamp {timestamp} excluding "
+            f"thread {exclude_tid}."
+        )
+        last_cpu_node = None
+        last_cpu_node_ev_idx = None
+        latest_timestamp = 0
+        for tid, ops in ops_by_tid.items():
+            if tid != exclude_tid:
+                for op in sorted(ops, key=lambda op: op.timestamp):
+                    if (op.category in ["cpu_op", "user_annotation"]) and \
+                       (op.timestamp < timestamp):
+                        if op.timestamp > latest_timestamp:
+                            last_cpu_node = op
+                            latest_timestamp = op.timestamp
+                            last_cpu_node_ev_idx = op.ev_idx
+        if last_cpu_node:
+            self.logger.debug(
+                f"Last CPU node before timestamp {timestamp} found: {last_cpu_node}"
+            )
+        return last_cpu_node_ev_idx
 
     def link_traces(self) -> None:
         """
@@ -617,11 +756,18 @@ class TraceLinker:
             kineto_op (KinetoOperator): Corresponding Kineto operator.
             cpu_ev_idx_to_gpu_ops_map (Dict[str, List[KinetoOperator]]): GPU ops mapping.
         """
+        kineto_op.pytorch_op = pytorch_op
         if kineto_op.ev_idx in cpu_ev_idx_to_gpu_ops_map:
             self.pytorch_op_id_to_kineto_ops_map[pytorch_op.id] =\
                     cpu_ev_idx_to_gpu_ops_map[kineto_op.ev_idx]
         self.pytorch_op_id_to_duration_map[pytorch_op.id] = kineto_op.duration
         self.pytorch_op_id_to_timestamp_map[pytorch_op.id] = kineto_op.timestamp
+        if kineto_op.inter_thread_dep:
+            inter_thread_dep_kineto_op =\
+                    self.kineto_ev_idx_to_kineto_op_map[kineto_op.inter_thread_dep]
+            if inter_thread_dep_kineto_op.pytorch_op:
+                self.pytorch_op_id_to_inter_thread_dep_map[pytorch_op.id] =\
+                        inter_thread_dep_kineto_op.pytorch_op.id
         if kineto_op.ev_idx in cpu_ev_idx_to_gpu_ops_map:
             self.link_gpu_ops(pytorch_op, cpu_ev_idx_to_gpu_ops_map[kineto_op.ev_idx])
 
@@ -682,6 +828,11 @@ class TraceLinker:
         if orig_op_id in self.pytorch_op_id_to_duration_map:
             op["dur"] = self.pytorch_op_id_to_duration_map[orig_op_id]
             op["ts"] = self.pytorch_op_id_to_timestamp_map[orig_op_id]
+            if orig_op_id in self.pytorch_op_id_to_inter_thread_dep_map:
+                op["inter_thread_dep"] = self.id_assigner.lookup_new_id(
+                        self.pytorch_op_id_to_inter_thread_dep_map[orig_op_id])
+            else:
+                op["inter_thread_dep"] = None
 
         # Process and append dependent GPU operators
         if orig_op_id in self.pytorch_op_id_to_kineto_ops_map:
@@ -782,6 +933,7 @@ def main() -> None:
         args.log_level
     )
     linker.load_traces()
+    linker.enforce_inter_thread_order()
     linker.link_traces()
     linker.dump_pytorch_execution_trace_plus(args.output_file)
 
