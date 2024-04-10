@@ -36,6 +36,7 @@ from chakra.et_def.et_def_pb2 import (
 
 NODE_ID = 0
 
+
 def get_node(node_name: str, node_type: ChakraNodeType) -> ChakraNode:
     global NODE_ID
     node = ChakraNode()
@@ -245,32 +246,12 @@ def one_comm_coll_node_reducescatter(num_npus: int, comm_size: int) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Execution Trace Generator"
-    )
+    parser = argparse.ArgumentParser(description="Execution Trace Generator")
+    parser.add_argument("--num_npus", type=int, default=64, help="Number of NPUs")
+    parser.add_argument("--default_runtime", type=int, default=5, help="Default runtime of compute nodes")
+    parser.add_argument("--default_tensor_size", type=int, default=1024, help="Default tensor size of memory nodes")
     parser.add_argument(
-        "--num_npus",
-        type=int,
-        default=64,
-        help="Number of NPUs"
-    )
-    parser.add_argument(
-        "--default_runtime",
-        type=int,
-        default=5,
-        help="Default runtime of compute nodes"
-    )
-    parser.add_argument(
-        "--default_tensor_size",
-        type=int,
-        default=1024,
-        help="Default tensor size of memory nodes"
-    )
-    parser.add_argument(
-        "--default_comm_size",
-        type=int,
-        default=65536,
-        help="Default communication size of communication nodes"
+        "--default_comm_size", type=int, default=65536, help="Default communication size of communication nodes"
     )
     args = parser.parse_args()
 

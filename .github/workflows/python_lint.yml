@@ -16,12 +16,11 @@ jobs:
 
     - name: Install dependencies
       run: |
-        pip install flake8
-        pip install pyre-check
+        pip install -r requirements-dev.txt
         pip install .
 
-    - name: Run Flake8
-      run: flake8 .
+    - name: Run ruff
+      run: ruff format --check --diff .
 
     - name: Run Pyre Check
       run: pyre check

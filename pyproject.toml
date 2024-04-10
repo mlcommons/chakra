@@ -36,3 +36,13 @@ chakra_visualizer = "chakra.et_visualizer.et_visualizer:main"
 chakra_timeline_visualizer = "chakra.et_timeline_visualizer.et_timeline_visualizer:main"
 chakra_generator = "chakra.et_generator.et_generator:main"
 chakra_jsonizer = "chakra.et_jsonizer.et_jsonizer:main"
+
+[tool.ruff]
+target-version = "py39"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["I", "B", "E", "F", "SIM", "W", "C90", "EXE"]
+
+[tool.ruff.format]
+indent-style = "space"
