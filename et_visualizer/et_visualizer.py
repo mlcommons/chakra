@@ -5,10 +5,7 @@ import graphviz
 import networkx as nx
 import re
 
-from chakra.third_party.utils.protolib import (
-    openFileRd as open_file_rd,
-    decodeMessage as decode_message
-)
+from chakra.third_party.utils.protolib import openFileRd as open_file_rd, decodeMessage as decode_message
 from chakra.et_def.et_def_pb2 import (
     GlobalMetadata,
     Node,
@@ -32,23 +29,11 @@ def escape_label(label: str) -> str:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Execution Trace Visualizer"
-    )
+    parser = argparse.ArgumentParser(description="Execution Trace Visualizer")
     parser.add_argument(
-        "--input_filename",
-        type=str,
-        default=None,
-        required=True,
-        help="Input Chakra execution trace filename"
+        "--input_filename", type=str, default=None, required=True, help="Input Chakra execution trace filename"
     )
-    parser.add_argument(
-        "--output_filename",
-        type=str,
-        default=None,
-        required=True,
-        help="Output graph filename"
-    )
+    parser.add_argument("--output_filename", type=str, default=None, required=True, help="Output graph filename")
     args = parser.parse_args()
 
     et = open_file_rd(args.input_filename)
@@ -61,10 +46,7 @@ def main() -> None:
         decode_message(et, gm)
         while decode_message(et, node):
             escaped_label = escape_label(node.name)
-            f.node(name=f"{node.id}",
-                   label=escaped_label,
-                   id=str(node.id),
-                   shape="record")
+            f.node(name=f"{node.id}", label=escaped_label, id=str(node.id), shape="record")
 
             # Handling data dependencies
             for data_dep_id in node.data_deps:
@@ -75,11 +57,9 @@ def main() -> None:
                 f.edge(str(ctrl_dep_id), str(node.id), arrowhead="tee")  # using "tee" arrow for ctrl_deps
 
         if args.output_filename.endswith(".pdf"):
-            f.render(args.output_filename.replace(".pdf", ""),
-                     format="pdf", cleanup=True)
+            f.render(args.output_filename.replace(".pdf", ""), format="pdf", cleanup=True)
         else:  # ends with ".dot"
-            f.render(args.output_filename.replace(".dot", ""),
-                     format="dot", cleanup=True)
+            f.render(args.output_filename.replace(".dot", ""), format="dot", cleanup=True)
     elif args.output_filename.endswith(".graphml"):
         G = nx.DiGraph()
         decode_message(et, gm)

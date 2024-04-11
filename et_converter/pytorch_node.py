@@ -29,11 +29,11 @@ class PyTorchNode:
             PyTorch node.
         """
         self.node_data = node_data
-        self.data_deps: List['PyTorchNode'] = []
-        self.children: List['PyTorchNode'] = []
-        self.gpu_children: List['PyTorchNode'] = []
-        self.record_param_comms_node: Optional['PyTorchNode'] = None
-        self.nccl_node: Optional['PyTorchNode'] = None
+        self.data_deps: List["PyTorchNode"] = []
+        self.children: List["PyTorchNode"] = []
+        self.gpu_children: List["PyTorchNode"] = []
+        self.record_param_comms_node: Optional["PyTorchNode"] = None
+        self.nccl_node: Optional["PyTorchNode"] = None
 
     def __repr__(self) -> str:
         """
@@ -527,7 +527,7 @@ class PyTorchNode:
         """
         return self.has_cat()
 
-    def add_data_dep(self, parent_node: 'PyTorchNode') -> None:
+    def add_data_dep(self, parent_node: "PyTorchNode") -> None:
         """
         Adds a data-dependent parent node to this node.
 
@@ -536,7 +536,7 @@ class PyTorchNode:
         """
         self.data_deps.append(parent_node)
 
-    def add_child(self, child_node: 'PyTorchNode') -> None:
+    def add_child(self, child_node: "PyTorchNode") -> None:
         """
         Adds a child node to this node.
 
@@ -545,7 +545,7 @@ class PyTorchNode:
         """
         self.children.append(child_node)
 
-    def add_gpu_child(self, gpu_child_node: 'PyTorchNode') -> None:
+    def add_gpu_child(self, gpu_child_node: "PyTorchNode") -> None:
         """
         Adds a child GPU node for this node.
 

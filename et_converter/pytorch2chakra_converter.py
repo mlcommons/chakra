@@ -108,12 +108,7 @@ class PyTorch2ChakraConverter:
                                                        dependencies.
     """
 
-    def __init__(
-        self,
-        input_filename: str,
-        output_filename: str,
-        logger: logging.Logger
-    ) -> None:
+    def __init__(self, input_filename: str, output_filename: str, logger: logging.Logger) -> None:
         """
         Initializes the PyTorch to Chakra converter. It sets up necessary
         attributes and prepares the environment for the conversion process.
@@ -157,8 +152,9 @@ class PyTorch2ChakraConverter:
         self.open_chakra_execution_trace()
 
         for pytorch_nid, pytorch_node in self.pytorch_nodes.items():
-            if (pytorch_node.get_op_type() == PyTorchNodeType.CPU_OP)\
-                    or (pytorch_node.get_op_type() == PyTorchNodeType.LABEL):
+            if (pytorch_node.get_op_type() == PyTorchNodeType.CPU_OP) or (
+                pytorch_node.get_op_type() == PyTorchNodeType.LABEL
+            ):
                 chakra_node = self.convert_to_chakra_node(pytorch_node)
                 self.chakra_nodes[chakra_node.id] = chakra_node
 
@@ -167,11 +163,12 @@ class PyTorch2ChakraConverter:
 
                     if chakra_node.type == COMM_COLL_NODE:
                         collective_comm_type = self.get_collective_comm_type(pytorch_node.name)
-                        chakra_gpu_node.attr.extend([
-                            ChakraAttr(name="comm_type",
-                                       int64_val=collective_comm_type),
-                            ChakraAttr(name="comm_size",
-                                       int64_val=pytorch_gpu_node.comm_size)])
+                        chakra_gpu_node.attr.extend(
+                            [
+                                ChakraAttr(name="comm_type", int64_val=collective_comm_type),
+                                ChakraAttr(name="comm_size", int64_val=pytorch_gpu_node.comm_size),
+                            ]
+                        )
 
                     self.chakra_nodes[chakra_gpu_node.id] = chakra_gpu_node
 
@@ -229,14 +226,10 @@ class PyTorch2ChakraConverter:
         self.pytorch_finish_ts = pytorch_et_data["finish_ts"]
 
         pytorch_nodes = pytorch_et_data["nodes"]
-        pytorch_node_objects = {
-            node_data["id"]: PyTorchNode(node_data) for node_data in pytorch_nodes
-        }
+        pytorch_node_objects = {node_data["id"]: PyTorchNode(node_data) for node_data in pytorch_nodes}
         self._establish_parent_child_relationships(pytorch_node_objects)
 
-    def _establish_parent_child_relationships(
-        self, pytorch_node_objects: Dict[int, PyTorchNode]
-    ) -> None:
+    def _establish_parent_child_relationships(self, pytorch_node_objects: Dict[int, PyTorchNode]) -> None:
         """
         Establishes parent-child relationships among PyTorch nodes and counts
         the node types.
@@ -252,7 +245,7 @@ class PyTorch2ChakraConverter:
             "gpu_op": 0,
             "record_param_comms_op": 0,
             "nccl_op": 0,
-            "root_op": 0
+            "root_op": 0,
         }
 
         # Establish parent-child relationships
@@ -271,8 +264,10 @@ class PyTorch2ChakraConverter:
                 if pytorch_node.is_nccl_op():
                     parent_node.nccl_node = pytorch_node
 
-            if pytorch_node.name in ["[pytorch|profiler|execution_graph|thread]",
-                                     "[pytorch|profiler|execution_trace|thread]"]:
+            if pytorch_node.name in [
+                "[pytorch|profiler|execution_graph|thread]",
+                "[pytorch|profiler|execution_trace|thread]",
+            ]:
                 self.pytorch_root_nids.append(pytorch_node.id)
                 node_type_counts["root_op"] += 1
 
@@ -333,17 +328,19 @@ class PyTorch2ChakraConverter:
         chakra_node.outputs.values = str(pytorch_node.outputs)
         chakra_node.outputs.shapes = str(pytorch_node.output_shapes)
         chakra_node.outputs.types = str(pytorch_node.output_types)
-        chakra_node.attr.extend([
-            ChakraAttr(name="rf_id", int64_val=pytorch_node.rf_id),
-            ChakraAttr(name="fw_parent", int64_val=pytorch_node.fw_parent),
-            ChakraAttr(name="seq_id", int64_val=pytorch_node.seq_id),
-            ChakraAttr(name="scope", int64_val=pytorch_node.scope),
-            ChakraAttr(name="tid", int64_val=pytorch_node.tid),
-            ChakraAttr(name="fw_tid", int64_val=pytorch_node.fw_tid),
-            ChakraAttr(name="op_schema", string_val=pytorch_node.op_schema),
-            ChakraAttr(name="is_cpu_op", int32_val=not pytorch_node.is_gpu_op()),
-            ChakraAttr(name="ts", int64_val=pytorch_node.ts)
-        ])
+        chakra_node.attr.extend(
+            [
+                ChakraAttr(name="rf_id", int64_val=pytorch_node.rf_id),
+                ChakraAttr(name="fw_parent", int64_val=pytorch_node.fw_parent),
+                ChakraAttr(name="seq_id", int64_val=pytorch_node.seq_id),
+                ChakraAttr(name="scope", int64_val=pytorch_node.scope),
+                ChakraAttr(name="tid", int64_val=pytorch_node.tid),
+                ChakraAttr(name="fw_tid", int64_val=pytorch_node.fw_tid),
+                ChakraAttr(name="op_schema", string_val=pytorch_node.op_schema),
+                ChakraAttr(name="is_cpu_op", int32_val=not pytorch_node.is_gpu_op()),
+                ChakraAttr(name="ts", int64_val=pytorch_node.ts),
+            ]
+        )
         return chakra_node
 
     def get_chakra_node_type_from_pytorch_node(self, pytorch_node: PyTorchNode) -> ChakraNodeType:
@@ -356,9 +353,7 @@ class PyTorch2ChakraConverter:
         Returns:
             int: The corresponding Chakra node type.
         """
-        if pytorch_node.is_gpu_op() and (
-            "ncclKernel" in pytorch_node.name or "ncclDevKernel" in pytorch_node.name
-        ):
+        if pytorch_node.is_gpu_op() and ("ncclKernel" in pytorch_node.name or "ncclDevKernel" in pytorch_node.name):
             return COMM_COLL_NODE
         elif ("c10d::" in pytorch_node.name) or ("nccl:" in pytorch_node.name):
             return COMM_COLL_NODE
@@ -392,8 +387,10 @@ class PyTorch2ChakraConverter:
             if key.lower() in name.lower():
                 return value
 
-        raise ValueError(f"'{name}' not found in collective communication mapping. "
-                         "Please add this collective communication name to the mapping.")
+        raise ValueError(
+            f"'{name}' not found in collective communication mapping. "
+            "Please add this collective communication name to the mapping."
+        )
 
     def is_root_node(self, node):
         """
@@ -412,8 +409,7 @@ class PyTorch2ChakraConverter:
         Returns:
             bool: True if the node is a root node, False otherwise.
         """
-        if node.name in ["[pytorch|profiler|execution_graph|thread]",
-                         "[pytorch|profiler|execution_trace|thread]"]:
+        if node.name in ["[pytorch|profiler|execution_graph|thread]", "[pytorch|profiler|execution_trace|thread]"]:
             return True
 
     def convert_ctrl_dep_to_data_dep(self, chakra_node: ChakraNode) -> None:
@@ -591,9 +587,7 @@ class PyTorch2ChakraConverter:
                 bool: True if a cycle is detected, False otherwise.
             """
             if node_id in stack:
-                cycle_nodes = " -> ".join(
-                    [self.chakra_nodes[n].name for n in path + [node_id]]
-                )
+                cycle_nodes = " -> ".join([self.chakra_nodes[n].name for n in path + [node_id]])
                 self.logger.error(f"Cyclic dependency detected: {cycle_nodes}")
                 return True
             if node_id in visited:
@@ -611,10 +605,7 @@ class PyTorch2ChakraConverter:
 
         for node_id in self.chakra_nodes:
             if dfs(node_id, []):
-                raise Exception(
-                    f"Cyclic dependency detected starting from node "
-                    f"{self.chakra_nodes[node_id].name}"
-                )
+                raise Exception(f"Cyclic dependency detected starting from node " f"{self.chakra_nodes[node_id].name}")
 
     def write_chakra_et(self) -> None:
         """
@@ -642,7 +633,7 @@ class PyTorch2ChakraConverter:
                 ChakraAttr(name="pid", uint64_val=self.pytorch_pid),
                 ChakraAttr(name="time", string_val=self.pytorch_time),
                 ChakraAttr(name="start_ts", uint64_val=self.pytorch_start_ts),
-                ChakraAttr(name="finish_ts", uint64_val=self.pytorch_finish_ts)
+                ChakraAttr(name="finish_ts", uint64_val=self.pytorch_finish_ts),
             ]
         )
         encode_message(self.chakra_et, global_metadata)
@@ -684,21 +675,18 @@ class PyTorch2ChakraConverter:
         execution based on the readiness determined by dependency resolution.
         A simplistic global clock is used to model the execution time.
         """
-        self.logger.info("Simulating execution of Chakra nodes based on data "
-                         "dependencies.")
+        self.logger.info("Simulating execution of Chakra nodes based on data " "dependencies.")
 
         # Initialize queues for ready CPU and GPU nodes
         ready_cpu_nodes = [
             (node_id, self.chakra_nodes[node_id])
             for node_id in self.chakra_nodes
-            if not self.chakra_nodes[node_id].data_deps and
-            not self.pytorch_nodes[node_id].is_gpu_op()
+            if not self.chakra_nodes[node_id].data_deps and not self.pytorch_nodes[node_id].is_gpu_op()
         ]
         ready_gpu_nodes = [
             (node_id, self.chakra_nodes[node_id])
             for node_id in self.chakra_nodes
-            if not self.chakra_nodes[node_id].data_deps and
-            self.pytorch_nodes[node_id].is_gpu_op()
+            if not self.chakra_nodes[node_id].data_deps and self.pytorch_nodes[node_id].is_gpu_op()
         ]
         ready_cpu_nodes.sort(key=lambda x: x[1].id)
         ready_gpu_nodes.sort(key=lambda x: x[1].id)
@@ -709,8 +697,7 @@ class PyTorch2ChakraConverter:
 
         current_time: int = 0  # Simulated global clock in microseconds
 
-        while any([ready_cpu_nodes, ready_gpu_nodes, current_cpu_node,
-                   current_gpu_node]):
+        while any([ready_cpu_nodes, ready_gpu_nodes, current_cpu_node, current_gpu_node]):
             if ready_cpu_nodes and not current_cpu_node:
                 cpu_node_id, cpu_node = ready_cpu_nodes.pop(0)
                 current_cpu_node = (cpu_node_id, current_time)
@@ -731,16 +718,18 @@ class PyTorch2ChakraConverter:
 
             current_time += 1
 
-            if current_cpu_node and current_time - current_cpu_node[1] >= \
-                    self.chakra_nodes[current_cpu_node[0]].duration_micros:
-                self.logger.info(f"CPU Node ID {current_cpu_node[0]} completed "
-                                 f"at {current_time}us")
+            if (
+                current_cpu_node
+                and current_time - current_cpu_node[1] >= self.chakra_nodes[current_cpu_node[0]].duration_micros
+            ):
+                self.logger.info(f"CPU Node ID {current_cpu_node[0]} completed " f"at {current_time}us")
                 current_cpu_node = None
 
-            if current_gpu_node and current_time - current_gpu_node[1] >= \
-                    self.chakra_nodes[current_gpu_node[0]].duration_micros:
-                self.logger.info(f"GPU Node ID {current_gpu_node[0]} completed "
-                                 f"at {current_time}us")
+            if (
+                current_gpu_node
+                and current_time - current_gpu_node[1] >= self.chakra_nodes[current_gpu_node[0]].duration_micros
+            ):
+                self.logger.info(f"GPU Node ID {current_gpu_node[0]} completed " f"at {current_time}us")
                 current_gpu_node = None
 
             for node_id in list(issued_nodes):

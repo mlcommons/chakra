@@ -32,9 +32,11 @@ class PyTorchTensor:
             bool: True if tensor_data is a list of exactly five integers,
                   False otherwise.
         """
-        return (isinstance(self.tensor_data, list) and
-                len(self.tensor_data) == 6 and
-                all(isinstance(item, int) for item in self.tensor_data))
+        return (
+            isinstance(self.tensor_data, list)
+            and len(self.tensor_data) == 6
+            and all(isinstance(item, int) for item in self.tensor_data)
+        )
 
     @property
     def tensor_id(self) -> int:
