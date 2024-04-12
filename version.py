@@ -107,4 +107,3 @@ if __name__ == "__main__":
         print("Backward compatibility not broken")
     main(["--version-change=" + version_change])
     subprocess.run(["protolock", "commit", "--force"], stdout=subprocess.PIPE)
-
