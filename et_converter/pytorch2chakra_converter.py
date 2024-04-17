@@ -168,7 +168,7 @@ class PyTorch2ChakraConverter:
         self.pytorch_finish_ts = pytorch_et_data["finish_ts"]
 
         pytorch_nodes = pytorch_et_data["nodes"]
-        pytorch_node_objects = {node_data["id"]: PyTorchNode(node_data) for node_data in pytorch_nodes}
+        pytorch_node_objects = {node_data["id"]: PyTorchNode(self.pytorch_schema, node_data) for node_data in pytorch_nodes}
         self._establish_parent_child_relationships(pytorch_node_objects)
 
     def _establish_parent_child_relationships(self, pytorch_node_objects: Dict[int, PyTorchNode]) -> None:
@@ -263,13 +263,13 @@ class PyTorch2ChakraConverter:
         chakra_node.type = self.get_chakra_node_type_from_pytorch_node(pytorch_node)
         if pytorch_node.parent in self.chakra_nodes:
             chakra_node.ctrl_deps.append(pytorch_node.parent)
-        chakra_node.duration_micros = pytorch_node.exclusive_dur
-        chakra_node.inputs.values = str(pytorch_node.inputs)
-        chakra_node.inputs.shapes = str(pytorch_node.input_shapes)
-        chakra_node.inputs.types = str(pytorch_node.input_types)
-        chakra_node.outputs.values = str(pytorch_node.outputs)
-        chakra_node.outputs.shapes = str(pytorch_node.output_shapes)
-        chakra_node.outputs.types = str(pytorch_node.output_types)
+        chakra_node.duration_micros = int(pytorch_node.exclusive_dur)
+        chakra_node.inputs.values = str(pytorch_node.inputs["values"])
+        chakra_node.inputs.shapes = str(pytorch_node.inputs["shapes"])
+        chakra_node.inputs.types = str(pytorch_node.inputs["types"])
+        chakra_node.outputs.values = str(pytorch_node.outputs["values"])
+        chakra_node.outputs.shapes = str(pytorch_node.outputs["shapes"])
+        chakra_node.outputs.types = str(pytorch_node.outputs["types"])
         chakra_node.attr.extend(
             [
                 ChakraAttr(name="rf_id", int64_val=pytorch_node.rf_id),
@@ -280,7 +280,6 @@ class PyTorch2ChakraConverter:
                 ChakraAttr(name="fw_tid", int64_val=pytorch_node.fw_tid),
                 ChakraAttr(name="op_schema", string_val=pytorch_node.op_schema),
                 ChakraAttr(name="is_cpu_op", int32_val=not pytorch_node.is_gpu_op()),
-                ChakraAttr(name="ts", int64_val=pytorch_node.ts),
             ]
         )
         return chakra_node
