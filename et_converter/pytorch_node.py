@@ -3,6 +3,8 @@
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
+from .pytorch_tensor import PyTorchTensor
+
 
 class PyTorchNodeType(Enum):
     CPU_OP = 1
@@ -185,13 +187,12 @@ class PyTorchNode:
         Returns:
             int: The calculated communication size.
         """
-        comm_size = 1
-        for input_type, input_shape in zip(self.inputs["types"], self.inputs["shapes"]):
-            type_size = self.get_data_type_size(input_type)
-            shape_size = 1
-            for dim in input_shape:
-                shape_size *= dim
-            comm_size += type_size * shape_size
+        comm_size = 0
+        for input_value, input_type in zip(self.inputs["values"], self.inputs["types"]):
+            if "Tensor" in input_type:
+                tensor = PyTorchTensor(input_value)
+                input_size = tensor.num_elem * tensor.elem_bytes
+                comm_size += input_size
         return comm_size
 
     @staticmethod
