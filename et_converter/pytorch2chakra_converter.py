@@ -105,7 +105,7 @@ class PyTorch2ChakraConverter:
                     chakra_gpu_node = self.convert_to_chakra_node(pytorch_gpu_node)
 
                     if chakra_node.type == COMM_COLL_NODE:
-                        collective_comm_type = self.get_collective_comm_type(pytorch_node.name)
+                        collective_comm_type = self.get_collective_comm_type(pytorch_gpu_node.name)
                         chakra_gpu_node.attr.extend(
                             [
                                 ChakraAttr(name="comm_type", int64_val=collective_comm_type),
@@ -316,19 +316,18 @@ class PyTorch2ChakraConverter:
             int: The collective communication type of the node.
         """
         comm_type_mapping = {
-            "all_reduce": ALL_REDUCE,
-            "all_to_all": ALL_TO_ALL,
-            "all_gather": ALL_GATHER,
-            "reduce_scatter": REDUCE_SCATTER,
+            "allreduce": ALL_REDUCE,
+            "alltoall": ALL_TO_ALL,
+            "allgather": ALL_GATHER,
+            "reducescatter": REDUCE_SCATTER,
             "broadcast": BROADCAST,
-            "AllReduce": ALL_REDUCE,
-            "Broadcast": BROADCAST,
             # Additional cases can be added here
         }
 
-        for key, value in comm_type_mapping.items():
-            if key.lower() in name.lower():
-                return value
+        normalized_name = name.replace("_", "").replace("-", "").lower()
+        for key in comm_type_mapping:
+            if key in normalized_name:
+                return comm_type_mapping[key]
 
         raise ValueError(
             f"'{name}' not found in collective communication mapping. "
