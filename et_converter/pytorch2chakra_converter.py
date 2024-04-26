@@ -319,6 +319,9 @@ class PyTorch2ChakraConverter:
             "allgather": ALL_GATHER,
             "reducescatter": REDUCE_SCATTER,
             "broadcast": BROADCAST,
+            "sendrecv": BROADCAST, # TODO
+            "send": BROADCAST, # TODO
+            "recv": BROADCAST, # TODO
             # Additional cases can be added here
         }
 
