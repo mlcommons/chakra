@@ -1,4 +1,5 @@
 import argparse
+import bisect
 import copy
 import json
 import logging
@@ -207,6 +208,8 @@ class TraceLinker:
         kineto_file (str): Path to the Kineto trace file.
         pytorch_ops (List[PyTorchOperator]): PyTorch operators from ET trace.
         kineto_ops (List[KinetoOperator]): Kineto operators from the trace.
+        sorted_kineto_ops (List[KinetoOperator]): Sorted list of Kineto operators based on timestamps.
+        sorted_ts (List[int]): Sorted list of timestamps extracted from Kineto operators for efficient temporal queries.
         kineto_ops_by_tid (Dict[int, List[KinetoOperator]]): Operators grouped by thread ID.
         kineto_cuda_runtime (Dict[int, KinetoOperator]): Mapping of CUDA runtime
             API calls to Kineto operators, indexed by their correlation ID. This
@@ -252,6 +255,8 @@ class TraceLinker:
         self.kineto_file = kineto_file
         self.pytorch_ops: List[PyTorchOperator] = []
         self.kineto_ops: List[KinetoOperator] = []
+        self.sorted_kineto_ops: List[KinetoOperator] = []
+        self.sorted_ts: List[int] = []
         self.kineto_ops_by_tid: Dict[int, List[KinetoOperator]] = {}
         self.kineto_cuda_runtime: Dict[int, KinetoOperator] = {}
         self.kineto_ac2g_s_ops: Dict[str, KinetoOperator] = {}
@@ -336,6 +341,9 @@ class TraceLinker:
         self.categorize_and_track_kineto_ops(sorted_kineto_ops)
         self.construct_kineto_rf_id_map()
         self.calculate_exclusive_dur()
+
+        self.sorted_kineto_ops = sorted(self.kineto_ops, key=lambda op: op.timestamp)
+        self.sorted_kineto_ts = [op.timestamp for op in self.sorted_kineto_ops]
 
         self.logger.info(
             f"Processed Kineto trace with {len(self.kineto_ops)} CPU ops, "
@@ -849,6 +857,7 @@ class TraceLinker:
             return None
 
         kineto_cuda_runtime_op = self.kineto_cuda_runtime[kineto_gpu_op.correlation]
+        kineto_gpu_op.tid = kineto_cuda_runtime_op.tid
         self.logger.debug(
             f"Found CUDA runtime operation '{kineto_cuda_runtime_op.name}' "
             f"for GPU operator '{kineto_gpu_op.name}'."
@@ -858,7 +867,7 @@ class TraceLinker:
 
         # Find the closest CPU operator that precedes the CUDA runtime operation
         parent_cpu_op = self.find_closest_op(
-            kineto_gpu_op, self.kineto_ops, kineto_cuda_runtime_op.timestamp
+            kineto_gpu_op, self.sorted_kineto_ops, kineto_cuda_runtime_op.timestamp
         )
         if not parent_cpu_op:
             self.logger.warning(
@@ -908,19 +917,41 @@ class TraceLinker:
         Returns:
             Optional[KinetoOperator]: The closest Kineto operator if found.
         """
-        closest_start = 0
-        closest_op = None
+        # Searching for the closest timestamp index
+        index = bisect.bisect_left(self.sorted_kineto_ts, ts)
 
-        for op in kineto_ops:
-            if (op.timestamp < ts) and (op.timestamp > closest_start):
-                if "nccl" in kineto_gpu_op.name and "nccl" in op.name:
-                    closest_start = op.timestamp
-                    closest_op = op
-                elif "nccl" not in kineto_gpu_op.name:
-                    closest_start = op.timestamp
-                    closest_op = op
+        if index == 0:
+            # All operators are later than the timestamp
+            return None
+        else:
+            # The operator immediately before the index is the closest one before the timestamp
+            closest_op = kineto_ops[index - 1]
 
-        return closest_op
+            # Check for NCCL specifics: if it's an NCCL operation and 'nccl:coalesced' should be skipped
+            if 'nccl' in kineto_gpu_op.name.lower() and closest_op.name == 'nccl:coalesced':
+                # Move back to find a non-'nccl:coalesced' operator, if available
+                for new_index in range(index - 2, -1, -1):
+                    potential_op = kineto_ops[new_index]
+                    if potential_op.tid == kineto_gpu_op.tid and potential_op.name != 'nccl:coalesced':
+                        return potential_op
+                # If no valid alternative found before 'nccl:coalesced', continue search forward
+                index = index - 1  # Adjust index to skip 'nccl:coalesced'
+
+            # After skipping 'nccl:coalesced', verify that the closest operation is on the same thread as the GPU operation
+            if closest_op.tid == kineto_gpu_op.tid:
+                return closest_op
+
+            # If the tids do not match, search forward to find the closest matching tid
+            for i in range(index - 1, -1, -1):
+                op = kineto_ops[i]
+                if op.tid == kineto_gpu_op.tid:
+                    if 'nccl' in kineto_gpu_op.name.lower() and op.name == 'nccl:coalesced':
+                        continue  # Skip 'nccl:coalesced' if it's an NCCL-related GPU operation
+                    if op.timestamp <= ts:
+                        return op
+
+            # If no matching tid is found going forward, return None
+            return None
 
     def link_ops(
         self,
