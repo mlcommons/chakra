@@ -385,10 +385,9 @@ class TraceLinker:
         """
         Constructs a map from ev_idx to KinetoOperator instances.
         """
-        for op in self.kineto_ops:
-            ev_idx = op.ev_idx
-            if ev_idx is not None:
-                self.kineto_ev_idx_to_kineto_op_map[ev_idx] = op
+        self.kineto_ev_idx_to_kineto_op_map = {
+            op.ev_idx: op for op in self.kineto_ops if op.ev_idx is not None
+        }
 
     def calculate_exclusive_dur(self) -> None:
         """
