@@ -174,7 +174,6 @@ class TraceLinker:
     Attributes:
         pytorch_et_file (str): Path to the PyTorch execution trace file.
         kineto_file (str): Path to the Kineto trace file.
-        annotation (str): Annotation for segmenting multiple iterations.
         pytorch_ops (List[PyTorchOperator]): PyTorch operators from ET trace.
         kineto_ops (List[KinetoOperator]): Kineto operators from the trace.
         kineto_ac2g_s_ops (Dict[str, KinetoOperator]): Start ops for CPU to GPU.
@@ -191,20 +190,18 @@ class TraceLinker:
     """
 
     def __init__(self, pytorch_et_file: str, kineto_file: str,
-                 annotation: str = "DataLoader", log_level: str = "INFO") -> None:
+                 log_level: str = "INFO") -> None:
         """
         Initializes the TraceLinker with paths to the PyTorch and Kineto trace files,
-        an annotation for segmenting iterations, and a log level.
+        and a log level.
 
         Args:
             pytorch_et_file (str): Path to the PyTorch execution trace file.
             kineto_file (str): Path to the Kineto trace file.
-            annotation (str): Annotation used for segmenting iterations.
             log_level (str): Logging level for the class.
         """
         self.pytorch_et_file = pytorch_et_file
         self.kineto_file = kineto_file
-        self.annotation = annotation
         self.pytorch_ops: List[PyTorchOperator] = []
         self.kineto_ops: List[KinetoOperator] = []
         self.kineto_ac2g_s_ops: Dict[str, KinetoOperator] = {}
@@ -236,15 +233,6 @@ class TraceLinker:
         """
         self.logger.info("Starting to load PyTorch Execution Trace.")
         pytorch_et = load_execution_trace_file(self.pytorch_et_file)
-        pytorch_et.set_iterations(self.annotation)
-
-        if pytorch_et.iterations() > 1:
-            self.logger.info(f"PyTorch Execution Trace has multiple iterations: "
-                        f"{pytorch_et.iterations()}.")
-            self.logger.info("Extracting one iteration for analysis.")
-            trim_iter = min(2, pytorch_et.iterations() - 1)
-            pytorch_et = pytorch_et.clone_one_iteration(trim_iter)
-            self.logger.info(f"Extracted iteration {trim_iter} for further processing.")
 
         root_node = pytorch_et.get_nodes()[1]  # Root node is usually 1-based
         self.pytorch_ops = self.extract_pytorch_ops(root_node)
@@ -776,8 +764,6 @@ def main() -> None:
                         help="Path to the PyTorch execution trace")
     parser.add_argument("--kineto-file", type=str, required=True,
                         help="Path to the Kineto trace")
-    parser.add_argument("--annotation", default="DataLoader", type=str,
-                        help="Operator name to help slice multiple iterations in trace")
     parser.add_argument("--output-file", type=str, required=True,
                         help="Path for the output PyTorch execution trace plus file")
     parser.add_argument("--log-level", default="INFO", type=str,
@@ -788,7 +774,6 @@ def main() -> None:
     linker = TraceLinker(
         args.pytorch_et_file,
         args.kineto_file,
-        args.annotation,
         args.log_level
     )
     linker.load_traces()
