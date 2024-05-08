@@ -40,6 +40,8 @@ class KinetoOperator:
         inter_thread_dep (Optional[int]): ID of the latest CPU node from other
             threads before the gap.
         stream (Optional[int]): Stream ID associated with the operator.
+        correlation (Optional[int]): Correlation ID used to link CUDA runtime
+            operations with their GPU counterparts.
     """
 
     def __init__(self, kineto_op: Dict[str, Any]) -> None:
@@ -64,11 +66,14 @@ class KinetoOperator:
         self.parent_pytorch_op_id = None
         self.inter_thread_dep: Optional[int] = None
         self.stream: Optional[int] = None
+        self.correlation: Optional[int] = None
 
         if "args" in kineto_op:
             self.external_id = kineto_op["args"].get("External id")
             self.ev_idx = kineto_op["args"].get("Ev Idx")
             self.stream = kineto_op["args"].get("stream")
+            if "correlation" in kineto_op["args"]:
+                self.correlation = int(kineto_op["args"]["correlation"])
 
     def is_valid(self, category: str, name_exception: str = "ProfilerStep",
                  phase: Optional[str] = None) -> bool:
@@ -190,6 +195,10 @@ class TraceLinker:
         pytorch_ops (List[PyTorchOperator]): PyTorch operators from ET trace.
         kineto_ops (List[KinetoOperator]): Kineto operators from the trace.
         kineto_ops_by_tid (Dict[int, List[KinetoOperator]]): Operators grouped by thread ID.
+        kineto_cuda_runtime (Dict[int, KinetoOperator]): Mapping of CUDA runtime
+            API calls to Kineto operators, indexed by their correlation ID. This
+            includes operations like `cudaLaunchKernel` and `cudaMemcpyAsync`,
+            crucial for mapping GPU activities back to their initiating CPU calls.
         kineto_ac2g_s_ops (Dict[str, KinetoOperator]): Start ops for CPU to GPU.
         kineto_ac2g_f_ops (Dict[str, KinetoOperator]): Final ops for CPU to GPU.
         kineto_cpu_launcher_ops (Dict[str, KinetoOperator]): CPU launcher ops.
@@ -230,6 +239,7 @@ class TraceLinker:
         self.pytorch_ops: List[PyTorchOperator] = []
         self.kineto_ops: List[KinetoOperator] = []
         self.kineto_ops_by_tid: Dict[int, List[KinetoOperator]] = {}
+        self.kineto_cuda_runtime: Dict[int, KinetoOperator] = {}
         self.kineto_ac2g_s_ops: Dict[str, KinetoOperator] = {}
         self.kineto_ac2g_f_ops: Dict[str, KinetoOperator] = {}
         self.kineto_cpu_launcher_ops: Dict[str, KinetoOperator] = {}
@@ -325,6 +335,10 @@ class TraceLinker:
 
         Args:
             kineto_ops (List[KinetoOperator]): List of Kineto operators to categorize.
+
+        Raises:
+            ValueError: If duplicate correlation IDs are found in 'cuda_runtime'
+                        category operators.
         """
         self.logger.info("Categorizing Kineto operators and calculating timing boundaries.")
         process_start_time = sys.maxsize
@@ -346,6 +360,12 @@ class TraceLinker:
             elif op.is_valid("kernel") or op.is_valid("gpu_memcpy"):
                 self.kineto_gpu_ops.append(op)
                 self.logger.debug(f"Added GPU op: {op.name}")
+
+            if (op.category == "cuda_runtime") or (op.category == "cuda_driver"):
+                if op.correlation in self.kineto_cuda_runtime:
+                    raise ValueError(f"Duplicate correlation ID {op.correlation} "
+                                     f"found in cuda_runtime operators.")
+                self.kineto_cuda_runtime[op.correlation] = op
 
             # Update timing boundaries
             if op.tid is not None:
@@ -745,24 +765,43 @@ class TraceLinker:
 
     def find_parent_cpu_op(self, kineto_gpu_op: KinetoOperator) -> Optional[KinetoOperator]:
         """
-        Finds the parent CPU operator for a given GPU operator based on
-        start time proximity and duration coverage.
+        Finds the parent CPU operator for a given GPU operator by identifying
+        the corresponding CUDA runtime operator through the correlation ID. It
+        then locates the closest preceding CPU operator based on the CUDA runtime's
+        timestamp, considering the temporal distance between the GPU operation's
+        start and the initiating CPU operation.
 
         Args:
             kineto_gpu_op (KinetoOperator): The GPU operator.
 
         Returns:
             Optional[KinetoOperator]: The parent CPU operator if found.
-        """
-        ts = self.get_start_timestamp_for_gpu_op(kineto_gpu_op)
-        kineto_gpu_op.timestamp = ts
 
-        parent_cpu_op = self.find_closest_op(kineto_gpu_op, self.kineto_ops, ts)
+        Raises:
+            ValueError: If no CUDA runtime operator is found for the given
+                        correlation ID.
+        """
+        if kineto_gpu_op.correlation not in self.kineto_cuda_runtime:
+            warning_msg = ("No CUDA runtime operator found for correlation ID "
+                         f"{kineto_gpu_op.correlation}.")
+            self.logger.warning(warning_msg)
+            return None
+
+        kineto_cuda_runtime_op = self.kineto_cuda_runtime[kineto_gpu_op.correlation]
+        self.logger.debug(f"Found CUDA runtime operation '{kineto_cuda_runtime_op.name}' "
+                          f"for GPU operator '{kineto_gpu_op.name}'.")
+
+        kineto_gpu_op.timestamp = self.get_start_timestamp_for_gpu_op(kineto_gpu_op)
+
+        # Find the closest CPU operator that precedes the CUDA runtime operation
+        parent_cpu_op = self.find_closest_op(kineto_gpu_op,
+                                             self.kineto_ops,
+                                             kineto_cuda_runtime_op.timestamp)
         if not parent_cpu_op:
             self.logger.warning(
                 f"No parent CPU operator found for GPU operator '{kineto_gpu_op.name}' "
-                f"(ts: {kineto_gpu_op.timestamp})"
-            )
+                f"linked to CUDA runtime operation '{kineto_cuda_runtime_op.name}' "
+                f"(ts: {kineto_cuda_runtime_op.timestamp}).")
 
         return parent_cpu_op
 
