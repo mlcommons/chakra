@@ -404,7 +404,6 @@ class PyTorch2ChakraConverter:
         stack: List[ChakraNode] = [chakra_node]
         last_visited_non_gpu: Optional[ChakraNode] = None
         last_visited_any: Optional[ChakraNode] = None
-        last_gpu_in_stream: Dict[int, ChakraNode] = {}
 
         while stack:
             current_node = stack.pop()
@@ -429,16 +428,7 @@ class PyTorch2ChakraConverter:
                             f"dependency on Node ID {last_visited_any.id}"
                         )
 
-                stream_id = pytorch_node.stream
-                if stream_id in last_gpu_in_stream:
-                    if last_gpu_in_stream[stream_id].id not in current_node.data_deps:
-                        current_node.data_deps.append(last_gpu_in_stream[stream_id].id)
-                        self.logger.debug(
-                            f"GPU Node ID {current_node.id} in stream {stream_id} now has a data "
-                            f"dependency on GPU Node ID {last_gpu_in_stream[stream_id].id} in the same stream."
-                        )
-                last_gpu_in_stream[stream_id] = current_node
-                last_visited_any = current_node
+                last_visited_any = last_visited_non_gpu
             else:
                 if pytorch_node.inter_thread_dep:
                     id = pytorch_node.inter_thread_dep
