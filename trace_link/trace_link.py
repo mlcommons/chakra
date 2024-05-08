@@ -37,6 +37,7 @@ class KinetoOperator:
         parent_pytorch_op_id (Optional[int]): ID of the parent PyTorch operator.
         inter_thread_dep (Optional[int]): ID of the latest CPU node from other
             threads before the gap.
+        stream (Optional[int]): Stream ID associated with the operator.
     """
 
     def __init__(self, kineto_op: Dict[str, Any]) -> None:
@@ -59,10 +60,12 @@ class KinetoOperator:
         self.pytorch_op: Optional[PyTorchOperator] = None
         self.parent_pytorch_op_id = None
         self.inter_thread_dep: Optional[int] = None
+        self.stream: Optional[int] = None
 
         if "args" in kineto_op:
             self.external_id = kineto_op["args"].get("External id")
             self.ev_idx = kineto_op["args"].get("Ev Idx")
+            self.stream = kineto_op["args"].get("stream")
 
     def is_valid(self, category: str, name_exception: str = "ProfilerStep",
                  phase: Optional[str] = None) -> bool:
@@ -874,7 +877,8 @@ class TraceLinker:
                 "name": gpu_op.name,
                 "ph": gpu_op.phase,
                 "dur": gpu_op.duration,
-                "ts": gpu_op.timestamp
+                "ts": gpu_op.timestamp,
+                "stream": gpu_op.stream
             })
             updated_gpu_ops.append(new_gpu_op)
 
