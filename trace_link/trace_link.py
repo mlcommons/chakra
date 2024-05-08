@@ -3,7 +3,7 @@ import copy
 import json
 import logging
 import sys
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from param_bench.train.compute.python.tools.execution_trace import (
     EXECUTION_TRACE_PROCESS_ANNOTATION,
@@ -28,7 +28,8 @@ class KinetoOperator:
         category (Optional[str]): Category of the operator.
         name (Optional[str]): Name of the operator.
         phase (Optional[str]): Phase of the operator.
-        duration (int): Duration of the operator in microseconds.
+        inclusive_dur (int): Inclusive duration of the operator in microseconds.
+        exclusive_dur (int): Exclusive duration of the operator in microseconds.
         timestamp (int): Timestamp of the operator in microseconds.
         external_id (Optional[str]): External ID associated with the operator.
         ev_idx (Optional[str]): Event index associated with the operator.
@@ -52,7 +53,8 @@ class KinetoOperator:
         self.category = kineto_op.get("cat")
         self.name = kineto_op.get("name")
         self.phase = kineto_op.get("ph")
-        self.duration = kineto_op.get("dur", 0)
+        self.inclusive_dur = kineto_op.get("dur", 0)
+        self.exclusive_dur = kineto_op.get("dur", 0)
         self.timestamp = kineto_op.get("ts", 0)
         self.external_id = None
         self.ev_idx = None
@@ -93,7 +95,9 @@ class KinetoOperator:
             str: A string representation of the KinetoOperator.
         """
         return (f"KinetoOperator(category={self.category}, "
-                f"name={self.name}, phase={self.phase}, duration={self.duration}, "
+                f"name={self.name}, phase={self.phase}, "
+                f"inclusive_dur={self.inclusive_dur}, "
+                f"exclusive_dur={self.exclusive_dur}, "
                 f"timestamp={self.timestamp}, external_id={self.external_id}, "
                 f"ev_idx={self.ev_idx}, tid={self.tid}, "
                 f"parent_pytorch_op_id={self.parent_pytorch_op_id})")
@@ -192,7 +196,8 @@ class TraceLinker:
             event index to KinetoOperator instances.
         pytorch_op_id_to_kineto_ops_map (Dict[int, List[KinetoOperator]]):
             Map from PyTorch op IDs to Kineto GPU ops.
-        pytorch_op_id_to_duration_map (Dict[int, int]): Duration map for PyTorch ops.
+        pytorch_op_id_to_inclusive_dur_map (Dict[int, int]): Inclusive duration map for PyTorch ops.
+        pytorch_op_id_to_inclusive_dur_map (Dict[int, int]): Exclusive duration map for PyTorch ops.
         pytorch_op_id_to_timestamp_map (Dict[int, int]): Timestamp map for PyTorch ops.
         pytorch_op_id_to_inter_thread_dep_map (Dict[int, int]): Mapping of PyTorch
             operator IDs to IDs of latest CPU node from other threads before the gap.
@@ -222,7 +227,8 @@ class TraceLinker:
         self.kineto_gpu_ops: List[KinetoOperator] = []
         self.kineto_ev_idx_to_kineto_op_map: Dict[str, KinetoOperator] = {}
         self.pytorch_op_id_to_kineto_ops_map: Dict[int, List[KinetoOperator]] = {}
-        self.pytorch_op_id_to_duration_map: Dict[int, int] = {}
+        self.pytorch_op_id_to_inclusive_dur_map: Dict[int, int] = {}
+        self.pytorch_op_id_to_exclusive_dur_map: Dict[int, int] = {}
         self.pytorch_op_id_to_timestamp_map: Dict[int, int] = {}
         self.pytorch_op_id_to_inter_thread_dep_map: Dict[int, int] = {}
         self.id_assigner = UniqueIdAssigner()
@@ -293,6 +299,7 @@ class TraceLinker:
 
         self.categorize_kineto_ops(sorted_kineto_ops)
         self.construct_kineto_ev_idx_map()
+        self.calculate_exclusive_dur()
 
         self.logger.info(f"Processed Kineto trace with {len(self.kineto_ops)} CPU ops, "
                     f"{len(self.kineto_cpu_launcher_ops)} CPU launcher ops, "
@@ -330,6 +337,88 @@ class TraceLinker:
             ev_idx = op.ev_idx
             if ev_idx is not None:
                 self.kineto_ev_idx_to_kineto_op_map[ev_idx] = op
+
+    def calculate_exclusive_dur(self) -> None:
+        """
+        Calculates the exclusive duration of non-GPU Kineto operators. The
+        exclusive duration is the operator's total duration minus any time
+        during which it overlaps with the execution of its child operators.
+        This function first constructs overlapping regions with all of the children
+        operators and then subtracts the overlapping durations to avoid multiple
+        subtractions of the same region. Updates the `exclusive_dur` attribute of
+        each KinetoOperator.
+        """
+        self.logger.info("Calculating exclusive durations for Kineto operators.")
+
+        # Group operators by their thread ID (tid).
+        ops_by_tid = self.group_ops_by_thread()
+
+        for tid, ops in ops_by_tid.items():
+            sorted_ops = sorted(ops, key=lambda op: (op.timestamp, op.inclusive_dur))
+            for i, op in enumerate(sorted_ops):
+                exclusive_dur = op.inclusive_dur
+                overlapping_regions = []
+
+                # Identify overlapping regions with child operators
+                for child_op in sorted_ops[i + 1:]:
+                    if child_op.timestamp >= op.timestamp and\
+                       (child_op.timestamp + child_op.inclusive_dur) <=\
+                       (op.timestamp + op.inclusive_dur):
+                        overlap_start = child_op.timestamp
+                        overlap_end = child_op.timestamp + child_op.inclusive_dur
+                        overlapping_regions.append((overlap_start, overlap_end))
+
+                # Merge overlapping regions and calculate exclusive duration
+                merged_regions = self.merge_overlapping_intervals(overlapping_regions)
+                for start, end in merged_regions:
+                    exclusive_dur -= (end - start)
+
+                # Check if exclusive_dur is not negative or zero
+                if exclusive_dur < 0:
+                    error_msg = (f"Exclusive duration calculation error for node "
+                                 f"'{op.name}' (tid: {tid}, ts: {op.timestamp}, "
+                                 f"inclusive_dur: {op.inclusive_dur}, "
+                                 f"external_id: {op.external_id}, ev_idx: {op.ev_idx}): "
+                                 f"Duration cannot be less than zero.")
+                    self.logger.error(error_msg)
+                    raise ValueError(error_msg)
+
+                op.exclusive_dur = exclusive_dur
+                self.logger.debug(f"Node '{op.name}' (tid: {tid}, ts: {op.timestamp}, "
+                                  f"inclusive_dur: {op.inclusive_dur}, "
+                                  f"external_id: {op.external_id}, ev_idx: {op.ev_idx}) "
+                                  f"exclusive duration: {op.exclusive_dur} microseconds.")
+
+        self.logger.info("Exclusive durations for Kineto operators calculated successfully.")
+
+    @staticmethod
+    def merge_overlapping_intervals(intervals: List[Tuple[int, int]]) -> List[Tuple[int, int]]:
+        """
+        Merges overlapping intervals into a single interval.
+
+        Args:
+            intervals (List[Tuple[int, int]]): List of intervals.
+
+        Returns:
+            List[Tuple[int, int]]: List of merged intervals.
+        """
+        if not intervals:
+            return []
+
+        # Sort intervals based on the start time
+        intervals.sort(key=lambda x: x[0])
+        merged = [intervals[0]]
+
+        for current in intervals:
+            prev = merged[-1]
+            if current[0] <= prev[1]:
+                # There is overlap, merge the current interval with the previous one
+                merged[-1] = (prev[0], max(prev[1], current[1]))
+            else:
+                # No overlap, add the current interval
+                merged.append(current)
+
+        return merged
 
     def _add_op_to_dict(self, op: KinetoOperator, target_dict: Dict,
                         *keys: str) -> None:
@@ -523,16 +612,16 @@ class TraceLinker:
                 if op.tid not in kineto_op_per_thread:
                     kineto_op_per_thread[op.tid] = {
                         "ts": op.timestamp,
-                        "end_ts": op.timestamp + op.duration,
+                        "end_ts": op.timestamp + op.inclusive_dur,
                         "index": i
                     }
                 else:
                     kineto_op_per_thread[op.tid]["end_ts"] = max(
                         kineto_op_per_thread[op.tid]["end_ts"],
-                        op.timestamp + op.duration
+                        op.timestamp + op.inclusive_dur
                     )
 
-                process_end_time = max(process_end_time, op.timestamp + op.duration)
+                process_end_time = max(process_end_time, op.timestamp + op.inclusive_dur)
 
         self.insert_process_annotation_op(process_end_time)
         self.insert_thread_annotation_ops(kineto_op_per_thread)
@@ -552,30 +641,87 @@ class TraceLinker:
         process_annotation_op = KinetoOperator({
             "name": EXECUTION_TRACE_PROCESS_ANNOTATION,
             "ts": self.kineto_ops[0].timestamp,
-            "dur": end_time - self.kineto_ops[0].timestamp
+            "inclusive_dur": end_time - self.kineto_ops[0].timestamp,
+            "exclusive_dur": 0
         })
         self.kineto_ops.insert(0, process_annotation_op)
 
     def insert_thread_annotation_ops(self, thread_info: Dict[int, Dict[str, int]]) -> None:
         """
-        Inserts thread annotation operators into the Kineto operators list based
-        on the provided thread information. Each annotation represents the start
-        and duration of operations in a specific thread.
+        Inserts thread annotation operators into the Kineto operators list.
+        These annotations represent the start and inclusive duration of operations
+        in a specific thread. While an exclusive duration is calculated to acknowledge
+        overlaps, it is set to zero in the final annotation. This is to avoid
+        constraining the execution schedule to the original trace, allowing more
+        flexibility in analyzing dependencies without being bound by specific
+        execution timings.
 
         Args:
-            thread_info (Dict[int, Dict[str, int]]): Information about threads.
+            thread_info (Dict[int, Dict[str, int]]): Information about threads,
+                including start and end times.
         """
         sorted_threads = dict(sorted(thread_info.items(),
                                      key=lambda x: x[1]["index"]))
         for index, (tid, info) in enumerate(sorted_threads.items()):
-            self.logger.debug("Adding thread annotation op for tid %d with name %s and ts %d",
-                              tid, EXECUTION_TRACE_THREAD_ANNOTATION, info["ts"])
+            start_ts = info["ts"]
+            end_ts = info["end_ts"]
+            inclusive_dur = end_ts - start_ts
+            calculated_exclusive_dur = self.calculate_non_overlapping_duration(tid, start_ts, end_ts)
+
+            self.logger.debug("Adding thread annotation op with tid %d, name %s, ts %d, "
+                              "inclusive_dur %d. Exclusive duration calculated as %d, "
+                              "but set to 0 in annotation for flexibility.",
+                              tid, EXECUTION_TRACE_THREAD_ANNOTATION, start_ts,
+                              inclusive_dur, calculated_exclusive_dur)
             thread_annotation_op = KinetoOperator({
                 "name": EXECUTION_TRACE_THREAD_ANNOTATION,
-                "ts": info["ts"],
-                "dur": info["end_ts"] - info["ts"]
+                "ts": start_ts,
+                "inclusive_dur": inclusive_dur,
+                "exclusive_dur": 0  # Setting exclusive duration to 0
             })
             self.kineto_ops.insert(index + 1 + info["index"], thread_annotation_op)
+
+    def calculate_non_overlapping_duration(self, tid: int, start_ts: int, end_ts: int) -> int:
+        """
+        Calculates the non-overlapping duration for a given thread and time range.
+
+        Args:
+            tid (int): Thread ID.
+            start_ts (int): Start timestamp.
+            end_ts (int): End timestamp.
+
+        Returns:
+            int: Non-overlapping duration.
+        """
+        ops_by_tid = self.group_ops_by_thread()
+
+        if tid not in ops_by_tid:
+            return end_ts - start_ts
+
+        sorted_ops = sorted(ops_by_tid[tid], key=lambda op: (op.timestamp, op.inclusive_dur))
+        non_overlapping_duration = end_ts - start_ts
+        child_durations = []
+
+        for op in sorted_ops:
+            if op.timestamp >= end_ts or (op.timestamp + op.inclusive_dur) <= start_ts:
+                continue  # Skip non-overlapping operators
+
+            # Calculate overlap
+            overlap_start = max(start_ts, op.timestamp)
+            overlap_end = min(end_ts, op.timestamp + op.inclusive_dur)
+
+            # Ensure this overlap hasn't been subtracted already
+            new_overlap = True
+            for (start, end) in child_durations:
+                if overlap_start >= start and overlap_end <= end:
+                    new_overlap = False
+                    break
+
+            if new_overlap:
+                non_overlapping_duration -= (overlap_end - overlap_start)
+                child_durations.append((overlap_start, overlap_end))
+
+        return non_overlapping_duration
 
     def map_pytorch_to_kineto_ops(self) -> None:
         """
@@ -682,7 +828,7 @@ class TraceLinker:
         """
         if kineto_gpu_op.external_id in self.kineto_cpu_launcher_ops:
             cpu_launcher_op = self.kineto_cpu_launcher_ops[kineto_gpu_op.external_id]
-            return cpu_launcher_op.timestamp + cpu_launcher_op.duration
+            return cpu_launcher_op.timestamp + cpu_launcher_op.inclusive_dur
         if kineto_gpu_op.external_id in self.kineto_ac2g_s_ops:
             return self.kineto_ac2g_s_ops[kineto_gpu_op.external_id].timestamp
         if kineto_gpu_op.external_id in self.kineto_ac2g_f_ops:
@@ -763,7 +909,8 @@ class TraceLinker:
         if kineto_op.ev_idx in cpu_ev_idx_to_gpu_ops_map:
             self.pytorch_op_id_to_kineto_ops_map[pytorch_op.id] =\
                     cpu_ev_idx_to_gpu_ops_map[kineto_op.ev_idx]
-        self.pytorch_op_id_to_duration_map[pytorch_op.id] = kineto_op.duration
+        self.pytorch_op_id_to_inclusive_dur_map[pytorch_op.id] = kineto_op.inclusive_dur
+        self.pytorch_op_id_to_exclusive_dur_map[pytorch_op.id] = kineto_op.exclusive_dur
         self.pytorch_op_id_to_timestamp_map[pytorch_op.id] = kineto_op.timestamp
         if kineto_op.inter_thread_dep:
             inter_thread_dep_kineto_op =\
@@ -828,8 +975,9 @@ class TraceLinker:
         op["id"] = new_op_id
 
         # Update operator with Kineto data if available
-        if orig_op_id in self.pytorch_op_id_to_duration_map:
-            op["dur"] = self.pytorch_op_id_to_duration_map[orig_op_id]
+        if orig_op_id in self.pytorch_op_id_to_inclusive_dur_map:
+            op["inclusive_dur"] = self.pytorch_op_id_to_inclusive_dur_map[orig_op_id]
+            op["exclusive_dur"] = self.pytorch_op_id_to_exclusive_dur_map[orig_op_id]
             op["ts"] = self.pytorch_op_id_to_timestamp_map[orig_op_id]
             if orig_op_id in self.pytorch_op_id_to_inter_thread_dep_map:
                 op["inter_thread_dep"] = self.id_assigner.lookup_new_id(
@@ -876,7 +1024,8 @@ class TraceLinker:
                 "cat": gpu_op.category,
                 "name": gpu_op.name,
                 "ph": gpu_op.phase,
-                "dur": gpu_op.duration,
+                "inclusive_dur": gpu_op.inclusive_dur,
+                "exclusive_dur": gpu_op.exclusive_dur,
                 "ts": gpu_op.timestamp,
                 "stream": gpu_op.stream
             })
