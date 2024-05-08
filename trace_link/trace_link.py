@@ -369,6 +369,7 @@ class TraceLinker:
                 self._add_op_to_dict(op, self.kineto_ac2g_f_ops, "id")
             elif op.is_valid("cuda_runtime") and op.name in [
                 "cudaLaunchKernel",
+                "cudaLaunchKernelExC",
                 "cudaMemcpyAsync",
             ]:
                 self._add_op_to_dict(
