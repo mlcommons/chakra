@@ -3,6 +3,7 @@ import copy
 import json
 import logging
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Optional, Tuple
 
 from param_bench.train.compute.python.tools.execution_trace import (
@@ -343,17 +344,19 @@ class TraceLinker:
 
     def calculate_exclusive_dur(self) -> None:
         """
-        Calculates the exclusive duration of non-GPU Kineto operators. The
-        exclusive duration is the operator's total duration minus any time
-        during which it overlaps with the execution of its child operators.
-        This function first constructs overlapping regions with all of the children
-        operators and then subtracts the overlapping durations to avoid multiple
-        subtractions of the same region. Updates the `exclusive_dur` attribute of
-        each KinetoOperator.
+        Calculates the exclusive duration of each operator in the Kineto traces
+        in parallel. The exclusive duration is defined as the total duration of
+        the operator minus any time spent in child operators, effectively
+        representing the time spent exclusively in that operator. This approach
+        significantly improves the performance of calculating exclusive durations,
+        especially for traces with a large number of operators. Additionally, by
+        processing each thread's operators in parallel, the method takes advantage
+        of concurrent execution capabilities to further speed up the computation.
         """
-        self.logger.info("Calculating exclusive durations for Kineto operators.")
+        self.logger.info("Calculating exclusive durations for Kineto operators in parallel.")
 
-        for tid, ops in self.kineto_ops_by_tid.items():
+        def process_ops_for_thread(ops: List['KinetoOperator']) -> None:
+            self.logger.info(f"Processing {len(ops)} operators in thread.")
             sorted_ops = sorted(ops, key=lambda op: (op.timestamp, op.inclusive_dur))
             for i, op in enumerate(sorted_ops):
                 exclusive_dur = op.inclusive_dur
@@ -367,6 +370,8 @@ class TraceLinker:
                         overlap_start = child_op.timestamp
                         overlap_end = child_op.timestamp + child_op.inclusive_dur
                         overlapping_regions.append((overlap_start, overlap_end))
+                    if (op.timestamp + op.inclusive_dur) < child_op.timestamp:
+                        break
 
                 # Merge overlapping regions and calculate exclusive duration
                 merged_regions = self.merge_overlapping_intervals(overlapping_regions)
@@ -384,10 +389,17 @@ class TraceLinker:
                     raise ValueError(error_msg)
 
                 op.exclusive_dur = exclusive_dur
-                self.logger.debug(f"Node '{op.name}' (tid: {tid}, ts: {op.timestamp}, "
+                self.logger.debug(f"Node '{op.name}' (tid: {op.tid}, ts: {op.timestamp}, "
                                   f"inclusive_dur: {op.inclusive_dur}, "
                                   f"external_id: {op.external_id}, ev_idx: {op.ev_idx}) "
                                   f"exclusive duration: {op.exclusive_dur} microseconds.")
+
+        with ThreadPoolExecutor() as executor:
+            futures = [executor.submit(process_ops_for_thread, ops)
+                       for ops in self.kineto_ops_by_tid.values()]
+
+            for future in as_completed(futures):
+                future.result()  # Wait for all threads to complete and handle any exceptions
 
         self.logger.info("Exclusive durations for Kineto operators calculated successfully.")
 
