@@ -40,6 +40,7 @@ class KinetoOperator:
         inter_thread_dep (Optional[int]): ID of the latest CPU node from other
             threads before the gap.
         stream (Optional[int]): Stream ID associated with the operator.
+        rf_id (Optional[int]): Record function ID.
         correlation (Optional[int]): Correlation ID used to link CUDA runtime
             operations with their GPU counterparts.
     """
@@ -66,12 +67,15 @@ class KinetoOperator:
         self.parent_pytorch_op_id = None
         self.inter_thread_dep: Optional[int] = None
         self.stream: Optional[int] = None
+        self.rf_id: Optional[int] = None
         self.correlation: Optional[int] = None
 
         if "args" in kineto_op:
             self.external_id = kineto_op["args"].get("External id")
             self.ev_idx = kineto_op["args"].get("Ev Idx")
             self.stream = kineto_op["args"].get("stream")
+            if "Record function id" in kineto_op["args"]:
+                self.rf_id = int(kineto_op["args"]["Record function id"])
             if "correlation" in kineto_op["args"]:
                 self.correlation = int(kineto_op["args"]["correlation"])
 
@@ -113,6 +117,7 @@ class KinetoOperator:
             f"exclusive_dur={self.exclusive_dur}, "
             f"timestamp={self.timestamp}, external_id={self.external_id}, "
             f"ev_idx={self.ev_idx}, tid={self.tid}, "
+            f"rf_id={self.rf_id}, "
             f"parent_pytorch_op_id={self.parent_pytorch_op_id})"
         )
 
@@ -217,8 +222,8 @@ class TraceLinker:
             latest operator timestamp.
         kineto_thread_info (Dict[int, Tuple[int, int]]): Information about threads,
             mapping thread IDs to a tuple of start and end times.
-        kineto_ev_idx_to_kineto_op_map (Dict[str, KinetoOperator]): Mapping from
-            event index to KinetoOperator instances.
+        kineto_rf_id_to_kineto_op_map (Dict[str, KinetoOperator]): Mapping from
+            rf_id to KinetoOperator instances.
         pytorch_op_id_to_kineto_ops_map (Dict[int, List[KinetoOperator]]):
             Map from PyTorch op IDs to Kineto GPU ops.
         pytorch_op_id_to_inclusive_dur_map (Dict[int, int]): Inclusive duration map for PyTorch ops.
@@ -256,7 +261,7 @@ class TraceLinker:
         self.kineto_process_start_time: int = 0
         self.kineto_process_end_time: int = 0
         self.kineto_thread_info: Dict[int, Tuple[int, int]] = {}
-        self.kineto_ev_idx_to_kineto_op_map: Dict[str, KinetoOperator] = {}
+        self.kineto_rf_id_to_kineto_op_map: Dict[str, KinetoOperator] = {}
         self.pytorch_op_id_to_kineto_ops_map: Dict[int, List[KinetoOperator]] = {}
         self.pytorch_op_id_to_inclusive_dur_map: Dict[int, int] = {}
         self.pytorch_op_id_to_exclusive_dur_map: Dict[int, int] = {}
@@ -329,7 +334,7 @@ class TraceLinker:
         )
 
         self.categorize_and_track_kineto_ops(sorted_kineto_ops)
-        self.construct_kineto_ev_idx_map()
+        self.construct_kineto_rf_id_map()
         self.calculate_exclusive_dur()
 
         self.logger.info(
@@ -408,12 +413,12 @@ class TraceLinker:
             "Kineto operators categorized and timing boundaries calculated."
         )
 
-    def construct_kineto_ev_idx_map(self) -> None:
+    def construct_kineto_rf_id_map(self) -> None:
         """
-        Constructs a map from ev_idx to KinetoOperator instances.
+        Constructs a map from rf_id to KinetoOperator instances.
         """
-        self.kineto_ev_idx_to_kineto_op_map = {
-            op.ev_idx: op for op in self.kineto_ops if op.ev_idx is not None
+        self.kineto_rf_id_to_kineto_op_map = {
+            op.rf_id: op for op in self.kineto_ops if op.rf_id is not None
         }
 
     def calculate_exclusive_dur(self) -> None:
@@ -460,7 +465,7 @@ class TraceLinker:
                         f"Exclusive duration calculation error for node "
                         f"'{op.name}' (tid: {tid}, ts: {op.timestamp}, "
                         f"inclusive_dur: {op.inclusive_dur}, "
-                        f"external_id: {op.external_id}, ev_idx: {op.ev_idx}): "
+                        f"rf_id: {op.rf_id}): "
                         f"Duration cannot be less than zero."
                     )
                     self.logger.error(error_msg)
@@ -470,7 +475,7 @@ class TraceLinker:
                 self.logger.debug(
                     f"Node '{op.name}' (tid: {op.tid}, ts: {op.timestamp}, "
                     f"inclusive_dur: {op.inclusive_dur}, "
-                    f"external_id: {op.external_id}, ev_idx: {op.ev_idx}) "
+                    f"rf_id: {op.rf_id}) "
                     f"exclusive duration: {op.exclusive_dur} microseconds."
                 )
 
@@ -576,7 +581,7 @@ class TraceLinker:
                 f"linking with threshold {threshold}us."
             )
             sorted_ops = sorted(ops, key=lambda op: op.timestamp)
-            last_cpu_node_ev_idx = None
+            last_cpu_node_rf_id = None
 
             for i, op in enumerate(sorted_ops):
                 if (
@@ -588,18 +593,18 @@ class TraceLinker:
                     )
                     > threshold
                 ):
-                    last_cpu_node_ev_idx = self.find_last_cpu_node_before_timestamp(
+                    last_cpu_node_rf_id = self.find_last_cpu_node_before_timestamp(
                         ops_by_tid, tid, op.timestamp
                     )
-                    if last_cpu_node_ev_idx:
+                    if last_cpu_node_rf_id:
                         self.logger.debug(
                             f"Thread {tid}: Linking op '{op.name}' "
-                            f"to CPU node before gap with ev_idx "
-                            f"'{last_cpu_node_ev_idx}'."
+                            f"to CPU node before gap with rf_id "
+                            f"'{last_cpu_node_rf_id}'."
                         )
 
-                if last_cpu_node_ev_idx:
-                    op.inter_thread_dep = last_cpu_node_ev_idx
+                if last_cpu_node_rf_id:
+                    op.inter_thread_dep = last_cpu_node_rf_id
 
         with ThreadPoolExecutor() as executor:
             futures = {
@@ -640,7 +645,7 @@ class TraceLinker:
             f"thread {exclude_tid}."
         )
         last_cpu_node = None
-        last_cpu_node_ev_idx = None
+        last_cpu_node_rf_id = None
         latest_timestamp = 0
         for tid, ops in ops_by_tid.items():
             if tid != exclude_tid:
@@ -651,45 +656,24 @@ class TraceLinker:
                         if op.timestamp > latest_timestamp:
                             last_cpu_node = op
                             latest_timestamp = op.timestamp
-                            last_cpu_node_ev_idx = op.ev_idx
+                            last_cpu_node_rf_id = op.rf_id
         if last_cpu_node:
             self.logger.debug(
                 f"Last CPU node before timestamp {timestamp} found: {last_cpu_node}"
             )
-        return last_cpu_node_ev_idx
+        return last_cpu_node_rf_id
 
     def link_traces(self) -> None:
         """
         Initiates the linking process between PyTorch Execution Traces (ET) and
         Kineto Traces to produce an enhanced PyTorch Execution Trace (ET+). This
         process relies on the assumption of an 'exact match' between these traces.
-
-        An 'exact match' implies that the PyTorch Execution Trace and the Kineto Trace
-        were collected simultaneously. If this condition is not met, the tool may not
-        function correctly, as the correlation between the two traces is essential for
-        accurate linking and analysis.
-
-        Currently, this tool supports only this 'exact_match' method for trace linking.
         """
         self.logger.info("Starting the process of linking PyTorch and Kineto traces.")
-        self.exact_match()
-        self.logger.info("Traces have been successfully linked.")
-
-    def exact_match(self) -> None:
-        """
-        Performs the process of 'exact matching' between PyTorch Execution Trace nodes
-        and Kineto operators. This method augments PyTorch nodes with timing and
-        additional data extracted from Kineto's trace, under the key assumption that
-        both traces were captured concurrently.
-
-        In the context of this tool, 'exact match' denotes the precise alignment in
-        time and sequence between the two types of traces. If the traces were not
-        recorded in tandem, the alignment and thus the linking process would be
-        inaccurate, leading to erroneous or misleading analytical conclusions.
-        """
         self.add_thread_and_process_annotations()
         self.map_pytorch_to_kineto_ops()
         self.construct_et_plus_data()
+        self.logger.info("Traces have been successfully linked.")
 
     def add_thread_and_process_annotations(self) -> None:
         """
@@ -779,15 +763,16 @@ class TraceLinker:
             )
 
         for i, pytorch_op in enumerate(self.pytorch_ops):
-            kineto_op = self.find_corresponding_kineto_op(pytorch_op, i)
-            if kineto_op is None:
-                self.logger.warning(
-                    f"No corresponding Kineto op found for PyTorch op "
-                    f"ID: {pytorch_op.id}, Name: '{pytorch_op.name}'."
-                )
-                continue
-
-            self.link_ops(pytorch_op, kineto_op, cpu_ev_idx_to_gpu_ops_map)
+            if pytorch_op.rf_id is not None:
+                if pytorch_op.rf_id in self.kineto_rf_id_to_kineto_op_map:
+                    kineto_op = self.kineto_rf_id_to_kineto_op_map[pytorch_op.rf_id]
+                    if kineto_op is None:
+                        self.logger.warning(
+                            f"No corresponding Kineto op found for PyTorch op "
+                            f"ID: {pytorch_op.id}, Name: '{pytorch_op.name}'."
+                        )
+                        continue
+                    self.link_ops(pytorch_op, kineto_op, cpu_ev_idx_to_gpu_ops_map)
 
         self.logger.info("Completed mapping of PyTorch operators to Kineto operators.")
 
@@ -937,37 +922,6 @@ class TraceLinker:
 
         return closest_op
 
-    def find_corresponding_kineto_op(
-        self, pytorch_op: PyTorchOperator, index: int
-    ) -> Optional[KinetoOperator]:
-        """
-        Finds the corresponding Kineto operator for a given PyTorch operator.
-
-        The search starts from the given index and expands gradually in both
-        forward and backward directions until the end of the kineto_ops list is reached.
-
-        Args:
-            pytorch_op (PyTorchOperator): The PyTorch operator.
-            index (int): The index to start the search from.
-
-        Returns:
-            Optional[KinetoOperator]: The corresponding Kineto operator, if found.
-        """
-        kineto_ops_length = len(self.kineto_ops)
-        for distance in range(0, kineto_ops_length):
-            forward_index = index + distance
-            backward_index = index - distance
-
-            if forward_index < kineto_ops_length:
-                if self.kineto_ops[forward_index].name == pytorch_op.name:
-                    return self.kineto_ops[forward_index]
-
-            if (backward_index >= 0) and (backward_index < kineto_ops_length):
-                if self.kineto_ops[backward_index].name == pytorch_op.name:
-                    return self.kineto_ops[backward_index]
-
-        return None
-
     def link_ops(
         self,
         pytorch_op: PyTorchOperator,
@@ -991,7 +945,7 @@ class TraceLinker:
         self.pytorch_op_id_to_exclusive_dur_map[pytorch_op.id] = kineto_op.exclusive_dur
         self.pytorch_op_id_to_timestamp_map[pytorch_op.id] = kineto_op.timestamp
         if kineto_op.inter_thread_dep:
-            inter_thread_dep_kineto_op = self.kineto_ev_idx_to_kineto_op_map[
+            inter_thread_dep_kineto_op = self.kineto_rf_id_to_kineto_op_map[
                 kineto_op.inter_thread_dep
             ]
             if inter_thread_dep_kineto_op.pytorch_op:
