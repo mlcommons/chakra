@@ -936,13 +936,15 @@ class TraceLinker:
         with open(self.pytorch_et_file, "r") as file:
             pytorch_et_data = json.load(file)
 
+        sorted_nodes = sorted(pytorch_et_data["nodes"], key=lambda x: x["id"])
         gpu_ops = []
-        for op in pytorch_et_data["nodes"]:
+        for op in sorted_nodes:
             gpu_ops += self.process_op_and_dependents(op)
         pytorch_et_data["nodes"] += gpu_ops
 
         # Update parent-child relationships with new IDs
-        for op in pytorch_et_data["nodes"]:
+        sorted_nodes = sorted(pytorch_et_data["nodes"], key=lambda x: x["id"])
+        for op in sorted_nodes:
             if 'parent' in op:
                 op["parent"] = self.id_assigner.assign_or_retrieve_id(op["parent"])
 
@@ -1036,6 +1038,10 @@ class TraceLinker:
         if self.pytorch_et_plus_data is None:
             self.logger.error("ET+ data not constructed. Please run construct_et_plus_data first.")
             return
+
+        if "nodes" in self.pytorch_et_plus_data:
+            self.pytorch_et_plus_data["nodes"] = sorted(
+                self.pytorch_et_plus_data["nodes"], key=lambda x: x["id"])
 
         try:
             with open(output_file, "w") as file:
