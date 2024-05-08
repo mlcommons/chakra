@@ -21,61 +21,6 @@ from chakra.et_def.et_def_pb2 import (
 )
 
 
-class UniqueIdAssigner:
-    """
-    Class for assigning unique IDs. Generates a new unique ID for each call,
-    even with the same original ID, and keeps track of all assigned IDs.
-
-    Attributes:
-        next_id (int): The next available unique ID.
-        original_to_assigned_ids (Dict[int, List[int]]): Mapping from original
-            IDs to lists of assigned unique IDs.
-    """
-
-    def __init__(self) -> None:
-        self.next_id = 0
-        self.original_to_assigned_ids: Dict[int, List[int]] = {}
-
-    def set_next_id(self, next_id: int) -> None:
-        """
-        Sets the starting next unique ID.
-
-        Args:
-            next_id (int): The starting next unique ID to set.
-        """
-        self.next_id = next_id
-
-    def assign_unique_id(self, original_id: int) -> int:
-        """
-        Generates and tracks a new unique ID for each call for a given original ID.
-
-        Args:
-            original_id (int): The original ID to generate a unique ID for.
-
-        Returns:
-            int: A new unique ID for the original ID.
-        """
-        unique_id = self.next_id
-        self.next_id += 1
-
-        assigned_ids = self.original_to_assigned_ids.setdefault(original_id, [])
-        assigned_ids.append(unique_id)
-
-        return unique_id
-
-    def get_assigned_ids(self, original_id: int) -> List[int]:
-        """
-        Retrieves all unique IDs assigned to a given original ID.
-
-        Args:
-            original_id (int): The original ID to retrieve unique IDs for.
-
-        Returns:
-            List[int]: List of unique IDs assigned to the original ID.
-        """
-        return self.original_to_assigned_ids.get(original_id, [])
-
-
 class PyTorch2ChakraConverter:
     """
     Converter class for transforming PyTorch execution traces into Chakra format.
@@ -90,7 +35,6 @@ class PyTorch2ChakraConverter:
         output_filename (str): Output file name for the converted Chakra trace.
         chakra_et(IO[bytes]): File handle for the Chakra execution trace output file.
         logger (logging.Logger): Logger for logging information during conversion.
-        id_assigner (UniqueIdAssigner): Object to manage unique ID assignments.
         pytorch_schema (Optional[str]): Schema info of the PyTorch trace.
         pytorch_pid (Optional[int]): Process ID associated with the PyTorch trace.
         pytorch_time (Optional[str]): Time info of the PyTorch trace.
@@ -122,7 +66,6 @@ class PyTorch2ChakraConverter:
         self.output_filename = output_filename
         self.chakra_et = None
         self.logger = logger
-        self.id_assigner = UniqueIdAssigner()
         self.initialize_attributes()
 
     def initialize_attributes(self) -> None:
@@ -203,7 +146,6 @@ class PyTorch2ChakraConverter:
             with open(self.input_filename, "r") as pytorch_et:
                 pytorch_et_data = json.load(pytorch_et)
             self._parse_and_instantiate_nodes(pytorch_et_data)
-            self.id_assigner.set_next_id(max(self.pytorch_nodes.keys()) + 1)
         except IOError as e:
             self.logger.error(f"Error opening file {self.input_filename}: {e}")
             raise Exception(f"Could not open file {self.input_filename}")
@@ -501,13 +443,13 @@ class PyTorch2ChakraConverter:
                 last_visited_any = current_node
             else:
                 if pytorch_node.inter_thread_dep:
-                    for id in self.id_assigner.get_assigned_ids(pytorch_node.inter_thread_dep):
-                        if id not in current_node.data_deps:
-                            current_node.data_deps.append(id)
-                            self.logger.debug(
-                                f"CPU Node ID {current_node.id} now has an inter-thread data "
-                                f"dependency on Node ID {id}"
-                            )
+                    id = pytorch_node.inter_thread_dep
+                    if id not in current_node.data_deps:
+                        current_node.data_deps.append(id)
+                        self.logger.debug(
+                            f"CPU Node ID {current_node.id} now has an inter-thread data "
+                            f"dependency on Node ID {id}"
+                        )
 
                 if last_visited_non_gpu:
                     if last_visited_non_gpu.id not in current_node.data_deps:
