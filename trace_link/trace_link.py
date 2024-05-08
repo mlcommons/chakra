@@ -504,47 +504,41 @@ class TraceLinker:
                              microseconds, used to define group boundaries.
         """
         self.logger.info("Enforcing inter-thread order in Kineto traces.")
-        for tid, ops in self.kineto_ops_by_tid.items():
-            self.logger.debug(f"Processing thread {tid} for inter-thread order.")
-            self.identify_and_link_groups(ops, self.kineto_ops_by_tid, tid, threshold)
 
-    def identify_and_link_groups(
-        self,
-        ops: List[KinetoOperator],
-        ops_by_tid: Dict[int, List[KinetoOperator]],
-        current_tid: int,
-        threshold: int
-    ) -> None:
-        """
-        Identifies groups within a thread based on significant gaps in execution
-        and links them with the last CPU operator from other threads before the
-        group's start. This enforces order and dependencies across threads,
-        reflecting realistic inter-thread execution dynamics in the trace.
+        def process_thread(tid: int, ops: List[KinetoOperator],
+                           ops_by_tid: Dict[int, List[KinetoOperator]]) -> None:
+            self.logger.info(f"Thread {tid}: Identifying gaps for dependency "
+                             f"linking with threshold {threshold}us.")
+            sorted_ops = sorted(ops, key=lambda op: op.timestamp)
+            last_cpu_node_ev_idx = None
 
-        Args:
-            ops (List[KinetoOperator]): Operators within the current thread.
-            ops_by_tid (Dict[int, List[KinetoOperator]]): Operators grouped by
-                                                          thread ID.
-            current_tid (int): The current thread ID being processed.
-            threshold (int): Threshold in microseconds for identifying significant
-                             gaps as new groups.
-        """
-        sorted_ops = sorted(ops, key=lambda op: op.timestamp)
-        last_cpu_node_ev_idx = None
+            for i, op in enumerate(sorted_ops):
+                if i == 0 or (sorted_ops[i].timestamp -
+                              sorted_ops[i - 1].timestamp -
+                              sorted_ops[i - 1].inclusive_dur) > threshold:
+                    last_cpu_node_ev_idx = self.find_last_cpu_node_before_timestamp(
+                        ops_by_tid, tid, op.timestamp)
+                    if last_cpu_node_ev_idx:
+                        self.logger.debug(f"Thread {tid}: Linking op '{op.name}' "
+                                          f"to CPU node before gap with ev_idx "
+                                          f"'{last_cpu_node_ev_idx}'.")
 
-        for i, op in enumerate(sorted_ops):
-            if i == 0 or (sorted_ops[i].timestamp -
-                          (sorted_ops[i - 1].timestamp +
-                           sorted_ops[i - 1].inclusive_dur)) > threshold:
-                last_cpu_node_ev_idx = \
-                    self.find_last_cpu_node_before_timestamp(
-                        ops_by_tid, current_tid, op.timestamp)
+                if last_cpu_node_ev_idx:
+                    op.inter_thread_dep = last_cpu_node_ev_idx
 
-                self.logger.debug(
-                    f"New group identified in thread {current_tid} starting at {op}")
+        with ThreadPoolExecutor() as executor:
+            futures = {
+                executor.submit(process_thread, tid, ops, self.kineto_ops_by_tid):
+                tid for tid, ops in self.kineto_ops_by_tid.items()
+            }
 
-            if last_cpu_node_ev_idx is not None:
-                op.inter_thread_dep = last_cpu_node_ev_idx
+            for future in as_completed(futures):
+                tid = futures[future]
+                try:
+                    future.result()
+                    self.logger.debug(f"Thread {tid} dependencies processed.")
+                except Exception as e:
+                    self.logger.error(f"Error processing thread {tid}: {e}")
 
     def find_last_cpu_node_before_timestamp(
         self,
