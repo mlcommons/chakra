@@ -40,6 +40,10 @@ chakra_jsonizer = "chakra.et_jsonizer.et_jsonizer:main"
 [tool.ruff]
 target-version = "py39"
 line-length = 120
+exclude = [
+    "trace_link.py",
+    "test_trace_link.py",
+]
 
 [tool.ruff.lint]
 select = ["I", "B", "E", "F", "SIM", "W", "C90", "EXE"]
