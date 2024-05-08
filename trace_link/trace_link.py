@@ -290,7 +290,6 @@ class TraceLinker:
         )
 
         self.categorize_kineto_ops(sorted_kineto_ops)
-        self.handle_kineto_segmentation()
 
         self.logger.info(f"Processed Kineto trace with {len(self.kineto_ops)} CPU ops, "
                     f"{len(self.kineto_cpu_launcher_ops)} CPU launcher ops, "
@@ -344,97 +343,6 @@ class TraceLinker:
             value = value[key]
 
         target_dict[value] = op
-
-    def handle_kineto_segmentation(self) -> None:
-        """
-        Segments Kineto operators based on the specified annotation.
-
-        - If the Kineto trace contains only one iteration, or if the provided
-          annotation is incorrect, the entire trace is used directly.
-        - Otherwise, the method identifies the segment in the Kineto trace that
-          most closely matches the number of operators in the PyTorch Execution Trace (ET).
-          Typically, the ET includes three additional operators for process and thread
-          annotations.
-        """
-        kineto_et_segs = self.segment_ops_by_annotation(self.kineto_ops, self.annotation)
-
-        if kineto_et_segs:
-            closest_seg = self.find_closest_segment(kineto_et_segs, len(self.pytorch_ops) - 3)
-            self.kineto_ops = closest_seg if closest_seg else self.kineto_ops
-        else:
-            self.logger.warning(
-                f"No '{self.annotation}' annotation found in Kineto file."
-                " Using entire trace; processing may be slow."
-            )
-
-    def segment_ops_by_annotation(self, kineto_ops: List[KinetoOperator],
-                                  annotation: str) -> List[List[KinetoOperator]]:
-        """
-        Segments Kineto operators based on a specified annotation.
-
-        Args:
-            kineto_ops (List[KinetoOperator]): Kineto operators to segment.
-            annotation (str): Annotation for segmenting.
-
-        Returns:
-            List[List[KinetoOperator]]: Segmented Kineto operators.
-        """
-        self.logger.info(f"Segmenting Kineto operators using annotation: '{annotation}'")
-        segments = []
-        current_segment = []
-        end_time = -1
-
-        for op in kineto_ops:
-            if end_time > 0 and op.timestamp >= end_time:
-                segments.append(current_segment)
-                self.logger.info(f"Segment created with {len(current_segment)} operators.")
-                current_segment = []
-                end_time = -1
-
-            if annotation in op.name:
-                current_segment.append(op)
-                end_time = op.timestamp + op.duration
-            else:
-                current_segment.append(op)
-
-        if current_segment:
-            segments.append(current_segment)
-            self.logger.info(f"Final segment created with {len(current_segment)} operators.")
-
-        self.logger.info(f"Total number of segments created: {len(segments)}")
-        return segments
-
-    def find_closest_segment(self, segments: List[List[KinetoOperator]],
-                             target_length: int) -> Optional[List[KinetoOperator]]:
-        """
-        Identifies the segment within Kineto operators that most closely matches the
-        target length. This is used to align Kineto trace segments with the PyTorch
-        Execution Trace.
-
-        Args:
-            segments (List[List[KinetoOperator]]): Segments of Kineto operators.
-            target_length (int): Target length for comparison.
-
-        Returns:
-            Optional[List[KinetoOperator]]: Closest segment in size.
-        """
-        self.logger.info(f"Finding the closest segment to the target length: {target_length}")
-
-        closest_length = float("inf")
-        closest_segment = None
-
-        for segment in segments:
-            length_difference = abs(len(segment) - target_length)
-            if length_difference < closest_length:
-                closest_length = length_difference
-                closest_segment = segment
-
-        if closest_segment:
-            self.logger.info(f"Found closest segment with {len(closest_segment)} operators.")
-        else:
-            self.logger.warning("No segment closely matches the target length.")
-
-        return closest_segment
 
     def link_traces(self) -> None:
         """
