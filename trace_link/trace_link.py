@@ -380,11 +380,11 @@ class TraceLinker:
                 self._add_op_to_dict(op, self.kineto_ac2g_s_ops, "id")
             elif op.is_valid("ac2g", phase="f"):
                 self._add_op_to_dict(op, self.kineto_ac2g_f_ops, "id")
-            elif op.is_valid("cuda_runtime") and op.name in [
+            elif (op.is_valid("cuda_runtime") and op.name in [
                 "cudaLaunchKernel",
                 "cudaLaunchKernelExC",
                 "cudaMemcpyAsync",
-            ]:
+                ]) or (op.category == "cuda_driver" and op.name in ["cuLaunchKernel"]):
                 self._add_op_to_dict(
                     op, self.kineto_cpu_launcher_ops, "args", "External id"
                 )
