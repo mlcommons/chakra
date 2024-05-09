@@ -29,23 +29,23 @@ class KinetoOperator:
 
     Attributes:
         op_dict (Dict[str, Any]): Dictionary containing the operator data.
-        category (Optional[str]): Category of the operator.
-        name (Optional[str]): Name of the operator.
+        category (str): Category of the operator.
+        name (str): Name of the operator.
         phase (Optional[str]): Phase of the operator.
         inclusive_dur (int): Inclusive duration of the operator in microseconds.
         exclusive_dur (int): Exclusive duration of the operator in microseconds.
         timestamp (int): Timestamp of the operator in microseconds.
-        external_id (Optional[str]): External ID associated with the operator.
-        ev_idx (Optional[str]): Event index associated with the operator.
-        tid (Optional[int]): Thread ID associated with the operator.
+        external_id (str): External ID associated with the operator.
+        ev_idx (str): Event index associated with the operator.
+        tid (int): Thread ID associated with the operator.
         pytorch_op (Optional[PyTorchOperator]): Associated PyTorch operator.
         parent_pytorch_op_id (Optional[int]): ID of the parent PyTorch operator.
         inter_thread_dep (Optional[int]): ID of the latest CPU node from other
             threads before the gap.
         stream (Optional[int]): Stream ID associated with the operator.
         rf_id (Optional[int]): Record function ID.
-        correlation (Optional[int]): Correlation ID used to link CUDA runtime
-            operations with their GPU counterparts.
+        correlation (int): Correlation ID used to link CUDA runtime operations
+            with their GPU counterparts.
     """
 
     def __init__(self, kineto_op: Dict[str, Any]) -> None:
@@ -57,25 +57,25 @@ class KinetoOperator:
                                         operator data.
         """
         self.op_dict = kineto_op
-        self.category = kineto_op.get("cat")
-        self.name = kineto_op.get("name")
+        self.category = kineto_op.get("cat", "")
+        self.name = kineto_op.get("name", "")
         self.phase = kineto_op.get("ph")
         self.inclusive_dur = kineto_op.get("dur", 0)
         self.exclusive_dur = kineto_op.get("dur", 0)
         self.timestamp = kineto_op.get("ts", 0)
-        self.external_id = None
-        self.ev_idx = None
-        self.tid = kineto_op.get("tid")
+        self.external_id = ""
+        self.ev_idx = ""
+        self.tid = kineto_op.get("tid", 0)
         self.pytorch_op: Optional[PyTorchOperator] = None
         self.parent_pytorch_op_id = None
         self.inter_thread_dep: Optional[int] = None
         self.stream: Optional[int] = None
         self.rf_id: Optional[int] = None
-        self.correlation: Optional[int] = None
+        self.correlation: int = None
 
         if "args" in kineto_op:
             self.external_id = kineto_op["args"].get("External id")
-            self.ev_idx = kineto_op["args"].get("Ev Idx")
+            self.ev_idx = kineto_op["args"].get("Ev Idx", "")
             self.stream = kineto_op["args"].get("stream")
             if "Record function id" in kineto_op["args"]:
                 self.rf_id = int(kineto_op["args"]["Record function id"])
@@ -227,7 +227,7 @@ class TraceLinker:
             latest operator timestamp.
         kineto_thread_info (Dict[int, Tuple[int, int]]): Information about threads,
             mapping thread IDs to a tuple of start and end times.
-        kineto_rf_id_to_kineto_op_map (Dict[str, KinetoOperator]): Mapping from
+        kineto_rf_id_to_kineto_op_map (Dict[int, KinetoOperator]): Mapping from
             rf_id to KinetoOperator instances.
         pytorch_op_id_to_kineto_ops_map (Dict[int, List[KinetoOperator]]):
             Map from PyTorch op IDs to Kineto GPU ops.
@@ -266,7 +266,7 @@ class TraceLinker:
         self.kineto_process_start_time: int = 0
         self.kineto_process_end_time: int = 0
         self.kineto_thread_info: Dict[int, Tuple[int, int]] = {}
-        self.kineto_rf_id_to_kineto_op_map: Dict[str, KinetoOperator] = {}
+        self.kineto_rf_id_to_kineto_op_map: Dict[int, KinetoOperator] = {}
         self.pytorch_op_id_to_kineto_ops_map: Dict[int, List[KinetoOperator]] = {}
         self.pytorch_op_id_to_inclusive_dur_map: Dict[int, int] = {}
         self.pytorch_op_id_to_exclusive_dur_map: Dict[int, int] = {}
@@ -761,7 +761,7 @@ class TraceLinker:
                 self.logger.warning(warning_msg)
                 continue
 
-            if parent_cpu_op.ev_idx is None:
+            if parent_cpu_op.ev_idx == "":
                 error_msg = (
                     f"Missing 'ev_idx' for CPU operator {parent_cpu_op.name}. "
                     f"Cannot link to GPU op {gpu_op.name} to {parent_cpu_op.name}."
