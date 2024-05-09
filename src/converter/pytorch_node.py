@@ -233,5 +233,5 @@ class PyTorchNode:
         }
         try:
             return data_type_size_map[data_type]
-        except KeyError:
-            raise ValueError(f"Unsupported data type: {data_type}")
+        except KeyError as e:
+            raise ValueError(f"Unsupported data type: {data_type}") from e
