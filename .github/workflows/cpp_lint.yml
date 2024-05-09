@@ -1,13 +1,17 @@
-name: Clang-format Full Tree
-on: [push, pull_request]
+name: C++ Lint
+
+on: pull_request
 
 jobs:
-  build:
+  cpp-lint:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v2
-    - uses: DoozyX/clang-format-lint-action@v0.11
+    - name: Checkout Code
+      uses: actions/checkout@v2
+
+    - name: Format and Lint C++ Code
+      uses: DoozyX/clang-format-lint-action@v0.11
       with:
         source: '.'
         extensions: 'cc,cpp,h,hh'
