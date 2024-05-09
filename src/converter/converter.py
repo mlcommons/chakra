@@ -4,10 +4,10 @@ import argparse
 import logging
 import sys
 import traceback
-
 from logging import FileHandler
-from .text2chakra_converter import Text2ChakraConverter
-from .pytorch2chakra_converter import PyTorch2ChakraConverter
+
+from .pytorch_converter import PyTorchConverter
+from .text_converter import TextConverter
 
 
 def get_logger(log_filename: str) -> logging.Logger:
@@ -52,17 +52,15 @@ def main() -> None:
 
     try:
         if args.input_type == "Text":
-            converter = Text2ChakraConverter(
-                args.input_filename, args.output_filename, args.num_npus, args.num_passes, logger
-            )
+            converter = TextConverter(args.input_filename, args.output_filename, args.num_npus, args.num_passes, logger)
             converter.convert()
         elif args.input_type == "PyTorch":
-            converter = PyTorch2ChakraConverter(args.input_filename, args.output_filename, logger)
+            converter = PyTorchConverter(args.input_filename, args.output_filename, logger)
             converter.convert()
         else:
             logger.error(f"{args.input_type} unsupported")
             sys.exit(1)
-    except Exception as e:
+    except Exception:
         traceback.print_exc()
         logger.debug(traceback.format_exc())
         sys.exit(1)

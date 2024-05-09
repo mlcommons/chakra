@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 
 import argparse
-import graphviz
-import networkx as nx
 import re
 
-from chakra.third_party.utils.protolib import openFileRd as open_file_rd, decodeMessage as decode_message
-from chakra.et_def.et_def_pb2 import (
+import graphviz
+import networkx as nx
+
+from ...schema.protobuf.et_def_pb2 import (
     GlobalMetadata,
     Node,
 )
+from ..third_party.utils.protolib import decodeMessage as decode_message
+from ..third_party.utils.protolib import openFileRd as open_file_rd
 
 
 def escape_label(label: str) -> str:

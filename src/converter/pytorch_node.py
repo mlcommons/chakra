@@ -73,9 +73,7 @@ class PyTorchNode:
         """
         supported_versions = ["1.0.2-chakra.0.0.4", "1.0.3-chakra.0.0.4"]
         if self.schema in supported_versions:
-            if self.schema == "1.0.2-chakra.0.0.4":
-                self._parse_data_1_0_3_chakra_0_0_4(node_data)
-            elif self.schema == "1.0.3-chakra.0.0.4":
+            if self.schema == "1.0.2-chakra.0.0.4" or self.schema == "1.0.3-chakra.0.0.4":
                 self._parse_data_1_0_3_chakra_0_0_4(node_data)
         else:
             raise ValueError(
@@ -96,8 +94,8 @@ class PyTorchNode:
         self.exclusive_dur = node_data.get("exclusive_dur", 0)
         self.ts = node_data.get("ts")
         self.inter_thread_dep = node_data.get("inter_thread_dep")
-        self.cat = node_data.get("cat", None)
-        self.stream = node_data.get("stream", None)
+        self.cat = node_data.get("cat")
+        self.stream = node_data.get("stream")
 
         for attr in node_data.get("attrs", []):
             setattr(self, attr["name"], attr["value"])
@@ -235,5 +233,5 @@ class PyTorchNode:
         }
         try:
             return data_type_size_map[data_type]
-        except KeyError:
-            raise ValueError(f"Unsupported data type: {data_type}")
+        except KeyError as e:
+            raise ValueError(f"Unsupported data type: {data_type}") from e

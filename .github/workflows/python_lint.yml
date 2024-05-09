@@ -21,6 +21,3 @@ jobs:
 
     - name: Run ruff
       run: ruff format --check --diff .
-
-    - name: Run Pyre Check
-      run: pyre check

@@ -4,10 +4,9 @@ import argparse
 import json
 import logging
 import sys
-
-from typing import Any, Dict, List, Tuple
-from logging import FileHandler
 from enum import IntEnum
+from logging import FileHandler
+from typing import Any, Dict, List, Tuple
 
 
 class TID(IntEnum):
@@ -37,35 +36,29 @@ def get_logger(log_filename: str) -> logging.Logger:
 
 
 def is_local_mem_node(node_name: str) -> bool:
-    if ("MEM_LOAD_NODE" in node_name) and ("LOCAL_MEMORY" in node_name):
-        return True
-    elif ("MEM_STORE_NODE" in node_name) and ("LOCAL_MEMORY" in node_name):
-        return True
-    else:
-        return False
+    return (
+        ("MEM_LOAD_NODE" in node_name)
+        and ("LOCAL_MEMORY" in node_name)
+        or ("MEM_STORE_NODE" in node_name)
+        and ("LOCAL_MEMORY" in node_name)
+    )
 
 
 def is_remote_mem_node(node_name: str) -> bool:
-    if ("MEM_LOAD_NODE" in node_name) and ("REMOTE_MEMORY" in node_name):
-        return True
-    elif ("MEM_STORE_NODE" in node_name) and ("REMOTE_MEMORY" in node_name):
-        return True
-    else:
-        return False
+    return (
+        ("MEM_LOAD_NODE" in node_name)
+        and ("REMOTE_MEMORY" in node_name)
+        or ("MEM_STORE_NODE" in node_name)
+        and ("REMOTE_MEMORY" in node_name)
+    )
 
 
 def is_comp_node(node_name: str) -> bool:
-    if "COMP_NODE" in node_name:
-        return True
-    else:
-        return False
+    return "COMP_NODE" in node_name
 
 
 def is_comm_node(node_name: str) -> bool:
-    if ("COMM_SEND_NODE" in node_name) or ("COMM_RECV_NODE" in node_name) or ("COMM_COLL_NODE" in node_name):
-        return True
-    else:
-        return False
+    return ("COMM_SEND_NODE" in node_name) or ("COMM_RECV_NODE" in node_name) or ("COMM_COLL_NODE" in node_name)
 
 
 def get_tid(node_name: str) -> TID:
@@ -91,7 +84,7 @@ def parse_event(line: str) -> Tuple[str, int, int, int, str]:
         node_name = cols[4].split("=")[1]
         return (trace_type, npu_id, curr_cycle, node_id, node_name)
     except Exception as e:
-        raise ValueError(f'Cannot parse the following event -- "{line}": {e}')
+        raise ValueError(f'Cannot parse the following event -- "{line}": {e}') from e
 
 
 def get_trace_events(input_filename: str, num_npus: int, npu_frequency: int) -> List[Dict[str, Any]]:

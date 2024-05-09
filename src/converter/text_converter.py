@@ -1,22 +1,22 @@
 #!/usr/bin/env python3
 
 import logging
-
 from io import TextIOWrapper
 from typing import Any, List
-from chakra.third_party.utils.protolib import encodeMessage as encode_message
-from chakra.et_def.et_def_pb2 import (
-    NodeType,
-    Node,
-    AttributeProto as ChakraAttr,
-    COMP_NODE,
-    COMM_COLL_NODE,
+
+from ...schema.protobuf.et_def_pb2 import (
+    ALL_GATHER,
     ALL_REDUCE,
     ALL_TO_ALL,
-    ALL_GATHER,
+    COMM_COLL_NODE,
+    COMP_NODE,
     REDUCE_SCATTER,
     GlobalMetadata,
+    Node,
+    NodeType,
+    AttributeProto as ChakraAttr,
 )
+from ..third_party.utils.protolib import encodeMessage as encode_message
 
 
 class Layer:
@@ -50,7 +50,7 @@ class Layer:
             raise ValueError(f'Cannot parse the following layer -- "{line}"')
 
 
-class Text2ChakraConverter:
+class TextConverter:
     def __init__(
         self, input_filename: str, output_filename: str, num_npus: int, num_passes: int, logger: logging.Logger
     ) -> None:

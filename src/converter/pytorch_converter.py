@@ -2,26 +2,32 @@
 
 import json
 import logging
-from typing import Dict, List, Optional, Tuple, Set
+from typing import Dict, List, Optional, Set, Tuple
 
-from .pytorch_node import PyTorchNodeType, PyTorchNode
-from chakra.third_party.utils.protolib import encodeMessage as encode_message
-from chakra.et_def.et_def_pb2 import (
-    GlobalMetadata,
-    NodeType as ChakraNodeType,
-    Node as ChakraNode,
-    AttributeProto as ChakraAttr,
-    COMP_NODE,
-    COMM_COLL_NODE,
-    ALL_REDUCE,
+from ...schema.protobuf.et_def_pb2 import (
     ALL_GATHER,
-    BROADCAST,
+    ALL_REDUCE,
     ALL_TO_ALL,
+    BROADCAST,
+    COMM_COLL_NODE,
+    COMP_NODE,
     REDUCE_SCATTER,
+    GlobalMetadata,
 )
+from ...schema.protobuf.et_def_pb2 import (
+    AttributeProto as ChakraAttr,
+)
+from ...schema.protobuf.et_def_pb2 import (
+    Node as ChakraNode,
+)
+from ...schema.protobuf.et_def_pb2 import (
+    NodeType as ChakraNodeType,
+)
+from ..third_party.utils.protolib import encodeMessage as encode_message
+from .pytorch_node import PyTorchNode, PyTorchNodeType
 
 
-class PyTorch2ChakraConverter:
+class PyTorchConverter:
     """
     Converter class for transforming PyTorch execution traces into Chakra format.
 
@@ -94,7 +100,7 @@ class PyTorch2ChakraConverter:
 
         self.open_chakra_execution_trace()
 
-        for pytorch_nid, pytorch_node in self.pytorch_nodes.items():
+        for _, pytorch_node in self.pytorch_nodes.items():
             if (pytorch_node.get_op_type() == PyTorchNodeType.CPU_OP) or (
                 pytorch_node.get_op_type() == PyTorchNodeType.LABEL
             ):
@@ -148,7 +154,7 @@ class PyTorch2ChakraConverter:
             self._parse_and_instantiate_nodes(pytorch_et_data)
         except IOError as e:
             self.logger.error(f"Error opening file {self.input_filename}: {e}")
-            raise Exception(f"Could not open file {self.input_filename}")
+            raise Exception(f"Could not open file {self.input_filename}") from e
 
     def _parse_and_instantiate_nodes(self, pytorch_et_data: Dict) -> None:
         """
@@ -173,7 +179,7 @@ class PyTorch2ChakraConverter:
         }
         self._establish_parent_child_relationships(pytorch_node_objects)
 
-    def _establish_parent_child_relationships(self, pytorch_node_objects: Dict[int, PyTorchNode]) -> None:
+    def _establish_parent_child_relationships(self, pytorch_node_objects: Dict[int, PyTorchNode]) -> None:  # noqa: C901
         """
         Establishes parent-child relationships among PyTorch nodes and counts
         the node types.
@@ -241,11 +247,11 @@ class PyTorch2ChakraConverter:
         """
         self.logger.info(f"Opening Chakra execution trace file: {self.output_filename}")
         try:
-            self.chakra_et = open(self.output_filename, "wb")
+            self.chakra_et = open(self.output_filename, "wb")  # noqa: SIM115
         except IOError as e:
             err_msg = f"Error opening file {self.output_filename}: {e}"
             self.logger.error(err_msg)
-            raise Exception(err_msg)
+            raise Exception(err_msg) from e
 
     def convert_to_chakra_node(self, pytorch_node: PyTorchNode) -> ChakraNode:
         """
@@ -296,9 +302,11 @@ class PyTorch2ChakraConverter:
         Returns:
             int: The corresponding Chakra node type.
         """
-        if pytorch_node.is_gpu_op() and ("ncclKernel" in pytorch_node.name or "ncclDevKernel" in pytorch_node.name):
-            return COMM_COLL_NODE
-        elif ("c10d::" in pytorch_node.name) or ("nccl:" in pytorch_node.name):
+        if (
+            pytorch_node.is_gpu_op()
+            and ("ncclKernel" in pytorch_node.name or "ncclDevKernel" in pytorch_node.name)
+            or (("c10d::" in pytorch_node.name) or ("nccl:" in pytorch_node.name))
+        ):
             return COMM_COLL_NODE
         return COMP_NODE
 
@@ -354,7 +362,7 @@ class PyTorch2ChakraConverter:
         if node.name in ["[pytorch|profiler|execution_graph|thread]", "[pytorch|profiler|execution_trace|thread]"]:
             return True
 
-    def convert_ctrl_dep_to_data_dep(self, chakra_node: ChakraNode) -> None:
+    def convert_ctrl_dep_to_data_dep(self, chakra_node: ChakraNode) -> None:  # noqa: C901
         """
         Traverses nodes based on control dependencies (parent nodes) and encodes
         data dependencies appropriately. This method is crucial for converting the
@@ -422,13 +430,11 @@ class PyTorch2ChakraConverter:
             node_op_type = pytorch_node.get_op_type()
 
             if node_op_type == PyTorchNodeType.GPU_OP:
-                if last_visited_any:
-                    if last_visited_any.id not in current_node.data_deps:
-                        current_node.data_deps.append(last_visited_any.id)
-                        self.logger.debug(
-                            f"GPU Node ID {current_node.id} now has a data "
-                            f"dependency on Node ID {last_visited_any.id}"
-                        )
+                if (last_visited_any) and (last_visited_any.id not in current_node.data_deps):
+                    current_node.data_deps.append(last_visited_any.id)
+                    self.logger.debug(
+                        f"GPU Node ID {current_node.id} now has a data " f"dependency on Node ID {last_visited_any.id}"
+                    )
 
                 last_visited_any = last_visited_non_gpu
             else:
@@ -440,13 +446,12 @@ class PyTorch2ChakraConverter:
                             f"CPU Node ID {current_node.id} now has an inter-thread data dependency on Node ID {id}"
                         )
 
-                if last_visited_non_gpu:
-                    if last_visited_non_gpu.id not in current_node.data_deps:
-                        current_node.data_deps.append(last_visited_non_gpu.id)
-                        self.logger.debug(
-                            f"CPU Node ID {current_node.id} now has a data "
-                            f"dependency on non-GPU Node ID {last_visited_non_gpu.id}"
-                        )
+                if (last_visited_non_gpu) and (last_visited_non_gpu.id not in current_node.data_deps):
+                    current_node.data_deps.append(last_visited_non_gpu.id)
+                    self.logger.debug(
+                        f"CPU Node ID {current_node.id} now has a data "
+                        f"dependency on non-GPU Node ID {last_visited_non_gpu.id}"
+                    )
                 last_visited_non_gpu = current_node
                 last_visited_any = current_node
 
