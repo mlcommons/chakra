@@ -1,23 +1,25 @@
-name: Python Linting
+name: Python Lint
 
-on: [push, pull_request]
+on: pull_request
 
 jobs:
-  lint-and-format:
+  python-lint:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v2
+    - name: Checkout Code
+      uses: actions/checkout@v2
 
-    - name: Set up Python
+    - name: Setup Python Environment
       uses: actions/setup-python@v2
       with:
         python-version: '3.8'
 
-    - name: Install dependencies
+    - name: Install Dependencies
       run: |
         pip install -r requirements-dev.txt
-        pip install .
 
-    - name: Run ruff
-      run: ruff format --check --diff .
+    - name: Lint Python Code
+      run: |
+        ruff format .
+        ruff check .
