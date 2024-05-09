@@ -10,6 +10,8 @@ from typing import Any, Dict, List, Optional, Tuple
 from param_bench.train.compute.python.tools.execution_trace import (
     EXECUTION_TRACE_PROCESS_ANNOTATION,
     EXECUTION_TRACE_THREAD_ANNOTATION,
+)
+from param_bench.train.compute.python.tools.execution_trace import (
     Node as PyTorchOperator,
 )
 from param_bench.train.compute.python.tools.utility import (

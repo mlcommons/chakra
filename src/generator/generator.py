@@ -2,37 +2,43 @@
 
 import argparse
 
-from chakra.third_party.utils.protolib import encodeMessage as encode_message
 from chakra.et_def.et_def_pb2 import (
-    NodeType as ChakraNodeType,
-    Node as ChakraNode,
-    DoubleList,
-    FloatList,
-    Int32List,
-    Int64List,
-    Uint32List,
-    Uint64List,
-    Sint32List,
-    Sint64List,
-    Fixed32List,
-    Fixed64List,
-    Sfixed32List,
-    Sfixed64List,
-    BoolList,
-    StringList,
-    BytesList,
-    GlobalMetadata,
-    AttributeProto as ChakraAttr,
-    METADATA_NODE,
-    MEM_LOAD_NODE,
-    MEM_STORE_NODE,
-    COMP_NODE,
-    COMM_COLL_NODE,
+    ALL_GATHER,
     ALL_REDUCE,
     ALL_TO_ALL,
-    ALL_GATHER,
+    COMM_COLL_NODE,
+    COMP_NODE,
+    MEM_LOAD_NODE,
+    MEM_STORE_NODE,
+    METADATA_NODE,
     REDUCE_SCATTER,
+    BoolList,
+    BytesList,
+    DoubleList,
+    Fixed32List,
+    Fixed64List,
+    FloatList,
+    GlobalMetadata,
+    Int32List,
+    Int64List,
+    Sfixed32List,
+    Sfixed64List,
+    Sint32List,
+    Sint64List,
+    StringList,
+    Uint32List,
+    Uint64List,
 )
+from chakra.et_def.et_def_pb2 import (
+    AttributeProto as ChakraAttr,
+)
+from chakra.et_def.et_def_pb2 import (
+    Node as ChakraNode,
+)
+from chakra.et_def.et_def_pb2 import (
+    NodeType as ChakraNodeType,
+)
+from chakra.third_party.utils.protolib import encodeMessage as encode_message
 
 NODE_ID = 0
 

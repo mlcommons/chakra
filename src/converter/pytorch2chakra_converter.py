@@ -2,23 +2,30 @@
 
 import json
 import logging
-from typing import Dict, List, Optional, Tuple, Set
+from typing import Dict, List, Optional, Set, Tuple
 
-from .pytorch_node import PyTorchNodeType, PyTorchNode
-from chakra.third_party.utils.protolib import encodeMessage as encode_message
 from chakra.et_def.et_def_pb2 import (
-    GlobalMetadata,
-    NodeType as ChakraNodeType,
-    Node as ChakraNode,
-    AttributeProto as ChakraAttr,
-    COMP_NODE,
-    COMM_COLL_NODE,
-    ALL_REDUCE,
     ALL_GATHER,
-    BROADCAST,
+    ALL_REDUCE,
     ALL_TO_ALL,
+    BROADCAST,
+    COMM_COLL_NODE,
+    COMP_NODE,
     REDUCE_SCATTER,
+    GlobalMetadata,
 )
+from chakra.et_def.et_def_pb2 import (
+    AttributeProto as ChakraAttr,
+)
+from chakra.et_def.et_def_pb2 import (
+    Node as ChakraNode,
+)
+from chakra.et_def.et_def_pb2 import (
+    NodeType as ChakraNodeType,
+)
+from chakra.third_party.utils.protolib import encodeMessage as encode_message
+
+from .pytorch_node import PyTorchNode, PyTorchNodeType
 
 
 class PyTorch2ChakraConverter:
@@ -296,9 +303,11 @@ class PyTorch2ChakraConverter:
         Returns:
             int: The corresponding Chakra node type.
         """
-        if pytorch_node.is_gpu_op() and ("ncclKernel" in pytorch_node.name or "ncclDevKernel" in pytorch_node.name):
-            return COMM_COLL_NODE
-        elif ("c10d::" in pytorch_node.name) or ("nccl:" in pytorch_node.name):
+        if (
+            pytorch_node.is_gpu_op()
+            and ("ncclKernel" in pytorch_node.name or "ncclDevKernel" in pytorch_node.name)
+            or (("c10d::" in pytorch_node.name) or ("nccl:" in pytorch_node.name))
+        ):
             return COMM_COLL_NODE
         return COMP_NODE
 

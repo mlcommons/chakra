@@ -2,14 +2,15 @@
 
 import argparse
 
-from google.protobuf.json_format import MessageToJson
-
-from chakra.third_party.utils.protolib import openFileRd as open_file_rd, decodeMessage as decode_message
-
 from chakra.et_def.et_def_pb2 import (
     GlobalMetadata,
+)
+from chakra.et_def.et_def_pb2 import (
     Node as ChakraNode,
 )
+from chakra.third_party.utils.protolib import decodeMessage as decode_message
+from chakra.third_party.utils.protolib import openFileRd as open_file_rd
+from google.protobuf.json_format import MessageToJson
 
 
 def main() -> None:

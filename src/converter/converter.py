@@ -4,10 +4,10 @@ import argparse
 import logging
 import sys
 import traceback
-
 from logging import FileHandler
-from .text2chakra_converter import Text2ChakraConverter
+
 from .pytorch2chakra_converter import PyTorch2ChakraConverter
+from .text2chakra_converter import Text2ChakraConverter
 
 
 def get_logger(log_filename: str) -> logging.Logger:
@@ -62,7 +62,7 @@ def main() -> None:
         else:
             logger.error(f"{args.input_type} unsupported")
             sys.exit(1)
-    except Exception as e:
+    except Exception:
         traceback.print_exc()
         logger.debug(traceback.format_exc())
         sys.exit(1)

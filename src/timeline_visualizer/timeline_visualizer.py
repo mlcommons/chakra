@@ -4,10 +4,9 @@ import argparse
 import json
 import logging
 import sys
-
-from typing import Any, Dict, List, Tuple
-from logging import FileHandler
 from enum import IntEnum
+from logging import FileHandler
+from typing import Any, Dict, List, Tuple
 
 
 class TID(IntEnum):
@@ -37,18 +36,24 @@ def get_logger(log_filename: str) -> logging.Logger:
 
 
 def is_local_mem_node(node_name: str) -> bool:
-    if ("MEM_LOAD_NODE" in node_name) and ("LOCAL_MEMORY" in node_name):
-        return True
-    elif ("MEM_STORE_NODE" in node_name) and ("LOCAL_MEMORY" in node_name):
+    if (
+        ("MEM_LOAD_NODE" in node_name)
+        and ("LOCAL_MEMORY" in node_name)
+        or ("MEM_STORE_NODE" in node_name)
+        and ("LOCAL_MEMORY" in node_name)
+    ):
         return True
     else:
         return False
 
 
 def is_remote_mem_node(node_name: str) -> bool:
-    if ("MEM_LOAD_NODE" in node_name) and ("REMOTE_MEMORY" in node_name):
-        return True
-    elif ("MEM_STORE_NODE" in node_name) and ("REMOTE_MEMORY" in node_name):
+    if (
+        ("MEM_LOAD_NODE" in node_name)
+        and ("REMOTE_MEMORY" in node_name)
+        or ("MEM_STORE_NODE" in node_name)
+        and ("REMOTE_MEMORY" in node_name)
+    ):
         return True
     else:
         return False
