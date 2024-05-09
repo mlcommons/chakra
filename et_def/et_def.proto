@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package ChakraProtoMsg;
 
+import "google/protobuf/any.proto";
+
 message AttributeProto {
   string name = 1;
   string doc_string = 2;
@@ -37,6 +39,8 @@ message AttributeProto {
     StringList string_list = 30;
     bytes bytes_val = 31;
     BytesList bytes_list = 32;
+    google.protobuf.Any any_val = 33;
+    AnyList any_list = 34;
   }
 }
 
@@ -98,6 +102,10 @@ message StringList {
 
 message BytesList {
   repeated bytes values = 1;
+}
+
+message AnyList {
+    repeated google.protobuf.Any values = 1;
 }
 
 message GlobalMetadata {
