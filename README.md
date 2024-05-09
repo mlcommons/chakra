@@ -10,7 +10,7 @@ A detailed description of the original motivation and guiding principles can be 
 
 ## Installation
 
-Check out [`INSTALL`](INSTALL.md) for details.
+Check out [`USER_GUIDE`](USER_GUIDE.md) for details.
 
 ## License
 
