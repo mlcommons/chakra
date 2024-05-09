@@ -19,29 +19,33 @@ Documentation = "https://github.com/mlcommons/chakra/README.md"
 Repository = "https://github.com/mlcommons/chakra.git"
 
 [tool.setuptools.package-dir]
-"chakra.et_def" = "et_def"
-"chakra.et_converter" = "et_converter"
-"chakra.et_visualizer" = "et_visualizer"
-"chakra.timeline_visualizer" = "timeline_visualizer"
-"chakra.et_generator" = "utils/et_generator"
-"chakra.et_jsonizer" = "utils/et_jsonizer"
-"chakra.trace_link" = "trace_link"
-"chakra.third_party.utils" = "third_party/utils"
+"chakra.schema.protobuf" = "schema/protobuf"
+"chakra.src.converter" = "src/converter"
+"chakra.src.generator" = "src/generator"
+"chakra.src.jsonizer" = "src/jsonizer"
+"chakra.src.third_party" = "src/third_party"
+"chakra.src.timeline_visualizer" = "src/timeline_visualizer"
+"chakra.src.trace_link" = "src/trace_link"
+"chakra.src.visualizer" = "src/visualizer"
 
 [tool.setuptools.package-data]
-"chakra.et_def" = ["et_def_pb2.pyi", "et_def.proto"]
+"chakra.schema.protobuf" = ["et_def.proto"]
 
 [project.scripts]
-chakra_converter = "chakra.et_converter.et_converter:main"
-chakra_visualizer = "chakra.et_visualizer.et_visualizer:main"
-chakra_timeline_visualizer = "chakra.et_timeline_visualizer.et_timeline_visualizer:main"
-chakra_generator = "chakra.et_generator.et_generator:main"
-chakra_jsonizer = "chakra.et_jsonizer.et_jsonizer:main"
-chakra_trace_link = "chakra.trace_link.trace_link:main"
+chakra_converter = "chakra.src.converter.converter:main"
+chakra_generator = "chakra.src.generator.generator:main"
+chakra_jsonizer = "chakra.src.jsonizer.jsonizer:main"
+chakra_timeline_visualizer = "chakra.src.timeline_visualizer.timeline_visualizer:main"
+chakra_trace_link = "chakra.src.trace_link.trace_link:main"
+chakra_visualizer = "chakra.src.visualizer.visualizer:main"
 
 [tool.ruff]
 target-version = "py39"
 line-length = 120
+exclude = [
+    "src/converter/text2chakra_converter.py",
+    "src/third_party/utils/protolib.py",
+]
 
 [tool.ruff.lint]
 select = ["I", "B", "E", "F", "SIM", "W", "C90", "EXE"]
