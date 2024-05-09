@@ -458,7 +458,7 @@ class TraceLinker:
                 if exclusive_dur < 0:
                     error_msg = (
                         f"Exclusive duration calculation error for node "
-                        f"'{op.name}' (tid: {tid}, ts: {op.timestamp}, "
+                        f"'{op.name}' (ts: {op.timestamp}, "
                         f"inclusive_dur: {op.inclusive_dur}, "
                         f"rf_id: {op.rf_id}): "
                         f"Duration cannot be less than zero."
@@ -468,7 +468,7 @@ class TraceLinker:
 
                 op.exclusive_dur = exclusive_dur
                 self.logger.debug(
-                    f"Node '{op.name}' (tid: {op.tid}, ts: {op.timestamp}, "
+                    f"Node '{op.name}' (ts: {op.timestamp}, "
                     f"inclusive_dur: {op.inclusive_dur}, "
                     f"rf_id: {op.rf_id}) "
                     f"exclusive duration: {op.exclusive_dur} microseconds."
@@ -622,11 +622,14 @@ class TraceLinker:
         for tid, ops in ops_by_tid.items():
             if tid != exclude_tid:
                 for op in sorted(ops, key=lambda op: op.timestamp):
-                    if (op.category in ["cpu_op", "user_annotation"]) and (op.timestamp < timestamp):
-                        if op.timestamp > latest_timestamp:
-                            last_cpu_node = op
-                            latest_timestamp = op.timestamp
-                            last_cpu_node_rf_id = op.rf_id
+                    if (
+                        (op.category in ["cpu_op", "user_annotation"])
+                        and (op.timestamp < timestamp)
+                        and (op.timestamp > latest_timestamp)
+                    ):
+                        last_cpu_node = op
+                        latest_timestamp = op.timestamp
+                        last_cpu_node_rf_id = op.rf_id
         if last_cpu_node:
             self.logger.debug(f"Last CPU node before timestamp {timestamp} found: {last_cpu_node}")
         return last_cpu_node_rf_id
@@ -723,17 +726,16 @@ class TraceLinker:
                 f"but possible scenario."
             )
 
-        for i, pytorch_op in enumerate(self.pytorch_ops):
-            if pytorch_op.rf_id is not None:
-                if pytorch_op.rf_id in self.kineto_rf_id_to_kineto_op_map:
-                    kineto_op = self.kineto_rf_id_to_kineto_op_map[pytorch_op.rf_id]
-                    if kineto_op is None:
-                        self.logger.warning(
-                            f"No corresponding Kineto op found for PyTorch op "
-                            f"ID: {pytorch_op.id}, Name: '{pytorch_op.name}'."
-                        )
-                        continue
-                    self.link_ops(pytorch_op, kineto_op, cpu_ev_idx_to_gpu_ops_map)
+        for _, pytorch_op in enumerate(self.pytorch_ops):
+            if (pytorch_op.rf_id is not None) and (pytorch_op.rf_id in self.kineto_rf_id_to_kineto_op_map):
+                kineto_op = self.kineto_rf_id_to_kineto_op_map[pytorch_op.rf_id]
+                if kineto_op is None:
+                    self.logger.warning(
+                        f"No corresponding Kineto op found for PyTorch op "
+                        f"ID: {pytorch_op.id}, Name: '{pytorch_op.name}'."
+                    )
+                    continue
+                self.link_ops(pytorch_op, kineto_op, cpu_ev_idx_to_gpu_ops_map)
 
         self.logger.info("Completed mapping of PyTorch operators to Kineto operators.")
 
@@ -872,7 +874,8 @@ class TraceLinker:
                 # If no valid alternative found before 'nccl:coalesced', continue search forward
                 index = index - 1  # Adjust index to skip 'nccl:coalesced'
 
-            # After skipping 'nccl:coalesced', verify that the closest operation is on the same thread as the GPU operation
+            # After skipping 'nccl:coalesced', verify that the closest operation is on the same thread
+            # as the GPU operation
             if closest_op.tid == kineto_gpu_op.tid:
                 return closest_op
 
