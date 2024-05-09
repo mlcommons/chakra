@@ -3,6 +3,8 @@
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
+from .pytorch_tensor import PyTorchTensor
+
 
 class PyTorchNodeType(Enum):
     CPU_OP = 1
@@ -12,34 +14,46 @@ class PyTorchNodeType(Enum):
 
 class PyTorchNode:
     """
-    Represents a node in a PyTorch execution trace.
+    Represents a node in a PyTorch execution trace, initialized based on a
+    schema version.
 
     Attributes:
-        node_data (Dict[str, Any]): Data of the PyTorch node.
+        schema (str): Schema version used for initialization.
         data_deps (List[PyTorchNode]): List of data-dependent parent nodes.
         children (List[PyTorchNode]): List of child nodes.
+        gpu_children (List[PyTorchNode]): List of GPU-specific child nodes.
+        record_param_comms_node (Optional['PyTorchNode']): Corresponding record_param_comms node.
+        nccl_node (Optional['PyTorchNode']): Corresponding NCCL node.
+        id (int): Unique identifier of the node.
+        name (str): Name of the node.
+        parent (int): Control dependencies identifier.
+        inputs (Dict[str, Any]): Input data including values, shapes, and types.
+        outputs (Dict[str, Any]): Output data including values, shapes, and types.
     """
 
-    def __init__(self, node_data: Dict[str, Any]) -> None:
+    def __init__(self, schema: str, node_data: Dict[str, Any]) -> None:
         """
-        Initializes a PyTorchNode object with the provided node data.
+        Initializes a PyTorchNode object using the node data and schema version provided.
 
         Args:
-            node_data (Dict[str, Any]): Dictionary containing the data of the
-            PyTorch node.
+            schema (str): The schema version based on which the node will be initialized.
+            node_data (Dict[str, Any]): Dictionary containing the data of the PyTorch node.
         """
-        self.node_data = node_data
+        self.schema = schema
         self.data_deps: List["PyTorchNode"] = []
         self.children: List["PyTorchNode"] = []
         self.gpu_children: List["PyTorchNode"] = []
         self.record_param_comms_node: Optional["PyTorchNode"] = None
         self.nccl_node: Optional["PyTorchNode"] = None
 
+        self.parse_data(node_data)
+
     def __repr__(self) -> str:
         """
-        Represent the PyTorchNode as a string.
+        Provides a string representation of the PyTorchNode.
+
         Returns:
-            str: A detailed string representation of the PyTorchNode.
+            str: String representation of the node.
         """
         return (
             f"PyTorchNode("
@@ -50,450 +64,43 @@ class PyTorchNode:
             f"exclusive_duration={self.exclusive_dur})"
         )
 
-    @property
-    def name(self) -> str:
+    def parse_data(self, node_data: Dict[str, Any]) -> None:
         """
-        Returns the name of the node.
-
-        Returns:
-            str: Name of the node.
-        """
-        return self.node_data["name"]
-
-    @name.setter
-    def name(self, value: str) -> None:
-        """
-        Sets the name of the node.
+        Parses node data based on the provided schema version.
 
         Args:
-            value (str): The new name of the node.
-        """
-        self.node_data["name"] = value
-
-    @property
-    def id(self) -> int:
-        """
-        Returns the node ID.
-
-        Returns:
-            int: ID of the node.
-        """
-        return self.node_data["id"]
-
-    @id.setter
-    def id(self, value: int) -> None:
-        """
-        Sets the node ID.
-
-        Args:
-            value (int): The new ID of the node.
-        """
-        self.node_data["id"] = value
-
-    @property
-    def rf_id(self) -> int:
-        """
-        Returns the unique record function ID.
-
-        Returns:
-            int: The unique record function ID.
-        """
-        return self.node_data["rf_id"]
-
-    @rf_id.setter
-    def rf_id(self, value: int) -> None:
-        """
-        Sets the unique record function ID.
-
-        Args:
-            value (int): The new unique record function ID.
-        """
-        self.node_data["rf_id"] = value
-
-    @property
-    def parent(self) -> int:
-        """
-        Returns the parent node ID.
-
-        Returns:
-            int: The parent node ID.
-        """
-        return self.node_data["parent"]
-
-    @parent.setter
-    def parent(self, value: int) -> None:
-        """
-        Sets the parent node ID.
-
-        Args:
-            value (int): The new parent node ID.
-        """
-        self.node_data["parent"] = value
-
-    @property
-    def fw_parent(self) -> int:
-        """
-        Returns the parent node ID from the forward thread.
-
-        Returns:
-            int: The parent node ID from the forward thread.
-        """
-        return self.node_data["fw_parent"]
-
-    @fw_parent.setter
-    def fw_parent(self, value: int) -> None:
-        """
-        Sets the parent node ID from the forward thread.
-
-        Args:
-            value (int): The new parent node ID from the forward thread.
-        """
-        self.node_data["fw_parent"] = value
-
-    @property
-    def seq_id(self) -> int:
-        """
-        Returns the record function sequence ID used to correlate forward and
-        backward operators.
-
-        Returns:
-            int: The record function sequence ID.
-        """
-        return self.node_data["seq_id"]
-
-    @seq_id.setter
-    def seq_id(self, value: int) -> None:
-        """
-        Sets the record function sequence ID.
-
-        Args:
-            value (int): The new sequence ID.
-        """
-        self.node_data["seq_id"] = value
-
-    @property
-    def scope(self) -> int:
-        """
-        Returns the record scope.
-
-        Returns:
-            int: The record scope.
-        """
-        return self.node_data["scope"]
-
-    @scope.setter
-    def scope(self, value: int) -> None:
-        """
-        Sets the record scope.
-
-        Args:
-            value (int): The new scope value.
-        """
-        self.node_data["scope"] = value
-
-    @property
-    def tid(self) -> int:
-        """
-        Returns the record function thread ID.
-
-        Returns:
-            int: The record function thread ID.
-        """
-        return self.node_data["tid"]
-
-    @tid.setter
-    def tid(self, value: int) -> None:
-        """
-        Sets the record function thread ID.
-
-        Args:
-            value (int): The new thread ID.
-        """
-        self.node_data["tid"] = value
-
-    @property
-    def fw_tid(self) -> int:
-        """
-        Returns the thread ID of the forward execution thread.
-
-        Returns:
-            int: The thread ID of the forward execution thread.
-        """
-        return self.node_data["fw_tid"]
-
-    @fw_tid.setter
-    def fw_tid(self, value: int) -> None:
-        """
-        Sets the thread ID of the forward execution thread.
-
-        Args:
-            value (int): The new forward thread ID.
-        """
-        self.node_data["fw_tid"] = value
-
-    @property
-    def op_schema(self) -> str:
-        """
-        Returns the PyTorch operator schema.
-
-        Returns:
-            str: The PyTorch operator schema.
-        """
-        return self.node_data["op_schema"]
-
-    @op_schema.setter
-    def op_schema(self, value: str) -> None:
-        """
-        Sets the PyTorch operator schema.
-
-        Args:
-            value (str): The new operator schema.
-        """
-        self.node_data["op_schema"] = value
-
-    @property
-    def inputs(self) -> List[Any]:
-        """
-        Returns the array of input arguments.
-
-        Returns:
-            List[Any]: The array of input arguments.
-        """
-        return self.node_data["inputs"]
-
-    @inputs.setter
-    def inputs(self, value: List[Any]) -> None:
-        """
-        Sets the array of input arguments.
-
-        Args:
-            value (List[Any]): The new array of input arguments.
-        """
-        self.node_data["inputs"] = value
-
-    @property
-    def input_shapes(self) -> List[Any]:
-        """
-        Returns the array of input shapes.
-
-        Returns:
-            List[Any]: The array of input shapes.
-        """
-        return self.node_data["input_shapes"]
-
-    @input_shapes.setter
-    def input_shapes(self, value: List[Any]) -> None:
-        """
-        Sets the array of input shapes.
-
-        Args:
-            value (List[Any]): The new array of input shapes.
-        """
-        self.node_data["input_shapes"] = value
-
-    @property
-    def input_types(self) -> List[Any]:
-        """
-        Returns the array of input types.
-
-        Returns:
-            List[Any]: The array of input types.
-        """
-        return self.node_data["input_types"]
-
-    @input_types.setter
-    def input_types(self, value: List[Any]) -> None:
-        """
-        Sets the array of input types.
-
-        Args:
-            value (List[Any]): The new array of input types.
-        """
-        self.node_data["input_types"] = value
-
-    @property
-    def outputs(self) -> List[Any]:
-        """
-        Returns the array of output arguments.
-
-        Returns:
-            List[Any]: The array of output arguments.
-        """
-        return self.node_data["outputs"]
-
-    @outputs.setter
-    def outputs(self, value: List[Any]) -> None:
-        """
-        Sets the array of output arguments.
-
-        Args:
-            value (List[Any]): The new array of output arguments.
-        """
-        self.node_data["outputs"] = value
-
-    @property
-    def output_shapes(self) -> List[Any]:
-        """
-        Returns the array of output shapes.
-
-        Returns:
-            List[Any]: The array of output shapes.
-        """
-        return self.node_data["output_shapes"]
-
-    @output_shapes.setter
-    def output_shapes(self, value: List[Any]) -> None:
-        """
-        Sets the array of output shapes.
-
-        Args:
-            value (List[Any]): The new array of output shapes.
-        """
-        self.node_data["output_shapes"] = value
-
-    @property
-    def output_types(self) -> List[Any]:
-        """
-        Returns the array of output types.
-
-        Returns:
-            List[Any]: The array of output types.
-        """
-        return self.node_data["output_types"]
-
-    @output_types.setter
-    def output_types(self, value: List[Any]) -> None:
-        """
-        Sets the array of output types.
-
-        Args:
-            value (List[Any]): The new array of output types.
-        """
-        self.node_data["output_types"] = value
-
-    @property
-    def ts(self) -> int:
-        """
-        Returns the timestamp of the node.
-
-        Returns:
-            int: The timestamp of the node.
-        """
-        return self.node_data.get("ts", 0)
-
-    @ts.setter
-    def ts(self, value: int) -> None:
-        """
-        Sets the timestamp of the node.
-
-        Args:
-            value (int): The new timestamp of the node.
-        """
-        self.node_data["ts"] = value
-
-    @property
-    def cat(self) -> str:
-        """
-        Returns the category field of the node.
-
-        Returns:
-            str: The category field of the node.
-        """
-        return self.node_data.get("cat", "")
-
-    @cat.setter
-    def cat(self, value: str) -> None:
-        """
-        Sets the category field of the node.
-
-        Args:
-            value (str): The new category field of the node.
-        """
-        self.node_data["cat"] = value
-
-    @property
-    def inclusive_dur(self) -> int:
-        """
-        Returns the inclusive duration of the node.
-
-        Returns:
-            int: The inclusive duration of the node.
-        """
-        if "inclusive_dur" in self.node_data:
-            return self.node_data["inclusive_dur"]
-        return 0
-
-    @inclusive_dur.setter
-    def inclusive_dur(self, value: int) -> None:
-        """
-        Sets the inclusive duration of the node.
-
-        Args:
-            value (int): The new inclusive duration of the node.
-        """
-        self.node_data["inclusive_dur"] = value
-
-    @property
-    def exclusive_dur(self) -> int:
-        """
-        Returns the exclusive duration of the node.
-
-        Returns:
-            int: The exclusive duration of the node.
-        """
-        return self.node_data.get("exclusive_dur", 0)
-
-    @exclusive_dur.setter
-    def exclusive_dur(self, value: int) -> None:
-        """
-        Sets the exclusive duration of the node.
-
-        Args:
-            value (int): The new exclusive duration of the node.
-        """
-        self.node_data["exclusive_dur"] = value
-
-    @property
-    def inter_thread_dep(self) -> Optional[int]:
-        """
-        Returns the inter-thread dependency value of the node, if available.
-
-        Returns:
-            Optional[int]: The inter-thread dependency value or None if not
-                           available.
-        """
-        return self.node_data.get("inter_thread_dep")
-
-    @property
-    def stream(self) -> int:
-        return self.node_data["stream"]
-
-    def has_ts(self) -> bool:
-        """
-        Checks if the node has a timestamp field.
-
-        Returns:
-            bool: True if the node has a timestamp field, False otherwise.
-        """
-        return "ts" in self.node_data
-
-    def has_cat(self) -> bool:
-        """
-        Checks if the node has a category field.
-
-        Returns:
-            bool: True if the node has a category field, False otherwise.
-        """
-        return "cat" in self.node_data
-
-    def has_dur(self) -> bool:
-        """
-        Checks if the node has a duration field.
-
-        Returns:
-            bool: True if the node has a duration field, False otherwise.
-        """
-        return "inclusive_dur" in self.node_data
+            node_data (Dict[str, Any]): The node data to be parsed.
+        """
+        supported_versions = ["1.0.2-chakra.0.0.4", "1.0.3-chakra.0.0.4"]
+        if self.schema in supported_versions:
+            if self.schema == "1.0.2-chakra.0.0.4":
+                self._parse_data_1_0_3_chakra_0_0_4(node_data)
+            elif self.schema == "1.0.3-chakra.0.0.4":
+                self._parse_data_1_0_3_chakra_0_0_4(node_data)
+        else:
+            raise ValueError(
+                f"Unsupported schema version '{self.schema}'. Please check "
+                f"if the schema version is in the list of supported versions: "
+                f"{supported_versions}"
+            )
+
+    def _parse_data_1_0_3_chakra_0_0_4(self, node_data: Dict[str, Any]) -> None:
+        self.id = node_data["id"]
+        self.name = node_data["name"]
+        self.parent = node_data["ctrl_deps"]
+        self.inputs = node_data["inputs"]
+        self.outputs = node_data["outputs"]
+
+        # TODO: should be added as attributes
+        self.inclusive_dur = node_data.get("inclusive_dur")
+        self.exclusive_dur = node_data.get("exclusive_dur", 0)
+        self.ts = node_data.get("ts")
+        self.inter_thread_dep = node_data.get("inter_thread_dep")
+        self.cat = node_data.get("cat", None)
+        self.stream = node_data.get("stream", None)
+
+        for attr in node_data.get("attrs", []):
+            setattr(self, attr["name"], attr["value"])
 
     def get_op_type(self) -> PyTorchNodeType:
         """
@@ -504,7 +111,7 @@ class PyTorchNode:
         """
         if self.is_gpu_op():
             return PyTorchNodeType.GPU_OP
-        elif self.node_data.get("op_schema") or self.node_data.get("outputs"):
+        elif hasattr(self, "op_schema") or hasattr(self, "outputs"):
             return PyTorchNodeType.CPU_OP
         else:
             return PyTorchNodeType.LABEL
@@ -525,7 +132,7 @@ class PyTorchNode:
         Returns:
             bool: True if the node is a GPU operator, False otherwise.
         """
-        return self.has_cat()
+        return self.cat is not None
 
     def add_data_dep(self, parent_node: "PyTorchNode") -> None:
         """
@@ -580,13 +187,12 @@ class PyTorchNode:
         Returns:
             int: The calculated communication size.
         """
-        comm_size = 1
-        for input_type, input_shape in zip(self.input_types, self.input_shapes):
-            type_size = self.get_data_type_size(input_type)
-            shape_size = 1
-            for dim in input_shape:
-                shape_size *= dim
-            comm_size += type_size * shape_size
+        comm_size = 0
+        for input_value, input_type in zip(self.inputs["values"], self.inputs["types"]):
+            if "Tensor" in input_type:
+                tensor = PyTorchTensor(input_value)
+                input_size = tensor.num_elem * tensor.elem_bytes
+                comm_size += input_size
         return comm_size
 
     @staticmethod

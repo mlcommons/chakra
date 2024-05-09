@@ -21,61 +21,6 @@ from chakra.et_def.et_def_pb2 import (
 )
 
 
-class UniqueIdAssigner:
-    """
-    Class for assigning unique IDs. Generates a new unique ID for each call,
-    even with the same original ID, and keeps track of all assigned IDs.
-
-    Attributes:
-        next_id (int): The next available unique ID.
-        original_to_assigned_ids (Dict[int, List[int]]): Mapping from original
-            IDs to lists of assigned unique IDs.
-    """
-
-    def __init__(self) -> None:
-        self.next_id = 0
-        self.original_to_assigned_ids: Dict[int, List[int]] = {}
-
-    def set_next_id(self, next_id: int) -> None:
-        """
-        Sets the starting next unique ID.
-
-        Args:
-            next_id (int): The starting next unique ID to set.
-        """
-        self.next_id = next_id
-
-    def assign_unique_id(self, original_id: int) -> int:
-        """
-        Generates and tracks a new unique ID for each call for a given original ID.
-
-        Args:
-            original_id (int): The original ID to generate a unique ID for.
-
-        Returns:
-            int: A new unique ID for the original ID.
-        """
-        unique_id = self.next_id
-        self.next_id += 1
-
-        assigned_ids = self.original_to_assigned_ids.setdefault(original_id, [])
-        assigned_ids.append(unique_id)
-
-        return unique_id
-
-    def get_assigned_ids(self, original_id: int) -> List[int]:
-        """
-        Retrieves all unique IDs assigned to a given original ID.
-
-        Args:
-            original_id (int): The original ID to retrieve unique IDs for.
-
-        Returns:
-            List[int]: List of unique IDs assigned to the original ID.
-        """
-        return self.original_to_assigned_ids.get(original_id, [])
-
-
 class PyTorch2ChakraConverter:
     """
     Converter class for transforming PyTorch execution traces into Chakra format.
@@ -90,7 +35,6 @@ class PyTorch2ChakraConverter:
         output_filename (str): Output file name for the converted Chakra trace.
         chakra_et(IO[bytes]): File handle for the Chakra execution trace output file.
         logger (logging.Logger): Logger for logging information during conversion.
-        id_assigner (UniqueIdAssigner): Object to manage unique ID assignments.
         pytorch_schema (Optional[str]): Schema info of the PyTorch trace.
         pytorch_pid (Optional[int]): Process ID associated with the PyTorch trace.
         pytorch_time (Optional[str]): Time info of the PyTorch trace.
@@ -122,7 +66,6 @@ class PyTorch2ChakraConverter:
         self.output_filename = output_filename
         self.chakra_et = None
         self.logger = logger
-        self.id_assigner = UniqueIdAssigner()
         self.initialize_attributes()
 
     def initialize_attributes(self) -> None:
@@ -162,7 +105,7 @@ class PyTorch2ChakraConverter:
                     chakra_gpu_node = self.convert_to_chakra_node(pytorch_gpu_node)
 
                     if chakra_node.type == COMM_COLL_NODE:
-                        collective_comm_type = self.get_collective_comm_type(pytorch_node.name)
+                        collective_comm_type = self.get_collective_comm_type(pytorch_gpu_node.name)
                         chakra_gpu_node.attr.extend(
                             [
                                 ChakraAttr(name="comm_type", int64_val=collective_comm_type),
@@ -203,7 +146,6 @@ class PyTorch2ChakraConverter:
             with open(self.input_filename, "r") as pytorch_et:
                 pytorch_et_data = json.load(pytorch_et)
             self._parse_and_instantiate_nodes(pytorch_et_data)
-            self.id_assigner.set_next_id(max(self.pytorch_nodes.keys()) + 1)
         except IOError as e:
             self.logger.error(f"Error opening file {self.input_filename}: {e}")
             raise Exception(f"Could not open file {self.input_filename}")
@@ -226,7 +168,9 @@ class PyTorch2ChakraConverter:
         self.pytorch_finish_ts = pytorch_et_data["finish_ts"]
 
         pytorch_nodes = pytorch_et_data["nodes"]
-        pytorch_node_objects = {node_data["id"]: PyTorchNode(node_data) for node_data in pytorch_nodes}
+        pytorch_node_objects = {
+            node_data["id"]: PyTorchNode(self.pytorch_schema, node_data) for node_data in pytorch_nodes
+        }
         self._establish_parent_child_relationships(pytorch_node_objects)
 
     def _establish_parent_child_relationships(self, pytorch_node_objects: Dict[int, PyTorchNode]) -> None:
@@ -321,13 +265,13 @@ class PyTorch2ChakraConverter:
         chakra_node.type = self.get_chakra_node_type_from_pytorch_node(pytorch_node)
         if pytorch_node.parent in self.chakra_nodes:
             chakra_node.ctrl_deps.append(pytorch_node.parent)
-        chakra_node.duration_micros = pytorch_node.exclusive_dur
-        chakra_node.inputs.values = str(pytorch_node.inputs)
-        chakra_node.inputs.shapes = str(pytorch_node.input_shapes)
-        chakra_node.inputs.types = str(pytorch_node.input_types)
-        chakra_node.outputs.values = str(pytorch_node.outputs)
-        chakra_node.outputs.shapes = str(pytorch_node.output_shapes)
-        chakra_node.outputs.types = str(pytorch_node.output_types)
+        chakra_node.duration_micros = int(pytorch_node.exclusive_dur)
+        chakra_node.inputs.values = str(pytorch_node.inputs["values"])
+        chakra_node.inputs.shapes = str(pytorch_node.inputs["shapes"])
+        chakra_node.inputs.types = str(pytorch_node.inputs["types"])
+        chakra_node.outputs.values = str(pytorch_node.outputs["values"])
+        chakra_node.outputs.shapes = str(pytorch_node.outputs["shapes"])
+        chakra_node.outputs.types = str(pytorch_node.outputs["types"])
         chakra_node.attr.extend(
             [
                 ChakraAttr(name="rf_id", int64_val=pytorch_node.rf_id),
@@ -338,7 +282,6 @@ class PyTorch2ChakraConverter:
                 ChakraAttr(name="fw_tid", int64_val=pytorch_node.fw_tid),
                 ChakraAttr(name="op_schema", string_val=pytorch_node.op_schema),
                 ChakraAttr(name="is_cpu_op", int32_val=not pytorch_node.is_gpu_op()),
-                ChakraAttr(name="ts", int64_val=pytorch_node.ts),
             ]
         )
         return chakra_node
@@ -373,19 +316,18 @@ class PyTorch2ChakraConverter:
             int: The collective communication type of the node.
         """
         comm_type_mapping = {
-            "all_reduce": ALL_REDUCE,
-            "all_to_all": ALL_TO_ALL,
-            "all_gather": ALL_GATHER,
-            "reduce_scatter": REDUCE_SCATTER,
+            "allreduce": ALL_REDUCE,
+            "alltoall": ALL_TO_ALL,
+            "allgather": ALL_GATHER,
+            "reducescatter": REDUCE_SCATTER,
             "broadcast": BROADCAST,
-            "AllReduce": ALL_REDUCE,
-            "Broadcast": BROADCAST,
             # Additional cases can be added here
         }
 
-        for key, value in comm_type_mapping.items():
-            if key.lower() in name.lower():
-                return value
+        normalized_name = name.replace("_", "").replace("-", "").lower()
+        for key in comm_type_mapping:
+            if key in normalized_name:
+                return comm_type_mapping[key]
 
         raise ValueError(
             f"'{name}' not found in collective communication mapping. "
@@ -464,7 +406,6 @@ class PyTorch2ChakraConverter:
         stack: List[ChakraNode] = [chakra_node]
         last_visited_non_gpu: Optional[ChakraNode] = None
         last_visited_any: Optional[ChakraNode] = None
-        last_gpu_in_stream: Dict[int, ChakraNode] = {}
 
         while stack:
             current_node = stack.pop()
@@ -489,25 +430,15 @@ class PyTorch2ChakraConverter:
                             f"dependency on Node ID {last_visited_any.id}"
                         )
 
-                stream_id = pytorch_node.stream
-                if stream_id in last_gpu_in_stream:
-                    if last_gpu_in_stream[stream_id].id not in current_node.data_deps:
-                        current_node.data_deps.append(last_gpu_in_stream[stream_id].id)
-                        self.logger.debug(
-                            f"GPU Node ID {current_node.id} in stream {stream_id} now has a data "
-                            f"dependency on GPU Node ID {last_gpu_in_stream[stream_id].id} in the same stream."
-                        )
-                last_gpu_in_stream[stream_id] = current_node
-                last_visited_any = current_node
+                last_visited_any = last_visited_non_gpu
             else:
                 if pytorch_node.inter_thread_dep:
-                    for id in self.id_assigner.get_assigned_ids(pytorch_node.inter_thread_dep):
-                        if id not in current_node.data_deps:
-                            current_node.data_deps.append(id)
-                            self.logger.debug(
-                                f"CPU Node ID {current_node.id} now has an inter-thread data "
-                                f"dependency on Node ID {id}"
-                            )
+                    id = pytorch_node.inter_thread_dep
+                    if id not in current_node.data_deps:
+                        current_node.data_deps.append(id)
+                        self.logger.debug(
+                            f"CPU Node ID {current_node.id} now has an inter-thread data dependency on Node ID {id}"
+                        )
 
                 if last_visited_non_gpu:
                     if last_visited_non_gpu.id not in current_node.data_deps:
@@ -605,7 +536,7 @@ class PyTorch2ChakraConverter:
 
         for node_id in self.chakra_nodes:
             if dfs(node_id, []):
-                raise Exception(f"Cyclic dependency detected starting from node " f"{self.chakra_nodes[node_id].name}")
+                raise Exception(f"Cyclic dependency detected starting from node {self.chakra_nodes[node_id].name}")
 
     def write_chakra_et(self) -> None:
         """
@@ -722,14 +653,14 @@ class PyTorch2ChakraConverter:
                 current_cpu_node
                 and current_time - current_cpu_node[1] >= self.chakra_nodes[current_cpu_node[0]].duration_micros
             ):
-                self.logger.info(f"CPU Node ID {current_cpu_node[0]} completed " f"at {current_time}us")
+                self.logger.info(f"CPU Node ID {current_cpu_node[0]} completed at {current_time}us")
                 current_cpu_node = None
 
             if (
                 current_gpu_node
                 and current_time - current_gpu_node[1] >= self.chakra_nodes[current_gpu_node[0]].duration_micros
             ):
-                self.logger.info(f"GPU Node ID {current_gpu_node[0]} completed " f"at {current_time}us")
+                self.logger.info(f"GPU Node ID {current_gpu_node[0]} completed at {current_time}us")
                 current_gpu_node = None
 
             for node_id in list(issued_nodes):
