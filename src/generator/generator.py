@@ -2,7 +2,7 @@
 
 import argparse
 
-from chakra.et_def.et_def_pb2 import (
+from ...schema.protobuf.et_def_pb2 import (
     ALL_GATHER,
     ALL_REDUCE,
     ALL_TO_ALL,
@@ -29,16 +29,16 @@ from chakra.et_def.et_def_pb2 import (
     Uint32List,
     Uint64List,
 )
-from chakra.et_def.et_def_pb2 import (
+from ...schema.protobuf.et_def_pb2 import (
     AttributeProto as ChakraAttr,
 )
-from chakra.et_def.et_def_pb2 import (
+from ...schema.protobuf.et_def_pb2 import (
     Node as ChakraNode,
 )
-from chakra.et_def.et_def_pb2 import (
+from ...schema.protobuf.et_def_pb2 import (
     NodeType as ChakraNodeType,
 )
-from chakra.third_party.utils.protolib import encodeMessage as encode_message
+from ..third_party.utils.protolib import encodeMessage as encode_message
 
 NODE_ID = 0
 

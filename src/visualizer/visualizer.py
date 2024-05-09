@@ -5,12 +5,13 @@ import re
 
 import graphviz
 import networkx as nx
-from chakra.et_def.et_def_pb2 import (
+
+from ...schema.protobuf.et_def_pb2 import (
     GlobalMetadata,
     Node,
 )
-from chakra.third_party.utils.protolib import decodeMessage as decode_message
-from chakra.third_party.utils.protolib import openFileRd as open_file_rd
+from ..third_party.utils.protolib import decodeMessage as decode_message
+from ..third_party.utils.protolib import openFileRd as open_file_rd
 
 
 def escape_label(label: str) -> str:
