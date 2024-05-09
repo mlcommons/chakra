@@ -605,7 +605,7 @@ class PyTorch2ChakraConverter:
 
         for node_id in self.chakra_nodes:
             if dfs(node_id, []):
-                raise Exception(f"Cyclic dependency detected starting from node " f"{self.chakra_nodes[node_id].name}")
+                raise Exception(f"Cyclic dependency detected starting from node {self.chakra_nodes[node_id].name}")
 
     def write_chakra_et(self) -> None:
         """
@@ -722,14 +722,14 @@ class PyTorch2ChakraConverter:
                 current_cpu_node
                 and current_time - current_cpu_node[1] >= self.chakra_nodes[current_cpu_node[0]].duration_micros
             ):
-                self.logger.info(f"CPU Node ID {current_cpu_node[0]} completed " f"at {current_time}us")
+                self.logger.info(f"CPU Node ID {current_cpu_node[0]} completed at {current_time}us")
                 current_cpu_node = None
 
             if (
                 current_gpu_node
                 and current_time - current_gpu_node[1] >= self.chakra_nodes[current_gpu_node[0]].duration_micros
             ):
-                self.logger.info(f"GPU Node ID {current_gpu_node[0]} completed " f"at {current_time}us")
+                self.logger.info(f"GPU Node ID {current_gpu_node[0]} completed at {current_time}us")
                 current_gpu_node = None
 
             for node_id in list(issued_nodes):
