@@ -50,7 +50,7 @@ class Layer:
             raise ValueError(f'Cannot parse the following layer -- "{line}"')
 
 
-class Text2ChakraConverter:
+class TextConverter:
     def __init__(
         self, input_filename: str, output_filename: str, num_npus: int, num_passes: int, logger: logging.Logger
     ) -> None:

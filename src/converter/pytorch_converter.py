@@ -27,7 +27,7 @@ from ..third_party.utils.protolib import encodeMessage as encode_message
 from .pytorch_node import PyTorchNode, PyTorchNodeType
 
 
-class PyTorch2ChakraConverter:
+class PyTorchConverter:
     """
     Converter class for transforming PyTorch execution traces into Chakra format.
 

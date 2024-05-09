@@ -43,7 +43,7 @@ chakra_visualizer = "chakra.src.visualizer.visualizer:main"
 target-version = "py39"
 line-length = 120
 exclude = [
-    "src/converter/text2chakra_converter.py",
+    "src/converter/text_converter.py",
     "src/third_party/utils/protolib.py",
 ]
 
