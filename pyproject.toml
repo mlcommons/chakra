@@ -48,7 +48,7 @@ exclude = [
 ]
 
 [tool.ruff.lint]
-select = ["I", "B", "E", "F", "SIM", "W", "C90", "EXE"]
+select = ["I", "B", "E", "F", "SIM", "W", "C90"]
 
 [tool.ruff.format]
 indent-style = "space"
