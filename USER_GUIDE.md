@@ -36,7 +36,19 @@ $ sed -i '' '13d' pyproject.toml
 $ pip install .
 ```
 
-### Step 4: Uninstalling Chakra
+### Step 4: Install Holistic Trace Analysis
+Installing Holistic Trace Analysis is necessary for Trace link.
+
+```bash
+$ git clone https://github.com/facebookresearch/HolisticTraceAnalysis.git
+$ cd HolisticTraceAnalysis
+$ git checkout d731cc2e2249976c97129d409a83bd53d93051f6
+$ git submodule update --init
+$ pip install -r requirements.txt
+$ pip install -e .
+```
+
+### Step 5: Uninstalling Chakra
 To uninstall Chakra, use the following command within the virtual environment.
 
 ```bash
@@ -51,6 +63,7 @@ Merge PyTorch Chakra host trace and Kineto trace to encode GPU operators into th
 $ chakra_trace_link \
     --pytorch-et-file /path/to/pytorch_et \
     --kineto-file /path/to/kineto \
+    --rank [RANK]
     --output-file /path/to/merged_et
 ```
 
