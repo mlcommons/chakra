@@ -27,6 +27,15 @@ jobs:
         sed -i '/param_bench/d' pyproject.toml
         pip install .
 
+    - name: Install HTA
+      run: |
+        git clone https://github.com/facebookresearch/HolisticTraceAnalysis.git
+        cd HolisticTraceAnalysis
+        git checkout d731cc2e2249976c97129d409a83bd53d93051f6
+        git submodule update --init
+        pip install -r requirements.txt
+        pip install -e .
+
     - name: Test chakra_trace_link Without Arguments
       run: |
         chakra_trace_link || [ $? -eq 2 ]
