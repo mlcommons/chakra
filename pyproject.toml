@@ -52,3 +52,14 @@ select = ["I", "B", "E", "F", "SIM", "W", "C90"]
 
 [tool.ruff.format]
 indent-style = "space"
+
+[tool.pyright]
+typeCheckingMode = "basic"
+exclude = [
+    "**/__pycache__",
+    "**/build/",
+    "setup.py",
+    "src/third_party/utils/protolib.py"
+]
+reportMissingImports = false
+reportAttributeAccessIssue = false

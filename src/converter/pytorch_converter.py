@@ -81,7 +81,7 @@ class PyTorchConverter:
         self.pytorch_time = None
         self.pytorch_start_ts = None
         self.pytorch_finish_ts = None
-        self.pytorch_nodes = None
+        self.pytorch_nodes = dict()
         self.pytorch_root_nids = []
 
         # Initialize node mapping dictionaries

@@ -23,3 +23,7 @@ jobs:
       run: |
         ruff format .
         ruff check .
+
+    - name: Run Pyright
+      run: |
+        pyright
