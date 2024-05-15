@@ -58,7 +58,11 @@ def main() -> None:
             converter = PyTorchConverter(args.input_filename, args.output_filename, logger)
             converter.convert()
         else:
-            logger.error(f"{args.input_type} unsupported")
+            supported_types = ["Text", "PyTorch"]
+            logger.error(
+                f"The input type '{args.input_type}' is not supported. "
+                f"Supported types are: {', '.join(supported_types)}."
+            )
             sys.exit(1)
     except Exception:
         traceback.print_exc()
