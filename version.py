@@ -7,7 +7,7 @@ import subprocess
 from typing import List
 
 
-def main(args: List[str] = None):
+def main(args: List[str] = None): # type: ignore
     """Build utilities
     args:
     --version-change: piece to change in semantic version number
@@ -63,7 +63,7 @@ def main(args: List[str] = None):
         If it does not exist a new one will be created with the build number starting at 1.""",
     )
 
-    args = parser.parse_args(args) if args is not None else parser.parse_args()
+    args = parser.parse_args(args) if args is not None else parser.parse_args() # type: ignore
 
     if os.path.exists("VERSION") is True:
         with open("VERSION", "rt", encoding="ascii") as fp:
