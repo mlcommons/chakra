@@ -1,5 +1,4 @@
-#!/usr/bin/env python3
-
+import traceback
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -22,22 +21,34 @@ class PyTorchNode:
         data_deps (List[PyTorchNode]): List of data-dependent parent nodes.
         children (List[PyTorchNode]): List of child nodes.
         gpu_children (List[PyTorchNode]): List of GPU-specific child nodes.
-        record_param_comms_node (Optional['PyTorchNode']): Corresponding record_param_comms node.
-        nccl_node (Optional['PyTorchNode']): Corresponding NCCL node.
-        id (int): Unique identifier of the node.
+        record_param_comms_node (Optional[PyTorchNode]): Corresponding
+            record_param_comms node.
+        nccl_node (Optional[PyTorchNode]): Corresponding NCCL node.
+        id (str): Identifier of the node.
         name (str): Name of the node.
-        parent (int): Control dependencies identifier.
-        inputs (Dict[str, Any]): Input data including values, shapes, and types.
-        outputs (Dict[str, Any]): Output data including values, shapes, and types.
+        parent (Any): Parent of the node.
+        inputs (Any): Inputs of the node.
+        outputs (Any): Outputs of the node.
+        inclusive_dur (Optional[float]): Inclusive duration of the node.
+        exclusive_dur (float): Exclusive duration of the node.
+        ts (Optional[float]): Timestamp of the node.
+        inter_thread_dep (Any): Inter-thread dependency of the node.
+        cat (Any): Category of the node.
+        stream (Any): Stream associated with the node.
     """
+
+    SUPPORTED_VERSIONS = ["1.0.2-chakra.0.0.4", "1.0.3-chakra.0.0.4"]
 
     def __init__(self, schema: str, node_data: Dict[str, Any]) -> None:
         """
-        Initializes a PyTorchNode object using the node data and schema version provided.
+        Initializes a PyTorchNode object using the node data and schema version
+        provided.
 
         Args:
-            schema (str): The schema version based on which the node will be initialized.
-            node_data (Dict[str, Any]): Dictionary containing the data of the PyTorch node.
+            schema (str): The schema version based on which the node will be
+                initialized.
+            node_data (Dict[str, Any]): Dictionary containing the data of the
+                PyTorch node.
         """
         self.schema = schema
         self.data_deps: List["PyTorchNode"] = []
@@ -71,15 +82,14 @@ class PyTorchNode:
         Args:
             node_data (Dict[str, Any]): The node data to be parsed.
         """
-        supported_versions = ["1.0.2-chakra.0.0.4", "1.0.3-chakra.0.0.4"]
-        if self.schema in supported_versions:
+        if self.schema in self.SUPPORTED_VERSIONS:
             if self.schema == "1.0.2-chakra.0.0.4" or self.schema == "1.0.3-chakra.0.0.4":
                 self._parse_data_1_0_3_chakra_0_0_4(node_data)
         else:
             raise ValueError(
                 f"Unsupported schema version '{self.schema}'. Please check "
                 f"if the schema version is in the list of supported versions: "
-                f"{supported_versions}"
+                f"{self.SUPPORTED_VERSIONS}"
             )
 
     def _parse_data_1_0_3_chakra_0_0_4(self, node_data: Dict[str, Any]) -> None:
@@ -88,8 +98,6 @@ class PyTorchNode:
         self.parent = node_data["ctrl_deps"]
         self.inputs = node_data["inputs"]
         self.outputs = node_data["outputs"]
-
-        # TODO: should be added as attributes
         self.inclusive_dur = node_data.get("inclusive_dur")
         self.exclusive_dur = node_data.get("exclusive_dur", 0)
         self.ts = node_data.get("ts")
@@ -155,7 +163,8 @@ class PyTorchNode:
         Adds a child GPU node for this node.
 
         Args:
-            gpu_child_node (Optional[PyTorchNode]): The child GPU node to be added.
+            gpu_child_node (Optional[PyTorchNode]): The child GPU node to be
+                added.
         """
         self.gpu_children.append(gpu_child_node)
 
@@ -164,7 +173,8 @@ class PyTorchNode:
         Checks if the node is a record_param_comms operator.
 
         Returns:
-            bool: True if the node is a record_param_comms operator, False otherwise.
+            bool: True if the node is a record_param_comms operator, False
+                otherwise.
         """
         return "record_param_comms" in self.name
 
@@ -234,4 +244,12 @@ class PyTorchNode:
         try:
             return data_type_size_map[data_type]
         except KeyError as e:
-            raise ValueError(f"Unsupported data type: {data_type}") from e
+            traceback_str = traceback.format_exc()
+            raise ValueError(
+                f"Unsupported data type: {data_type}. The data_type_size_map "
+                f"dictionary is used for mapping the number of bytes for a "
+                f"given tensor data type. This dictionary may be incomplete. "
+                f"Please update the data_type_size_map or report this issue "
+                f"to the maintainer by creating an issue. Traceback:\n"
+                f"{traceback_str}"
+            ) from e

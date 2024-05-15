@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 from typing import List
 
 
@@ -29,7 +27,7 @@ class PyTorchTensor:
         Checks if the tensor data is valid.
 
         Returns:
-            bool: True if tensor_data is a list of exactly five integers,
+            bool: True if tensor_data is a list of exactly six integers,
                   False otherwise.
         """
         return (
