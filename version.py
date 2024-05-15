@@ -1,10 +1,10 @@
 """Build utilities"""
 
-import subprocess
-from typing import List
+import argparse
 import os
 import os.path
-import argparse
+import subprocess
+from typing import List
 
 
 def main(args: List[str] = None):
@@ -27,13 +27,16 @@ def main(args: List[str] = None):
         required=False,
         help="""
         --version-change == major
-            Major version X (X.y.z | X > 0) MUST be incremented if any backward incompatible changes are introduced to the public API.
+            Major version X (X.y.z | X > 0) MUST be incremented if any backward incompatible changes
+            are introduced to the public API.
             It MAY also include minor and patch level changes.
             Patch and minor versions MUST be reset to 0 when major version is incremented.
         --version-change == minor
-            Minor version Y (x.Y.z | x > 0) MUST be incremented if new, backward compatible functionality is introduced to the public API.
+            Minor version Y (x.Y.z | x > 0) MUST be incremented if new, backward compatible functionality
+            is introduced to the public API.
             It MUST be incremented if any public API functionality is marked as deprecated.
-            It MAY be incremented if substantial new functionality or improvements are introduced within the private code.
+            It MAY be incremented if substantial new functionality or improvements are introduced
+            within the private code.
             It MAY include patch level changes.
             Patch version MUST be reset to 0 when minor version is incremented.
         --version-change == patch
@@ -59,10 +62,9 @@ def main(args: List[str] = None):
         help="""Name of the file that contains the existing build number.
         If it does not exist a new one will be created with the build number starting at 1.""",
     )
-    if args is not None:
-        args = parser.parse_args(args)
-    else:
-        args = parser.parse_args()
+
+    args = parser.parse_args(args) if args is not None else parser.parse_args()
+
     if os.path.exists("VERSION") is True:
         with open("VERSION", "rt", encoding="ascii") as fp:
             version_number = fp.read()
