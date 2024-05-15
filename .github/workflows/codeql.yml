@@ -86,11 +86,11 @@ jobs:
         sudo apt install protobuf-compiler libprotobuf-dev
         SCRIPT_DIR=.
         BUILD_DIR="${SCRIPT_DIR:?}"/build
-        CHAKRA_ET_DIR="${SCRIPT_DIR:?}"/et_def
+        CHAKRA_ET_DIR="${SCRIPT_DIR:?}"/schema/protobuf
         protoc et_def.proto \
           --proto_path="${CHAKRA_ET_DIR:?}" \
           --cpp_out="${CHAKRA_ET_DIR:?}"
-        g++ -shared -fPIC -Wall  et_feeder/et_feeder.cpp et_feeder/et_feeder_node.cpp third_party/utils/protoio.cc et_def/et_def.pb.cc -o libfeeder.so -lprotobuf -I .
+        g++ -shared -fPIC -Wall  src/feeder/et_feeder.cpp src/feeder/et_feeder_node.cpp src/third_party/utils/protoio.cc schema/protobuf/et_def.pb.cc -o libfeeder.so -lprotobuf -I .
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v3
