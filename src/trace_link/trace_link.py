@@ -7,14 +7,12 @@ def main() -> None:
     """
     Main function to execute the trace linking process.
 
-    For more detailed steps on collecting traces and converting them to Chakra
-    traces, visit the guide at:
+    For more detailed steps on collecting traces and converting them to Chakra traces, visit the guide at:
     https://github.com/mlcommons/chakra/wiki/Chakra-Execution-Trace-Collection-%E2%80%90-A-Comprehensive-Guide-on-Merging-PyTorch-and-Kineto-Traces
     """
     parser = argparse.ArgumentParser(
-        description="Link PyTorch execution trace with Kineto trace "
-        "to produce Chakra traces. For more information, "
-        "see the guide at https://github.com/mlcommons/chakra/wiki/Chakra-Execution-Trace-Collection-%E2%80%90-A-Comprehensive-Guide-on-Merging-PyTorch-and-Kineto-Traces"
+        description="Link PyTorch execution trace with Kineto trace to produce Chakra traces."
+        "For more information, see the guide at https://github.com/mlcommons/chakra/wiki/Chakra-Execution-Trace-Collection-%E2%80%90-A-Comprehensive-Guide-on-Merging-PyTorch-and-Kineto-Traces"
     )
     parser.add_argument(
         "--pytorch-et-file",
