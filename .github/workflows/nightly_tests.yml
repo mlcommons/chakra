@@ -1,0 +1,38 @@
+name: Nightly Tests
+
+on:
+  schedule:
+    # Runs at 2 AM UTC every day
+    - cron: '0 2 * * *'
+
+jobs:
+  nightly-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v2
+
+      - name: Setup Python Environment
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.10.14'
+
+      - name: Install Chakra
+        run: |
+          pip install .
+
+      - name: Install PARAM
+        run: |
+          git clone https://github.com/facebookresearch/param.git
+          cd param/train/compute/python/
+          git checkout c83ce8429110a86549c40fec5a01acbd9fbd54a4
+          pip install .
+
+      - name: Install Dependencies
+        run: |
+          pip install -r requirements-dev.txt
+
+      - name: Run Unit Tests
+        run: |
+          python -m pytest -vv tests
