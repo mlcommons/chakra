@@ -1,13 +1,15 @@
 from typing import Any, Dict, Optional
 
-from param_bench.train.compute.python.tools.execution_trace import (
-    Node as PyTorchOperator,
-)
+from param_bench.train.compute.python.tools.execution_trace import Node as PyTorchOperator
 
 
 class KinetoOperator:
     """
-    Represents a single operator extracted from the Kineto trace.
+    Represents a single operator in a Kineto trace by default, with fields primarily sourced
+    from the Kineto traces. In addition to the default fields from Kineto traces, additional
+    fields have been introduced for postprocessing purposes. These additional fields facilitate
+    the correlation of PyTorch operators and the enforcement of dependencies among them,
+    enhancing trace analysis and utility.
 
     Attributes:
         op_dict (Dict[str, Any]): Dictionary containing the operator data.
@@ -38,31 +40,38 @@ class KinetoOperator:
             kineto_op (Dict[str, Any]): The dictionary representing the
                                         operator data.
         """
-        self.op_dict = kineto_op
-        self.category = kineto_op.get("cat", "")
-        self.name = kineto_op.get("name", "")
-        self.phase = kineto_op.get("ph")
-        self.inclusive_dur = kineto_op.get("dur", 0)
-        self.exclusive_dur = kineto_op.get("dur", 0)
-        self.timestamp = kineto_op.get("ts", 0)
-        self.external_id = ""
-        self.ev_idx = ""
-        self.tid = kineto_op.get("tid", 0)
+        self.op_dict: Dict[str, Any] = kineto_op
+        self.category: str = kineto_op.get("cat", "")
+        self.name: str = kineto_op.get("name", "")
+        self.phase: Optional[str] = kineto_op.get("ph")
+        self.inclusive_dur: int = kineto_op.get("dur", 0)
+        self.exclusive_dur: int = kineto_op.get("dur", 0)
+        self.timestamp: int = kineto_op.get("ts", 0)
+        self.external_id: str = kineto_op.get("args", {}).get("External id", "")
+        self.ev_idx: str = kineto_op.get("args", {}).get("Ev Idx", "")
+        self.tid: int = kineto_op.get("tid", 0)
         self.pytorch_op: Optional[PyTorchOperator] = None
-        self.parent_pytorch_op_id = None
+        self.parent_pytorch_op_id: Optional[int] = None
         self.inter_thread_dep: Optional[int] = None
-        self.stream: Optional[int] = None
-        self.rf_id: Optional[int] = None
-        self.correlation: int = None
+        self.stream: Optional[int] = kineto_op.get("args", {}).get("stream")
+        self.rf_id: Optional[int] = kineto_op.get("args", {}).get("Record function id")
+        self.correlation: int = kineto_op.get("args", {}).get("correlation", -1)
 
-        if "args" in kineto_op:
-            self.external_id = kineto_op["args"].get("External id")
-            self.ev_idx = kineto_op["args"].get("Ev Idx", "")
-            self.stream = kineto_op["args"].get("stream")
-            if "Record function id" in kineto_op["args"]:
-                self.rf_id = int(kineto_op["args"]["Record function id"])
-            if "correlation" in kineto_op["args"]:
-                self.correlation = int(kineto_op["args"]["correlation"])
+    def __repr__(self) -> str:
+        """
+        Represent the KinetoOperator as a string.
+
+        Returns:
+            str: A string representation of the KinetoOperator.
+        """
+        return (
+            f"KinetoOperator(category={self.category}, name={self.name}, phase={self.phase}, "
+            f"inclusive_dur={self.inclusive_dur}, exclusive_dur={self.exclusive_dur}, "
+            f"timestamp={self.timestamp}, external_id={self.external_id}, ev_idx={self.ev_idx}, "
+            f"tid={self.tid}, parent_pytorch_op_id={self.parent_pytorch_op_id}, "
+            f"inter_thread_dep={self.inter_thread_dep}, stream={self.stream}, rf_id={self.rf_id}, "
+            f"correlation={self.correlation})"
+        )
 
     def is_valid(
         self,
@@ -72,6 +81,12 @@ class KinetoOperator:
     ) -> bool:
         """
         Checks if the operator matches specified filtering criteria.
+
+        Comment (TODO):
+            This is legacy code from a previous implementation. Ideally, we should merge this logic
+            into trace_linker.py. The purpose of is_valid is ambiguous, and it is unclear whether
+            the function is essential. However, we keep it as it is to avoid breaking downstream
+            tools. After properly setting up CI/CD pipelines and testing, we can consider removing it.
 
         Args:
             category (str): The category to check against.
@@ -86,22 +101,4 @@ class KinetoOperator:
             and name_exception not in self.name
             and self.category == category
             and (phase is None or self.phase == phase)
-        )
-
-    def __repr__(self) -> str:
-        """
-        Represent the KinetoOperator as a string.
-
-        Returns:
-            str: A string representation of the KinetoOperator.
-        """
-        return (
-            f"KinetoOperator(category={self.category}, "
-            f"name={self.name}, phase={self.phase}, "
-            f"inclusive_dur={self.inclusive_dur}, "
-            f"exclusive_dur={self.exclusive_dur}, "
-            f"timestamp={self.timestamp}, external_id={self.external_id}, "
-            f"ev_idx={self.ev_idx}, tid={self.tid}, "
-            f"rf_id={self.rf_id}, "
-            f"parent_pytorch_op_id={self.parent_pytorch_op_id})"
         )
