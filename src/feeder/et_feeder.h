@@ -6,8 +6,8 @@
 #include <unordered_set>
 #include <vector>
 
-#include "et_feeder/et_feeder_node.h"
-#include "third_party/utils/protoio.hh"
+#include "src/feeder/et_feeder_node.h"
+#include "src/third_party/utils/protoio.hh"
 
 namespace Chakra {
 struct CompareNodes : public std::binary_function<
