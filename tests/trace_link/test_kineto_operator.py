@@ -13,7 +13,7 @@ def sample_operator_data():
         "dur": 100,
         "ts": 1590000000,
         "tid": 1234,
-        "args": {"External id": "ext123", "Ev Idx": "ev456", "stream": 7, "Record function id": 12, "correlation": 99},
+        "args": {"External id": "123", "Ev Idx": "456", "stream": 7, "Record function id": 12, "correlation": 99},
     }
 
 
@@ -26,8 +26,8 @@ def test_init_kineto_operator(sample_operator_data):
     assert operator.inclusive_dur == 100
     assert operator.exclusive_dur == 100
     assert operator.timestamp == 1590000000
-    assert operator.external_id == "ext123"
-    assert operator.ev_idx == "ev456"
+    assert operator.external_id == 123
+    assert operator.ev_idx == 456
     assert operator.tid == 1234
     assert operator.stream == 7
     assert operator.rf_id == 12
@@ -41,20 +41,9 @@ def test_repr_method(sample_operator_data):
     """Test the __repr__ method output."""
     operator = KinetoOperator(sample_operator_data)
     expected_repr = (
-        "KinetoOperator(category=Kernel, name=cudaLaunchKernel, phase=X, "
-        "inclusive_dur=100, exclusive_dur=100, timestamp=1590000000, external_id=ext123, ev_idx=ev456, "
+        "KinetoOperator(id=None, category=Kernel, name=cudaLaunchKernel, phase=X, "
+        "inclusive_dur=100, exclusive_dur=100, timestamp=1590000000, external_id=123, ev_idx=456, "
         "tid=1234, parent_pytorch_op_id=None, inter_thread_dep=None, stream=7, rf_id=12, "
         "correlation=99)"
     )
     assert repr(operator) == expected_repr
-
-
-def test_is_valid_method(sample_operator_data):
-    """Test the is_valid method under various conditions."""
-    operator = KinetoOperator(sample_operator_data)
-    assert operator.is_valid(category="Kernel")  # Matching category
-    assert not operator.is_valid(category="Memory")  # Non-matching category
-    assert operator.is_valid(category="Kernel", name_exception="cudaMalloc")  # Matching category, name not excluded
-    assert not operator.is_valid(category="Kernel", name_exception="cudaLaunchKernel")  # Name excluded
-    assert operator.is_valid(category="Kernel", phase="X")  # Matching phase
-    assert not operator.is_valid(category="Kernel", phase="B")  # Non-matching phase
