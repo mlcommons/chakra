@@ -1,4 +1,4 @@
-#include "src/feeder/et_feeder_node.h"
+#include "et_feeder_node.h"
 
 using namespace std;
 using namespace Chakra;

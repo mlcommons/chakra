@@ -90,7 +90,7 @@ jobs:
         protoc et_def.proto \
           --proto_path="${CHAKRA_ET_DIR:?}" \
           --cpp_out="${CHAKRA_ET_DIR:?}"
-        g++ -shared -fPIC -Wall  src/feeder/et_feeder.cpp src/feeder/et_feeder_node.cpp src/third_party/utils/protoio.cc schema/protobuf/et_def.pb.cc -o libfeeder.so -lprotobuf -I .
+        g++ -shared -fPIC -Wall  src/feeder/et_feeder.cpp src/feeder/et_feeder_node.cpp src/third_party/utils/protoio.cc schema/protobuf/et_def.pb.cc -o libfeeder.so -lprotobuf -I . -I src/feeder -I src/third_party/utils -I schema/protobuf
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v3

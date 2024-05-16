@@ -4,7 +4,7 @@
 #include <unordered_set>
 #include <vector>
 
-#include "schema/protobuf/et_def.pb.h"
+#include "et_def.pb.h"
 
 namespace Chakra {
 
