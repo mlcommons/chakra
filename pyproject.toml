@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "chakra"
 requires-python = ">=3.7"
-version = "0.0.4"
+dynamic = ["version"]
 readme = "README.md"
 license = {file = "LICENSE.md"}
 authors = [
@@ -63,3 +63,6 @@ exclude = [
 ]
 reportMissingImports = false
 reportAttributeAccessIssue = false
+
+[tool.setuptools.dynamic]
+version = {file = ["VERSION"]}

@@ -1,0 +1,585 @@
+{
+  "definitions": [
+    {
+      "protopath": "et_def:/:et_def.proto",
+      "def": {
+        "enums": [
+          {
+            "name": "NodeType",
+            "enum_fields": [
+              {
+                "name": "INVALID_NODE"
+              },
+              {
+                "name": "METADATA_NODE",
+                "integer": 1
+              },
+              {
+                "name": "MEM_LOAD_NODE",
+                "integer": 2
+              },
+              {
+                "name": "MEM_STORE_NODE",
+                "integer": 3
+              },
+              {
+                "name": "COMP_NODE",
+                "integer": 4
+              },
+              {
+                "name": "COMM_SEND_NODE",
+                "integer": 5
+              },
+              {
+                "name": "COMM_RECV_NODE",
+                "integer": 6
+              },
+              {
+                "name": "COMM_COLL_NODE",
+                "integer": 7
+              }
+            ]
+          },
+          {
+            "name": "CollectiveCommType",
+            "enum_fields": [
+              {
+                "name": "ALL_REDUCE"
+              },
+              {
+                "name": "REDUCE",
+                "integer": 1
+              },
+              {
+                "name": "ALL_GATHER",
+                "integer": 2
+              },
+              {
+                "name": "GATHER",
+                "integer": 3
+              },
+              {
+                "name": "SCATTER",
+                "integer": 4
+              },
+              {
+                "name": "BROADCAST",
+                "integer": 5
+              },
+              {
+                "name": "ALL_TO_ALL",
+                "integer": 6
+              },
+              {
+                "name": "REDUCE_SCATTER",
+                "integer": 7
+              },
+              {
+                "name": "REDUCE_SCATTER_BLOCK",
+                "integer": 8
+              },
+              {
+                "name": "BARRIER",
+                "integer": 9
+              }
+            ]
+          }
+        ],
+        "messages": [
+          {
+            "name": "AttributeProto",
+            "fields": [
+              {
+                "id": 1,
+                "name": "name",
+                "type": "string"
+              },
+              {
+                "id": 2,
+                "name": "doc_string",
+                "type": "string"
+              },
+              {
+                "id": 3,
+                "name": "double_val",
+                "type": "double",
+                "oneof_parent": "value"
+              },
+              {
+                "id": 4,
+                "name": "double_list",
+                "type": "DoubleList",
+                "oneof_parent": "value"
+              },
+              {
+                "id": 5,
+                "name": "float_val",
+                "type": "float",
+                "oneof_parent": "value"
+              },
+              {
+                "id": 6,
+                "name": "float_list",
+                "type": "FloatList",
+                "oneof_parent": "value"
+              },
+              {
+                "id": 7,
+                "name": "int32_val",
+                "type": "int32",
+                "oneof_parent": "value"
+              },
+              {
+                "id": 8,
+                "name": "int32_list",
+                "type": "Int32List",
+                "oneof_parent": "value"
+              },
+              {
+                "id": 9,
+                "name": "int64_val",
+                "type": "int64",
+                "oneof_parent": "value"
+              },
+              {
+                "id": 10,
+                "name": "int64_list",
+                "type": "Int64List",
+                "oneof_parent": "value"
+              },
+              {
+                "id": 11,
+                "name": "uint32_val",
+                "type": "uint32",
+                "oneof_parent": "value"
+              },
+              {
+                "id": 12,
+                "name": "uint32_list",
+                "type": "Uint32List",
+                "oneof_parent": "value"
+              },
+              {
+                "id": 13,
+                "name": "uint64_val",
+                "type": "uint64",
+                "oneof_parent": "value"
+              },
+              {
+                "id": 14,
+                "name": "uint64_list",
+                "type": "Uint64List",
+                "oneof_parent": "value"
+              },
+              {
+                "id": 15,
+                "name": "sint32_val",
+                "type": "sint32",
+                "oneof_parent": "value"
+              },
+              {
+                "id": 16,
+                "name": "sint32_list",
+                "type": "Sint32List",
+                "oneof_parent": "value"
+              },
+              {
+                "id": 17,
+                "name": "sint64_val",
+                "type": "sint64",
+                "oneof_parent": "value"
+              },
+              {
+                "id": 18,
+                "name": "sint64_list",
+                "type": "Sint64List",
+                "oneof_parent": "value"
+              },
+              {
+                "id": 19,
+                "name": "fixed32_val",
+                "type": "fixed32",
+                "oneof_parent": "value"
+              },
+              {
+                "id": 20,
+                "name": "fixed32_list",
+                "type": "Fixed32List",
+                "oneof_parent": "value"
+              },
+              {
+                "id": 21,
+                "name": "fixed64_val",
+                "type": "fixed64",
+                "oneof_parent": "value"
+              },
+              {
+                "id": 22,
+                "name": "fixed64_list",
+                "type": "Fixed64List",
+                "oneof_parent": "value"
+              },
+              {
+                "id": 23,
+                "name": "sfixed32_val",
+                "type": "sfixed32",
+                "oneof_parent": "value"
+              },
+              {
+                "id": 24,
+                "name": "sfixed32_list",
+                "type": "Sfixed32List",
+                "oneof_parent": "value"
+              },
+              {
+                "id": 25,
+                "name": "sfixed64_val",
+                "type": "sfixed64",
+                "oneof_parent": "value"
+              },
+              {
+                "id": 26,
+                "name": "sfixed64_list",
+                "type": "Sfixed64List",
+                "oneof_parent": "value"
+              },
+              {
+                "id": 27,
+                "name": "bool_val",
+                "type": "bool",
+                "oneof_parent": "value"
+              },
+              {
+                "id": 28,
+                "name": "bool_list",
+                "type": "BoolList",
+                "oneof_parent": "value"
+              },
+              {
+                "id": 29,
+                "name": "string_val",
+                "type": "string",
+                "oneof_parent": "value"
+              },
+              {
+                "id": 30,
+                "name": "string_list",
+                "type": "StringList",
+                "oneof_parent": "value"
+              },
+              {
+                "id": 31,
+                "name": "bytes_val",
+                "type": "bytes",
+                "oneof_parent": "value"
+              },
+              {
+                "id": 32,
+                "name": "bytes_list",
+                "type": "BytesList",
+                "oneof_parent": "value"
+              }
+            ]
+          },
+          {
+            "name": "DoubleList",
+            "fields": [
+              {
+                "id": 1,
+                "name": "values",
+                "type": "double",
+                "is_repeated": true
+              }
+            ]
+          },
+          {
+            "name": "FloatList",
+            "fields": [
+              {
+                "id": 1,
+                "name": "values",
+                "type": "float",
+                "is_repeated": true
+              }
+            ]
+          },
+          {
+            "name": "Int32List",
+            "fields": [
+              {
+                "id": 1,
+                "name": "values",
+                "type": "int32",
+                "is_repeated": true
+              }
+            ]
+          },
+          {
+            "name": "Int64List",
+            "fields": [
+              {
+                "id": 1,
+                "name": "values",
+                "type": "int64",
+                "is_repeated": true
+              }
+            ]
+          },
+          {
+            "name": "Uint32List",
+            "fields": [
+              {
+                "id": 1,
+                "name": "values",
+                "type": "uint32",
+                "is_repeated": true
+              }
+            ]
+          },
+          {
+            "name": "Uint64List",
+            "fields": [
+              {
+                "id": 1,
+                "name": "values",
+                "type": "uint64",
+                "is_repeated": true
+              }
+            ]
+          },
+          {
+            "name": "Sint32List",
+            "fields": [
+              {
+                "id": 1,
+                "name": "values",
+                "type": "sint32",
+                "is_repeated": true
+              }
+            ]
+          },
+          {
+            "name": "Sint64List",
+            "fields": [
+              {
+                "id": 1,
+                "name": "values",
+                "type": "sint64",
+                "is_repeated": true
+              }
+            ]
+          },
+          {
+            "name": "Fixed32List",
+            "fields": [
+              {
+                "id": 1,
+                "name": "values",
+                "type": "fixed32",
+                "is_repeated": true
+              }
+            ]
+          },
+          {
+            "name": "Fixed64List",
+            "fields": [
+              {
+                "id": 1,
+                "name": "values",
+                "type": "fixed64",
+                "is_repeated": true
+              }
+            ]
+          },
+          {
+            "name": "Sfixed32List",
+            "fields": [
+              {
+                "id": 1,
+                "name": "values",
+                "type": "sfixed32",
+                "is_repeated": true
+              }
+            ]
+          },
+          {
+            "name": "Sfixed64List",
+            "fields": [
+              {
+                "id": 1,
+                "name": "values",
+                "type": "sfixed64",
+                "is_repeated": true
+              }
+            ]
+          },
+          {
+            "name": "BoolList",
+            "fields": [
+              {
+                "id": 1,
+                "name": "values",
+                "type": "bool",
+                "is_repeated": true
+              }
+            ]
+          },
+          {
+            "name": "StringList",
+            "fields": [
+              {
+                "id": 1,
+                "name": "values",
+                "type": "string",
+                "is_repeated": true
+              }
+            ]
+          },
+          {
+            "name": "BytesList",
+            "fields": [
+              {
+                "id": 1,
+                "name": "values",
+                "type": "bytes",
+                "is_repeated": true
+              }
+            ]
+          },
+          {
+            "name": "GlobalMetadata",
+            "fields": [
+              {
+                "id": 1,
+                "name": "version",
+                "type": "string"
+              },
+              {
+                "id": 2,
+                "name": "attr",
+                "type": "AttributeProto",
+                "is_repeated": true
+              }
+            ]
+          },
+          {
+            "name": "Node",
+            "fields": [
+              {
+                "id": 1,
+                "name": "id",
+                "type": "uint64"
+              },
+              {
+                "id": 2,
+                "name": "name",
+                "type": "string"
+              },
+              {
+                "id": 3,
+                "name": "type",
+                "type": "NodeType"
+              },
+              {
+                "id": 4,
+                "name": "ctrl_deps",
+                "type": "uint64",
+                "is_repeated": true
+              },
+              {
+                "id": 5,
+                "name": "data_deps",
+                "type": "uint64",
+                "is_repeated": true
+              },
+              {
+                "id": 6,
+                "name": "start_time_micros",
+                "type": "uint64"
+              },
+              {
+                "id": 7,
+                "name": "duration_micros",
+                "type": "uint64"
+              },
+              {
+                "id": 8,
+                "name": "inputs",
+                "type": "IOInfo"
+              },
+              {
+                "id": 9,
+                "name": "outputs",
+                "type": "IOInfo"
+              },
+              {
+                "id": 10,
+                "name": "attr",
+                "type": "AttributeProto",
+                "is_repeated": true
+              }
+            ]
+          },
+          {
+            "name": "IOInfo",
+            "fields": [
+              {
+                "id": 1,
+                "name": "values",
+                "type": "string"
+              },
+              {
+                "id": 2,
+                "name": "shapes",
+                "type": "string"
+              },
+              {
+                "id": 3,
+                "name": "types",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "name": "Tensor",
+            "fields": [
+              {
+                "id": 1,
+                "name": "tensor_id",
+                "type": "uint64"
+              },
+              {
+                "id": 2,
+                "name": "storage_id",
+                "type": "uint64"
+              },
+              {
+                "id": 3,
+                "name": "offset",
+                "type": "uint64"
+              },
+              {
+                "id": 4,
+                "name": "num_elem",
+                "type": "uint64"
+              },
+              {
+                "id": 5,
+                "name": "elem_bytes",
+                "type": "uint64"
+              },
+              {
+                "id": 6,
+                "name": "device",
+                "type": "string"
+              }
+            ]
+          }
+        ],
+        "package": {
+          "name": "ChakraProtoMsg"
+        }
+      }
+    }
+  ]
+}

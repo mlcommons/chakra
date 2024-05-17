@@ -1,0 +1,61 @@
+name: Update version and publish release
+on: 
+    push:
+        branches:
+            - main
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v2
+        with:
+          python-version: 3.7
+      - name: Set Up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.20'
+      - name: Install protolock
+        run: |
+          go install github.com/nilslice/protolock/cmd/protolock@latest
+          protolock
+      - name: Check broken compatibility and update version
+        run: |
+            python3 version.py
+            echo "RELEASE_TAG=$(cat VERSION)" >> $GITHUB_ENV
+      - name: Commit changes
+        uses: EndBug/add-and-commit@v9
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          author_name: GitHub Actions
+          author_email: actions@github.com
+          message: Release ${{ env.RELEASE_TAG }}
+          add: "['VERSION', 'proto.lock']"
+          push: "-o ci.skip"
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          release_name: Release ${{ env.RELEASE_TAG }}
+          body: |
+            Release ${{ env.RELEASE_TAG }}
+          draft: false
+          prerelease: false
+      - name: Build wheel
+        run: |
+          pip install --upgrade build
+          python3 -m build
+      - name: Upload Release Asset
+        id: upload-release-asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./dist/chakra-${{ env.RELEASE_TAG }}-py3-none-any.whl
+          asset_name: chakra.whl
+          asset_content_type: application/whl
