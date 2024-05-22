@@ -594,7 +594,7 @@ class TraceLinker:
             return cpu_launcher_op.timestamp + cpu_launcher_op.inclusive_dur
         if kineto_gpu_op.external_id in self.kineto_id_arrow_op_map:
             return self.kineto_id_arrow_op_map[kineto_gpu_op.external_id].timestamp
-        raise RuntimeError(f"No valid timestamp found for GPU operator: {kineto_gpu_op.name}")
+        raise RuntimeError(f"No valid timestamp found for GPU operator: {kineto_gpu_op}")
 
     def find_closest_op(
         self, kineto_gpu_op: KinetoOperator, kineto_ops: List[KinetoOperator], ts: int
