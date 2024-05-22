@@ -1,7 +1,6 @@
 import argparse
 import concurrent.futures
 import os
-import re
 import subprocess
 import tarfile
 
@@ -96,27 +95,27 @@ def validate_log(filename: str, expected_time_us: int, tolerance: float) -> None
     Raises:
         ValueError: If the log does not contain the expected output or is outside the acceptable time range.
     """
-    completion_pattern = re.compile(
-        r"INFO \[\d{2}/\d{2}/\d{4} \d{2}:\d{2}:\d{2} PM\] GPU Node ID \d+ completed at (\d+)us"
-    )
+    last_time = None
     with open(filename, "r") as file:
-        last_time = None
         for line in file:
-            match = completion_pattern.search(line)
-            if match:
-                last_time = int(match.group(1))
+            if "completed at" in line:
+                parts = line.split("completed at")
+                if len(parts) > 1:
+                    time_str = parts[1].strip()
+                    if time_str.endswith("us"):
+                        last_time = int(time_str[:-2])  # Remove 'us' and convert to int
 
-        if last_time is None:
-            raise ValueError(f"No completion time found in {filename}")
+    if last_time is None:
+        raise ValueError(f"No completion time found in {filename}")
 
-        lower_bound = expected_time_us * (1 - tolerance)
-        upper_bound = expected_time_us * (1 + tolerance)
+    lower_bound = expected_time_us * (1 - tolerance)
+    upper_bound = expected_time_us * (1 + tolerance)
 
-        if not lower_bound <= last_time <= upper_bound:
-            raise ValueError(
-                f"Completion time in {filename} is {last_time}us; expected between {lower_bound}us and {upper_bound}us."
-            )
-        print(f"Validation successful for {filename}: {last_time}us is within the acceptable range.")
+    if not lower_bound <= last_time <= upper_bound:
+        raise ValueError(
+            f"Completion time in {filename} is {last_time}us; expected between {lower_bound}us and {upper_bound}us."
+        )
+    print(f"Validation successful for {filename}: {last_time}us is within the acceptable range.")
 
 
 def parse_args():
