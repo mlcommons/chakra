@@ -563,7 +563,7 @@ class TraceLinker:
             f"Found CUDA runtime operation '{kineto_runtime_op.name}' for GPU operator '{kineto_gpu_op.name}'."
         )
 
-        kineto_gpu_op.timestamp = self.get_start_timestamp_for_gpu_op(kineto_gpu_op)
+        kineto_gpu_op.timestamp = kineto_runtime_op.timestamp
 
         # Find the closest CPU operator that precedes the CUDA runtime operation
         parent_cpu_op = self.find_closest_op(kineto_gpu_op, self.sorted_kineto_cpu_ops, kineto_runtime_op.timestamp)
@@ -575,26 +575,6 @@ class TraceLinker:
             )
 
         return parent_cpu_op
-
-    def get_start_timestamp_for_gpu_op(self, kineto_gpu_op: KinetoOperator) -> int:
-        """
-        Determines the start timestamp for a GPU operator from various sources.
-
-        Args:
-            kineto_gpu_op (KinetoOperator): The GPU operator.
-
-        Returns:
-            int: The start timestamp.
-
-        Raises:
-            RuntimeError: If no valid timestamp is found for the GPU operator.
-        """
-        if kineto_gpu_op.external_id in self.kineto_id_cuda_launch_op_map:
-            cpu_launcher_op = self.kineto_id_cuda_launch_op_map[kineto_gpu_op.external_id]
-            return cpu_launcher_op.timestamp + cpu_launcher_op.inclusive_dur
-        if kineto_gpu_op.external_id in self.kineto_id_arrow_op_map:
-            return self.kineto_id_arrow_op_map[kineto_gpu_op.external_id].timestamp
-        raise RuntimeError(f"No valid timestamp found for GPU operator: {kineto_gpu_op}")
 
     def find_closest_op(
         self, kineto_gpu_op: KinetoOperator, kineto_ops: List[KinetoOperator], ts: int
