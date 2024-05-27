@@ -9,11 +9,16 @@ jobs:
     steps:
     - name: Checkout Code
       uses: actions/checkout@v4
-    - name: Build
+    - name: Install protoc
       run: |
         sudo apt update
         sudo apt install protobuf-compiler libprotobuf-dev
-        sudo apt -y install googletest-tools
+    - name: Install Google Test Framework
+      run: |
+        sudo apt update
+        sudo apt install libgtest-dev
+    - name: Build
+      run: |
         SCRIPT_DIR=.
         BUILD_DIR="${SCRIPT_DIR:?}"/build
         CHAKRA_ET_DIR="${SCRIPT_DIR:?}"/schema/protobuf
