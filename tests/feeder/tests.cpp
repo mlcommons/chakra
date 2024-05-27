@@ -20,7 +20,7 @@ protected:
 };
 
 TEST_F(ETFeederTest, ConstructorNodeIDTest) {
-    SetUp("test/data/chakra.0.et");
+    SetUp("tests/data/chakra.0.et");
     std::shared_ptr<Chakra::ETFeederNode> node = trace->getNextIssuableNode();
     uint64_t firstNodeID = node->id(); 
     ASSERT_EQ(firstNodeID, 216);
@@ -31,7 +31,7 @@ TEST_F(ETFeederTest, ConstructorNodeIDTest) {
 }
 
 TEST_F(ETFeederTest, ConstructorNodeValuesTest) {
-    SetUp("test/data/chakra.0.et");
+    SetUp("tests/data/chakra.0.et");
     std::shared_ptr<Chakra::ETFeederNode> node = trace->getNextIssuableNode();
     ChakraProtoMsg::NodeType firstNodeType = node->type(); 
     ASSERT_EQ(firstNodeType, ChakraProtoMsg::COMP_NODE);
@@ -51,7 +51,7 @@ TEST_F(ETFeederTest, ConstructorNodeValuesTest) {
 }
 
 TEST_F(ETFeederTest, ConstructorETFeederTest) {
-    SetUp("test/data/chakra.0.et");
+    SetUp("tests/data/chakra.0.et");
     std::shared_ptr<Chakra::ETFeederNode> node = trace->getNextIssuableNode();
     std::vector<std::shared_ptr<Chakra::ETFeederNode>> children = node->getChildren(); 
     ASSERT_EQ(children[0]->id(), 217);
@@ -60,7 +60,7 @@ TEST_F(ETFeederTest, ConstructorETFeederTest) {
 }
 
 TEST_F(ETFeederTest, RemoveTest) {
-    SetUp("test/data/chakra.0.et");
+    SetUp("tests/data/chakra.0.et");
     std::shared_ptr<Chakra::ETFeederNode> node = trace->lookupNode(216);
     ASSERT_EQ(node->id(), 216);
     trace->removeNode(216);
@@ -87,7 +87,7 @@ TEST_F(ETFeederTest, RemoveAndGetNextTest) {
 }
 
 TEST_F(ETFeederTest, FreeChildrenTest) {
-    SetUp("test/data/chakra.0.et");
+    SetUp("tests/data/chakra.0.et");
     std::shared_ptr<Chakra::ETFeederNode> node = trace->lookupNode(216);
     ASSERT_EQ(node->id(), 216);
     trace->freeChildrenNodes(216);
@@ -107,7 +107,7 @@ TEST_F(ETFeederTest, HasNodesToIssueTest) {
 }
 
 TEST_F(ETFeederTest, PushBackIssuableNodeTest) {
-    SetUp("test/data/chakra.0.et");
+    SetUp("tests/data/chakra.0.et");
     std::shared_ptr<Chakra::ETFeederNode> node;
     trace->pushBackIssuableNode(217);
     node = trace->getNextIssuableNode();
@@ -117,7 +117,7 @@ TEST_F(ETFeederTest, PushBackIssuableNodeTest) {
 }
 
 TEST_F(ETFeederTest, AddNodeTest) {
-    SetUp("test/data/chakra.0.et");
+    SetUp("tests/data/chakra.0.et");
     std::shared_ptr<Chakra::ETFeederNode> node;
     node = trace->lookupNode(216);
     trace->removeNode(216);
@@ -128,7 +128,7 @@ TEST_F(ETFeederTest, AddNodeTest) {
 }
 
 TEST_F(ETFeederTest, NodeGetChildrenTest) {
-    SetUp("test/data/chakra.0.et");
+    SetUp("tests/data/chakra.0.et");
     std::shared_ptr<Chakra::ETFeederNode> node;
     node = trace->lookupNode(216);
     std::vector<std::shared_ptr<Chakra::ETFeederNode>> children = node->getChildren();
