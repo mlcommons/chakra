@@ -48,7 +48,23 @@ exclude = [
 ]
 
 [tool.ruff.lint]
-select = ["I", "B", "E", "F", "SIM", "W", "C90"]
+select = ["I", "B", "E", "D", "F", "SIM", "W", "C90", "EXE"]
+ignore = [
+    "D407", # Missing dashed underline after section
+    "D203", # conflicts with D211
+    "D212", # conflicts with D213
+    "D413", # Missing blank line after last section
+
+    # TODO: Remove these once we have docstrings
+    "D100", # Missing docstring in public module
+    "D102", # Missing docstring in public method
+    "D103", # Missing docstring in public function
+    "D104", # Missing docstring in public package
+    "D107", # Missing docstring in `__init__`
+]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/*" = ["D"]
 
 [tool.ruff.format]
 indent-style = "space"
