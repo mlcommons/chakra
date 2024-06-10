@@ -5,7 +5,7 @@ from .trace_linker import TraceLinker
 
 def main() -> None:
     """
-    Main function to execute the trace linking process.
+    Execute the trace linking process.
 
     For more detailed steps on collecting traces and converting them to Chakra traces, visit the guide at:
     https://github.com/mlcommons/chakra/wiki/Chakra-Execution-Trace-Collection-%E2%80%90-A-Comprehensive-Guide-on-Merging-PyTorch-and-Kineto-Traces

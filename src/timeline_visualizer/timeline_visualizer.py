@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import argparse
 import json
 import logging
@@ -10,6 +8,16 @@ from typing import Any, Dict, List, Tuple
 
 
 class TID(IntEnum):
+    """
+    Enum representing the types of TID (Thread ID) used for classifying different nodes in a trace.
+
+    Attributes
+        LOCAL_MEMORY (int): Represents local memory nodes.
+        REMOTE_MEMORY (int): Represents remote memory nodes.
+        COMP (int): Represents compute nodes.
+        COMM (int): Represents communication nodes.
+    """
+
     LOCAL_MEMORY = 1
     REMOTE_MEMORY = 2
     COMP = 3
