@@ -211,7 +211,9 @@ def test_process_dependent_gpu_ops(trace_linker, orig_op_id, cpu_op, kineto_gpu_
     trace_linker.id_assigner.generate_new_id = MagicMock(side_effect=expected_ids)
 
     # Call the method
-    updated_gpu_ops = trace_linker.process_dependent_gpu_ops(cpu_op, orig_op_id)
+    updated_gpu_ops = trace_linker.process_dependent_gpu_ops(
+        cpu_op, orig_op_id, trace_linker.pytorch_op_id_to_kineto_ops_map
+    )
 
     # Restore the original generate_new_id method
     trace_linker.id_assigner.generate_new_id = original_generate_new_id
@@ -237,10 +239,24 @@ def test_process_dependent_gpu_ops(trace_linker, orig_op_id, cpu_op, kineto_gpu_
 @patch("json.load")
 def test_construct_et_plus_data(mock_json_load, mock_open, mock_process_op_and_dependents, trace_linker):
     mock_json_load.return_value = {"nodes": [{"id": 1}, {"id": 2}]}
-    mock_process_op_and_dependents.side_effect = lambda x: [{"id": x["id"] + 2}]
+    mock_process_op_and_dependents.side_effect = lambda op, *args: [{"id": op["id"] + 2}]
 
-    trace_linker.construct_et_plus_data()
-    assert trace_linker.pytorch_et_plus_data["nodes"] == [{"id": 1}, {"id": 2}, {"id": 3}, {"id": 4}]
+    pytorch_op_id_to_kineto_ops_map = {}
+    pytorch_op_id_to_inclusive_dur_map = {}
+    pytorch_op_id_to_exclusive_dur_map = {}
+    pytorch_op_id_to_timestamp_map = {}
+    pytorch_op_id_to_inter_thread_dep_map = {}
+
+    result = trace_linker.construct_et_plus_data(
+        "path/to/pytorch_et.json",
+        pytorch_op_id_to_kineto_ops_map,
+        pytorch_op_id_to_inclusive_dur_map,
+        pytorch_op_id_to_exclusive_dur_map,
+        pytorch_op_id_to_timestamp_map,
+        pytorch_op_id_to_inter_thread_dep_map,
+    )
+
+    assert result["nodes"] == [{"id": 1}, {"id": 2}, {"id": 3}, {"id": 4}]
 
 
 @patch("builtins.open", new_callable=MagicMock)
