@@ -31,19 +31,7 @@ class PyTorchConverter:
     Attributes:
         input_filename (str): Input file name containing PyTorch execution trace.
         output_filename (str): Output file name for the converted Chakra trace.
-        chakra_et(IO[bytes]): File handle for the Chakra execution trace output file.
         logger (logging.Logger): Logger for logging information during conversion.
-        pytorch_schema (Optional[str]): Schema info of the PyTorch trace.
-        pytorch_pid (Optional[int]): Process ID associated with the PyTorch trace.
-        pytorch_time (Optional[str]): Time info of the PyTorch trace.
-        pytorch_start_ts (Optional[int]): Start timestamp of the PyTorch trace.
-        pytorch_finish_ts (Optional[int]): Finish timestamp of the PyTorch trace.
-        pytorch_nodes (Dict[int, Any]): Map of PyTorch node IDs to nodes.
-        pytorch_root_nids (List[int]): List of root node IDs in the PyTorch trace.
-        pytorch_cpu_node_id_gpu_node_map (Dict[int, List[int]]): Map of PyTorch CPU node IDs to GPU node IDs.
-        chakra_nodes (Dict[int, Any]): Map of Chakra node IDs to nodes.
-        parent_to_children_map (Dict[int, List[int]]): Map of Chakra parent node IDs to their child node IDs. Used to
-            simulate execution based on data dependencies
     """
 
     def __init__(self, input_filename: str, output_filename: str, logger: logging.Logger) -> None:
@@ -58,44 +46,42 @@ class PyTorchConverter:
         """
         self.input_filename = input_filename
         self.output_filename = output_filename
-        self.chakra_et: Optional[IO[bytes]] = None
         self.logger = logger
-        self.initialize_attributes()
-
-    def initialize_attributes(self) -> None:
-        """
-        Initializes attributes related to the PyTorch execution trace.
-        """
-        self.pytorch_schema = None
-        self.pytorch_pid = None
-        self.pytorch_time = None
-        self.pytorch_start_ts = None
-        self.pytorch_finish_ts = None
-        self.pytorch_nodes = {}
-        self.pytorch_root_nids = []
-        self.pytorch_cpu_node_id_gpu_node_map = {}
-        self.chakra_nodes = {}
-        self.parent_to_children_map = {}
 
     def convert(self) -> None:
         """
-        Converts PyTorch execution traces into the Chakra format. Orchestrates
-        the conversion process including trace loading, trace opening, phase
-        end node construction, node splitting, and node conversion.
+        Converts PyTorch execution traces into the Chakra format. Orchestrates the conversion process including trace
+        loading, trace opening, phase end node construction, node splitting, and node conversion.
         """
         pytorch_et_data = self.load_pytorch_execution_traces()
-        self._parse_and_instantiate_nodes(pytorch_et_data)
-        self.open_chakra_execution_trace()
-        self.convert_nodes()
-        root_nodes = [node for node in self.chakra_nodes.values() if self.is_root_node(node)]
+        (
+            pytorch_schema,
+            pytorch_pid,
+            pytorch_time,
+            pytorch_start_ts,
+            pytorch_finish_ts,
+            pytorch_nodes,
+        ) = self._parse_and_instantiate_nodes(pytorch_et_data)
+        chakra_et = self.open_chakra_execution_trace(self.output_filename)
+        chakra_nodes = {}
+        self.convert_nodes(pytorch_nodes, chakra_nodes)
+        root_nodes = [node for node in chakra_nodes.values() if self.is_root_node(node)]
         for root_node in root_nodes:
-            self.convert_ctrl_dep_to_data_dep(root_node)
-        self.remove_dangling_nodes()
-        self.update_parent_to_children_map()
-        self.identify_cyclic_dependencies()
-        self.write_chakra_et()
-        self.close_chakra_execution_trace()
-        self.simulate_execution()
+            self.convert_ctrl_dep_to_data_dep(pytorch_nodes, chakra_nodes, root_node)
+        chakra_nodes = self.remove_dangling_nodes(chakra_nodes)
+        parent_to_children_map = self.update_parent_to_children_map(chakra_nodes)
+        self.identify_cyclic_dependencies(chakra_nodes)
+        self.write_chakra_et(
+            chakra_et,
+            pytorch_schema,
+            pytorch_pid,
+            pytorch_time,
+            pytorch_start_ts,
+            pytorch_finish_ts,
+            chakra_nodes,
+        )
+        self.close_chakra_execution_trace(chakra_et)
+        self.simulate_execution(chakra_nodes, pytorch_nodes, parent_to_children_map)
 
     def load_pytorch_execution_traces(self) -> Dict:
         """
@@ -118,7 +104,9 @@ class PyTorchConverter:
             self.logger.error(f"Error opening file {self.input_filename}: {e}")
             raise Exception(f"Could not open file {self.input_filename}") from e
 
-    def _parse_and_instantiate_nodes(self, pytorch_et_data: Dict) -> None:
+    def _parse_and_instantiate_nodes(
+        self, pytorch_et_data: Dict
+    ) -> Tuple[str, int, str, int, int, Dict[int, PyTorchNode]]:
         """
         Parses and instantiates PyTorch nodes from execution trace data.
 
@@ -126,28 +114,36 @@ class PyTorchConverter:
             pytorch_et_data (Dict): The execution trace data.
 
         Extracts node information, sorts nodes by timestamp, and establishes parent-child relationships among them.
+
+        Returns:
+            Tuple: A tuple containing PyTorch schema, PID, time, start timestamp, finish timestamp, and dictionary of
+                PyTorch node objects.
         """
         self.logger.info("Extracting and processing node data from execution trace.")
-        self.pytorch_schema = pytorch_et_data["schema"]
-        self.pytorch_pid = pytorch_et_data["pid"]
-        self.pytorch_time = pytorch_et_data["time"]
-        self.pytorch_start_ts = pytorch_et_data["start_ts"]
-        self.pytorch_finish_ts = pytorch_et_data["finish_ts"]
+        pytorch_schema = pytorch_et_data["schema"]
+        pytorch_pid = pytorch_et_data["pid"]
+        pytorch_time = pytorch_et_data["time"]
+        pytorch_start_ts = pytorch_et_data["start_ts"]
+        pytorch_finish_ts = pytorch_et_data["finish_ts"]
 
         pytorch_nodes = pytorch_et_data["nodes"]
-        pytorch_node_objects = {
-            node_data["id"]: PyTorchNode(self.pytorch_schema, node_data) for node_data in pytorch_nodes
-        }
-        self._establish_parent_child_relationships(pytorch_node_objects)
+        pytorch_node_objects = {node_data["id"]: PyTorchNode(pytorch_schema, node_data) for node_data in pytorch_nodes}
+        pytorch_root_nids = []
+        pytorch_node_objects = self._establish_parent_child_relationships(pytorch_node_objects, pytorch_root_nids)
+        return pytorch_schema, pytorch_pid, pytorch_time, pytorch_start_ts, pytorch_finish_ts, pytorch_node_objects
 
-    def _establish_parent_child_relationships(self, pytorch_node_objects: Dict[int, PyTorchNode]) -> None:
+    def _establish_parent_child_relationships(
+        self, pytorch_node_objects: Dict[int, PyTorchNode], pytorch_root_nids: List[int]
+    ) -> Dict[int, PyTorchNode]:
         """
-        Establishes parent-child relationships among PyTorch nodes and counts
-        the node types.
+        Establishes parent-child relationships among PyTorch nodes and counts the node types.
 
         Args:
-            pytorch_node_objects (Dict[int, PyTorchNode]): Dictionary of PyTorch
-            node objects.
+            pytorch_node_objects (Dict[int, PyTorchNode]): Dictionary of PyTorch node objects.
+            pytorch_root_nids (List[int]): List to store root node IDs.
+
+        Returns:
+            Dict[int, PyTorchNode]: Dictionary of PyTorch nodes with established relationships.
         """
         node_type_counts = self._initialize_node_type_counts()
 
@@ -157,7 +153,7 @@ class PyTorchConverter:
                 self._process_parent_child_relationships(pytorch_node_objects, pytorch_node, parent_id)
 
             if self._is_root_node(pytorch_node):
-                self.pytorch_root_nids.append(pytorch_node.id)
+                pytorch_root_nids.append(pytorch_node.id)
                 node_type_counts["root_op"] += 1
 
             self._update_node_type_counts(node_type_counts, pytorch_node)
@@ -165,7 +161,7 @@ class PyTorchConverter:
         for node_type, count in node_type_counts.items():
             self.logger.info(f"{node_type}: {count}")
 
-        self.pytorch_nodes = pytorch_node_objects
+        return pytorch_node_objects
 
     def _initialize_node_type_counts(self) -> Dict[str, int]:
         """
@@ -239,37 +235,44 @@ class PyTorchConverter:
         if pytorch_node.is_nccl_op():
             node_type_counts["nccl_op"] += 1
 
-    def open_chakra_execution_trace(self) -> None:
+    def open_chakra_execution_trace(self, output_filename: str) -> IO[bytes]:
         """
         Opens the Chakra execution trace file for writing.
 
+        Args:
+            output_filename (str): Name of the output file for the converted Chakra trace.
+
         Raises:
             Exception: If there is an IOError in opening the file.
+
+        Returns:
+            IO[bytes]: File handle for the Chakra execution trace output file.
         """
-        self.logger.info(f"Opening Chakra execution trace file: {self.output_filename}")
+        self.logger.info(f"Opening Chakra execution trace file: {output_filename}")
         try:
-            self.chakra_et = open(self.output_filename, "wb")  # noqa: SIM115
+            chakra_et = open(output_filename, "wb")  # noqa: SIM115
+            return chakra_et
         except IOError as e:
-            err_msg = f"Error opening file {self.output_filename}: {e}"
+            err_msg = f"Error opening file {output_filename}: {e}"
             self.logger.error(err_msg)
             raise Exception(err_msg) from e
 
-    def convert_nodes(self) -> None:
+    def convert_nodes(self, pytorch_nodes: Dict[int, PyTorchNode], chakra_nodes: Dict[int, ChakraNode]) -> None:
         """
         Converts PyTorch nodes to Chakra nodes.
 
         This method traverses through the PyTorch nodes and converts them to Chakra nodes. It also handles special
         cases for GPU nodes and collective communication types.
         """
-        for _, pytorch_node in self.pytorch_nodes.items():
+        for _, pytorch_node in pytorch_nodes.items():
             if (pytorch_node.get_op_type() == PyTorchNodeType.CPU_OP) or (
                 pytorch_node.get_op_type() == PyTorchNodeType.LABEL
             ):
-                chakra_node = self.convert_to_chakra_node(pytorch_node)
-                self.chakra_nodes[chakra_node.id] = chakra_node
+                chakra_node = self.convert_to_chakra_node(chakra_nodes, pytorch_node)
+                chakra_nodes[chakra_node.id] = chakra_node
 
                 for pytorch_gpu_node in pytorch_node.gpu_children:
-                    chakra_gpu_node = self.convert_to_chakra_node(pytorch_gpu_node)
+                    chakra_gpu_node = self.convert_to_chakra_node(chakra_nodes, pytorch_gpu_node)
 
                     if chakra_node.type == COMM_COLL_NODE:
                         collective_comm_type = self.get_collective_comm_type(pytorch_gpu_node.name)
@@ -280,13 +283,14 @@ class PyTorchConverter:
                             ]
                         )
 
-                    self.chakra_nodes[chakra_gpu_node.id] = chakra_gpu_node
+                    chakra_nodes[chakra_gpu_node.id] = chakra_gpu_node
 
-    def convert_to_chakra_node(self, pytorch_node: PyTorchNode) -> ChakraNode:
+    def convert_to_chakra_node(self, chakra_nodes: Dict[int, ChakraNode], pytorch_node: PyTorchNode) -> ChakraNode:
         """
         Converts a PyTorchNode to a ChakraNode.
 
         Args:
+            chakra_nodes (Dict[int, ChakraNode]): Dictionary of existing Chakra nodes.
             pytorch_node (PyTorchNode): The PyTorch node to convert.
 
         Returns:
@@ -297,7 +301,7 @@ class PyTorchConverter:
         chakra_node.id = pytorch_node.id
         chakra_node.name = pytorch_node.name
         chakra_node.type = self.get_chakra_node_type_from_pytorch_node(pytorch_node)
-        if pytorch_node.parent in self.chakra_nodes:
+        if pytorch_node.parent in chakra_nodes:
             chakra_node.ctrl_deps.append(pytorch_node.parent)
         chakra_node.duration_micros = int(pytorch_node.exclusive_dur)
         chakra_node.inputs.values = str(pytorch_node.inputs["values"])
@@ -385,7 +389,12 @@ class PyTorchConverter:
         """
         return node.name in ["[pytorch|profiler|execution_graph|thread]", "[pytorch|profiler|execution_trace|thread]"]
 
-    def convert_ctrl_dep_to_data_dep(self, chakra_node: ChakraNode) -> None:  # noqa: C901
+    def convert_ctrl_dep_to_data_dep(  # noqa: C901
+        self,
+        pytorch_nodes: Dict[int, PyTorchNode],
+        chakra_nodes: Dict[int, ChakraNode],
+        chakra_node: ChakraNode,
+    ) -> None:
         """
         Converts control dependencies to data dependencies in Chakra nodes.
 
@@ -421,6 +430,8 @@ class PyTorchConverter:
         ensuring accurate modeling and analysis of concurrent operations within the Chakra framework.
 
         Args:
+            pytorch_nodes (Dict[int, PyTorchNode]): Dictionary of PyTorch nodes.
+            chakra_nodes (Dict[int, ChakraNode]): Dictionary of Chakra nodes.
             chakra_node (ChakraNode): The starting node for the traversal and dependency processing.
         """
         visited: Set[int] = set()
@@ -434,7 +445,7 @@ class PyTorchConverter:
                 continue
 
             visited.add(current_node.id)
-            pytorch_node = self.pytorch_nodes.get(current_node.id)
+            pytorch_node = pytorch_nodes.get(current_node.id)
             if not pytorch_node:
                 continue
 
@@ -466,44 +477,54 @@ class PyTorchConverter:
 
             children_chakra_ids = [child.id for child in pytorch_node.children]
             for child_chakra_id in sorted(children_chakra_ids, reverse=True):
-                child_chakra_node = self.chakra_nodes.get(child_chakra_id)
+                child_chakra_node = chakra_nodes.get(child_chakra_id)
                 if child_chakra_node and child_chakra_node.id not in visited:
                     stack.append(child_chakra_node)
 
-    def remove_dangling_nodes(self) -> None:
+    def remove_dangling_nodes(self, chakra_nodes: Dict[int, ChakraNode]) -> Dict[int, ChakraNode]:
         """
         Removes any dangling nodes from the chakra_nodes dictionary.
 
         A node is considered dangling if it has no parents and no children.
+
+        Args:
+            chakra_nodes (Dict[int, ChakraNode]): Dictionary of Chakra nodes.
+
+        Returns:
+            Dict[int, ChakraNode]: Updated dictionary of Chakra nodes with dangling nodes removed.
         """
         parent_ids = set()
-        for node in self.chakra_nodes.values():
+        for node in chakra_nodes.values():
             parent_ids.update(node.data_deps)
 
         dangling_nodes = [
-            node_id for node_id, node in self.chakra_nodes.items() if node_id not in parent_ids and not node.data_deps
+            node_id for node_id, node in chakra_nodes.items() if node_id not in parent_ids and not node.data_deps
         ]
         for node_id in dangling_nodes:
-            del self.chakra_nodes[node_id]
+            del chakra_nodes[node_id]
 
         if dangling_nodes:
             self.logger.info(f"Identified and removed {len(dangling_nodes)} dangling nodes:")
             for node_id in dangling_nodes:
                 self.logger.info(f" - Node ID {node_id}")
 
-    def update_parent_to_children_map(self) -> None:
+        return chakra_nodes
+
+    def update_parent_to_children_map(self, chakra_nodes: Dict[int, ChakraNode]) -> Dict[int, List[int]]:
         """
         Updates the parent_to_children_map based on the data dependencies of each node.
 
         This map is used to efficiently simulate node execution based on data dependencies.
         """
-        for node_id, node in self.chakra_nodes.items():
+        parent_to_children_map = {}
+        for node_id, node in chakra_nodes.items():
             for dep_id in node.data_deps:
-                if dep_id not in self.parent_to_children_map:
-                    self.parent_to_children_map[dep_id] = []
-                self.parent_to_children_map[dep_id].append(node_id)
+                if dep_id not in parent_to_children_map:
+                    parent_to_children_map[dep_id] = []
+                parent_to_children_map[dep_id].append(node_id)
+        return parent_to_children_map
 
-    def identify_cyclic_dependencies(self) -> None:
+    def identify_cyclic_dependencies(self, chakra_nodes: Dict[int, ChakraNode]) -> None:
         """
         Identifies if there are any cyclic dependencies among Chakra nodes.
 
@@ -529,7 +550,7 @@ class PyTorchConverter:
                 bool: True if a cycle is detected, False otherwise.
             """
             if node_id in stack:
-                cycle_nodes = " -> ".join([self.chakra_nodes[n].name for n in path + [node_id]])
+                cycle_nodes = " -> ".join([chakra_nodes[n].name for n in path + [node_id]])
                 self.logger.error(f"Cyclic dependency detected: {cycle_nodes}")
                 return True
             if node_id in visited:
@@ -538,18 +559,27 @@ class PyTorchConverter:
             visited.add(node_id)
             stack.add(node_id)
             path.append(node_id)
-            for child_id in self.chakra_nodes[node_id].data_deps:
+            for child_id in chakra_nodes[node_id].data_deps:
                 if dfs(child_id, path.copy()):
                     return True
             stack.remove(node_id)
             path.pop()
             return False
 
-        for node_id in self.chakra_nodes:
+        for node_id in chakra_nodes:
             if dfs(node_id, []):
-                raise Exception(f"Cyclic dependency detected starting from node {self.chakra_nodes[node_id].name}")
+                raise Exception(f"Cyclic dependency detected starting from node {chakra_nodes[node_id].name}")
 
-    def write_chakra_et(self) -> None:
+    def write_chakra_et(
+        self,
+        chakra_et: IO[bytes],
+        pytorch_schema: str,
+        pytorch_pid: int,
+        pytorch_time: str,
+        pytorch_start_ts: int,
+        pytorch_finish_ts: int,
+        chakra_nodes: Dict[int, ChakraNode],
+    ) -> None:
         """
         Writes the Chakra execution trace by encoding global metadata and nodes.
 
@@ -557,11 +587,21 @@ class PyTorchConverter:
         complete execution trace.
         """
         self.logger.info("Writing Chakra execution trace.")
-        self._write_global_metadata()
-        self._encode_and_write_nodes()
+        self._write_global_metadata(
+            chakra_et, pytorch_schema, pytorch_pid, pytorch_time, pytorch_start_ts, pytorch_finish_ts
+        )
+        self._encode_and_write_nodes(chakra_et, chakra_nodes)
         self.logger.info("Chakra execution trace writing completed.")
 
-    def _write_global_metadata(self) -> None:
+    def _write_global_metadata(
+        self,
+        chakra_et: IO[bytes],
+        pytorch_schema: str,
+        pytorch_pid: int,
+        pytorch_time: str,
+        pytorch_start_ts: int,
+        pytorch_finish_ts: int,
+    ) -> None:
         """
         Encodes and writes global metadata for the Chakra execution trace.
 
@@ -571,16 +611,16 @@ class PyTorchConverter:
         self.logger.info("Encoding global metadata for Chakra execution trace.")
         global_metadata = GlobalMetadata(
             attr=[
-                ChakraAttr(name="schema", string_val=self.pytorch_schema),
-                ChakraAttr(name="pid", uint64_val=self.pytorch_pid),
-                ChakraAttr(name="time", string_val=self.pytorch_time),
-                ChakraAttr(name="start_ts", uint64_val=self.pytorch_start_ts),
-                ChakraAttr(name="finish_ts", uint64_val=self.pytorch_finish_ts),
+                ChakraAttr(name="schema", string_val=pytorch_schema),
+                ChakraAttr(name="pid", uint64_val=pytorch_pid),
+                ChakraAttr(name="time", string_val=pytorch_time),
+                ChakraAttr(name="start_ts", uint64_val=pytorch_start_ts),
+                ChakraAttr(name="finish_ts", uint64_val=pytorch_finish_ts),
             ]
         )
-        encode_message(self.chakra_et, global_metadata)
+        encode_message(chakra_et, global_metadata)
 
-    def _encode_and_write_nodes(self) -> None:
+    def _encode_and_write_nodes(self, chakra_et: IO[bytes], chakra_nodes: Dict[int, ChakraNode]) -> None:
         """
         Encodes and writes nodes for the Chakra execution trace.
 
@@ -589,43 +629,56 @@ class PyTorchConverter:
         """
         self.logger.info("Encoding and writing nodes for Chakra execution trace.")
         seen_nids = set()
-        for nid in sorted(self.chakra_nodes.keys()):
+        for nid in sorted(chakra_nodes.keys()):
             if nid in seen_nids:
                 err_msg = f"Duplicate NID {nid} detected in Chakra nodes."
                 self.logger.error(err_msg)
                 raise ValueError(err_msg)
             seen_nids.add(nid)
-            chakra_node = self.chakra_nodes[nid]
-            encode_message(self.chakra_et, chakra_node)
+            chakra_node = chakra_nodes[nid]
+            encode_message(chakra_et, chakra_node)
 
-    def close_chakra_execution_trace(self) -> None:
+    def close_chakra_execution_trace(self, chakra_et: IO[bytes]) -> None:
         """
         Closes the Chakra execution trace file if it is open.
 
         Ensures proper closure of the trace file to preserve data integrity.
+
+        Args:
+            chakra_et (IO[bytes]): File handle for the Chakra execution trace output file.
         """
         self.logger.info("Closing Chakra execution trace file.")
-        if self.chakra_et and not self.chakra_et.closed:
-            self.chakra_et.close()
+        if chakra_et and not chakra_et.closed:
+            chakra_et.close()
 
-    def simulate_execution(self) -> None:
+    def simulate_execution(
+        self,
+        chakra_nodes: Dict[int, ChakraNode],
+        pytorch_nodes: Dict[int, PyTorchNode],
+        parent_to_children_map: Dict[int, List[int]],
+    ) -> None:
         """
         Simulates the execution of Chakra nodes based on data dependencies.
 
         This method considers both CPU and GPU nodes. Nodes are issued for execution based on the readiness determined
         by dependency resolution. A simplistic global clock is used to model the execution time.
+
+        Args:
+            chakra_nodes (Dict[int, ChakraNode]): The Chakra nodes to be simulated.
+            pytorch_nodes (Dict[int, PyTorchNode]): The PyTorch nodes to reference for additional information.
+            parent_to_children_map (Dict[int, List[int]]): Mapping from parent node IDs to their child node IDs.
         """
         self.logger.info("Simulating execution of Chakra nodes based on data dependencies.")
 
         ready_cpu_nodes = [
-            (node_id, self.chakra_nodes[node_id])
-            for node_id in self.chakra_nodes
-            if not self.chakra_nodes[node_id].data_deps and not self.pytorch_nodes[node_id].is_gpu_op()
+            (node_id, chakra_nodes[node_id])
+            for node_id in chakra_nodes
+            if not chakra_nodes[node_id].data_deps and not pytorch_nodes[node_id].is_gpu_op()
         ]
         ready_gpu_nodes = [
-            (node_id, self.chakra_nodes[node_id])
-            for node_id in self.chakra_nodes
-            if not self.chakra_nodes[node_id].data_deps and self.pytorch_nodes[node_id].is_gpu_op()
+            (node_id, chakra_nodes[node_id])
+            for node_id in chakra_nodes
+            if not chakra_nodes[node_id].data_deps and pytorch_nodes[node_id].is_gpu_op()
         ]
         ready_cpu_nodes.sort(key=lambda x: x[1].id)
         ready_gpu_nodes.sort(key=lambda x: x[1].id)
@@ -659,25 +712,25 @@ class PyTorchConverter:
 
             if (
                 current_cpu_node
-                and current_time - current_cpu_node[1] >= self.chakra_nodes[current_cpu_node[0]].duration_micros
+                and current_time - current_cpu_node[1] >= chakra_nodes[current_cpu_node[0]].duration_micros
             ):
                 self.logger.info(f"CPU Node ID {current_cpu_node[0]} completed at {current_time}us")
                 current_cpu_node = None
 
             if (
                 current_gpu_node
-                and current_time - current_gpu_node[1] >= self.chakra_nodes[current_gpu_node[0]].duration_micros
+                and current_time - current_gpu_node[1] >= chakra_nodes[current_gpu_node[0]].duration_micros
             ):
                 self.logger.info(f"GPU Node ID {current_gpu_node[0]} completed at {current_time}us")
                 current_gpu_node = None
 
             for node_id in list(issued_nodes):
-                children_ids = self.parent_to_children_map.get(node_id, [])
+                children_ids = parent_to_children_map.get(node_id, [])
                 for child_id in children_ids:
-                    child_node = self.chakra_nodes[child_id]
+                    child_node = chakra_nodes[child_id]
                     child_node.data_deps.remove(node_id)
                     if not child_node.data_deps:
-                        if not self.pytorch_nodes[child_id].is_gpu_op():
+                        if not pytorch_nodes[child_id].is_gpu_op():
                             ready_cpu_nodes.append((child_id, child_node))
                         else:
                             ready_gpu_nodes.append((child_id, child_node))
