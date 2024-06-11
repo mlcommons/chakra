@@ -4,10 +4,7 @@ import re
 import graphviz
 import networkx as nx
 
-from ...schema.protobuf.et_def_pb2 import (
-    GlobalMetadata,
-    Node,
-)
+from ...schema.protobuf.et_def_pb2 import GlobalMetadata, Node
 from ..third_party.utils.protolib import decodeMessage as decode_message
 from ..third_party.utils.protolib import openFileRd as open_file_rd
 
@@ -29,11 +26,23 @@ def escape_label(label: str) -> str:
 
 
 def main() -> None:
+    """
+    Main function for the Execution Trace Visualizer.
+
+    This function parses command-line arguments, reads the input Chakra execution trace file,
+    and generates an output graph file in the specified format (PDF, DOT, or GraphML).
+    """
     parser = argparse.ArgumentParser(description="Execution Trace Visualizer")
+    parser.add_argument("--input_filename", type=str, required=True, help="Input Chakra execution trace filename")
     parser.add_argument(
-        "--input_filename", type=str, default=None, required=True, help="Input Chakra execution trace filename"
+        "--output_filename",
+        type=str,
+        required=True,
+        help=(
+            "Output graph filename. Supported extensions are pdf, dot, and graphml. "
+            "Recommend using graphml for large graphs for rendering speed."
+        ),
     )
-    parser.add_argument("--output_filename", type=str, default=None, required=True, help="Output graph filename")
     args = parser.parse_args()
 
     et = open_file_rd(args.input_filename)
