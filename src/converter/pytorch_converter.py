@@ -469,6 +469,16 @@ class PyTorchConverter:
                 last_visited_non_gpu = current_node
                 last_visited_any = current_node
 
+            if pytorch_node.sync_dep:
+                ids = pytorch_node.sync_dep
+                for id in ids:
+                    if id not in current_node.data_deps:
+                        current_node.data_deps.append(id)
+                        self.logger.info(
+                            f"Node ID {current_node.id} now has an synchonization dependency on Node ID {id}"
+                        )
+
+            # Add children to the stack
             children_chakra_ids = [child.id for child in pytorch_node.children]
             for child_chakra_id in sorted(children_chakra_ids, reverse=True):
                 child_chakra_node = chakra_nodes.get(child_chakra_id)
