@@ -31,11 +31,8 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    linker = TraceLinker(args.pytorch_et_file, args.kineto_file, args.log_level)
-    linker.load_traces()
-    linker.enforce_inter_thread_order()
-    linker.link_traces()
-    linker.dump_pytorch_execution_trace_plus(args.output_file)
+    linker = TraceLinker(args.log_level)
+    linker.link(args.pytorch_et_file, args.kineto_file, args.output_file)
 
 
 if __name__ == "__main__":

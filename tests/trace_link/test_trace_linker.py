@@ -15,12 +15,10 @@ from param_bench.train.compute.python.tools.execution_trace import (
 
 @pytest.fixture
 def trace_linker():
-    return TraceLinker(pytorch_et_file="path/to/pytorch_et.json", kineto_file="path/to/kineto.json")
+    return TraceLinker(log_level="INFO")
 
 
 def test_initialization(trace_linker):
-    assert trace_linker.pytorch_et_file == "path/to/pytorch_et.json"
-    assert trace_linker.kineto_file == "path/to/kineto.json"
     assert isinstance(trace_linker.id_assigner, UniqueIdAssigner)
     assert trace_linker.logger.name == "chakra.src.trace_link.trace_linker"
 
@@ -30,6 +28,8 @@ def test_initialization(trace_linker):
 @patch("chakra.src.trace_link.trace_linker.TraceLinker.update_kineto_data")
 def test_load_traces(mock_update_kineto_data, mock_load_kineto_trace, mock_load_pytorch_et, trace_linker):
     mock_load_kineto_trace.return_value = {"sample_data": "data"}
+    trace_linker.pytorch_et_file = "path/to/pytorch_et.json"
+    trace_linker.kineto_file = "path/to/kineto.json"
     trace_linker.load_traces()
     mock_load_pytorch_et.assert_called_once()
     mock_load_kineto_trace.assert_called_once()
