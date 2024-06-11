@@ -27,3 +27,6 @@ jobs:
     - name: Run Pyright
       run: |
         pyright
+
+    - name: Run vulture check
+      run: vulture src/ tests/ --min-confidence 100
