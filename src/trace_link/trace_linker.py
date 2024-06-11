@@ -60,17 +60,15 @@ class TraceLinker:
         logger (logging.Logger): Logger for the class.
     """
 
-    def __init__(self, pytorch_et_file: str, kineto_file: str, log_level: str = "INFO") -> None:
+    def __init__(self, log_level: str = "INFO") -> None:
         """
-        Initialize the TraceLinker with paths to the PyTorch and Kineto trace files, and a log level.
+        Initialize the TraceLinker with a log level.
 
         Args:
-            pytorch_et_file (str): Path to the PyTorch execution trace file.
-            kineto_file (str): Path to the Kineto trace file.
             log_level (str): Logging level for the class.
         """
-        self.pytorch_et_file: str = pytorch_et_file
-        self.kineto_file: str = kineto_file
+        self.pytorch_et_file: str = ""
+        self.kineto_file: str = ""
         self.pytorch_ops: List[PyTorchOperator] = []
         self.kineto_cpu_ops: List[KinetoOperator] = []
         self.sorted_kineto_cpu_ops: List[KinetoOperator] = []
@@ -93,6 +91,22 @@ class TraceLinker:
         self.pytorch_et_plus_data: Optional[Dict] = None
         self.logger: logging.Logger = logging.getLogger(__name__)
         self.logger.setLevel(log_level.upper())
+
+    def link(self, pytorch_et_file: str, kineto_file: str, output_file: str) -> None:
+        """
+        High-level method to link traces and produce the ET+ file.
+
+        Args:
+            pytorch_et_file (str): Path to the PyTorch execution trace file.
+            kineto_file (str): Path to the Kineto trace file.
+            output_file (str): Path for the output PyTorch execution trace plus file.
+        """
+        self.pytorch_et_file = pytorch_et_file
+        self.kineto_file = kineto_file
+        self.load_traces()
+        self.enforce_inter_thread_order()
+        self.link_traces()
+        self.dump_pytorch_execution_trace_plus(output_file)
 
     def load_traces(self) -> None:
         """Load both PyTorch Execution Traces and Kineto Traces."""
