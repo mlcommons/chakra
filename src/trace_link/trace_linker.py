@@ -101,28 +101,38 @@ class TraceLinker:
             kineto_file (str): Path to the Kineto trace file.
             output_file (str): Path for the output PyTorch execution trace plus file.
         """
-        self.pytorch_et_file = pytorch_et_file
-        self.kineto_file = kineto_file
-        self.pytorch_ops, kineto_data = self.load_traces(pytorch_et_file, kineto_file)
+        pytorch_ops, kineto_data = self.load_traces(pytorch_et_file, kineto_file)
 
         (
-            self.kineto_cpu_ops,
-            self.kineto_tid_cpu_ops_map,
-            self.kineto_correlation_cuda_runtime_map,
-            self.kineto_gpu_ops,
-            self.kineto_id_arrow_op_map,
-            self.kineto_id_cuda_launch_op_map,
-            self.kineto_process_start_time,
-            self.kineto_process_end_time,
-            self.kineto_thread_info,
-            self.kineto_rf_id_to_kineto_op_map,
-            self.sorted_kineto_cpu_ops,
-            self.sorted_kineto_cpu_op_ts,
+            kineto_cpu_ops,
+            kineto_tid_cpu_ops_map,
+            kineto_correlation_cuda_runtime_map,
+            kineto_gpu_ops,
+            kineto_id_arrow_op_map,
+            kineto_id_cuda_launch_op_map,
+            kineto_process_start_time,
+            kineto_process_end_time,
+            kineto_thread_info,
+            kineto_rf_id_to_kineto_op_map,
+            sorted_kineto_cpu_ops,
+            sorted_kineto_cpu_op_ts,
         ) = self.update_kineto_data(kineto_data)
 
-        self.kineto_tid_cpu_ops_map = self.enforce_inter_thread_order(self.kineto_tid_cpu_ops_map)
-        self.link_traces()
-        self.dump_pytorch_execution_trace_plus(output_file)
+        kineto_tid_cpu_ops_map = self.enforce_inter_thread_order(kineto_tid_cpu_ops_map)
+        pytorch_et_plus_data = self.link_traces(
+            pytorch_et_file,
+            pytorch_ops,
+            kineto_cpu_ops,
+            sorted_kineto_cpu_ops,
+            sorted_kineto_cpu_op_ts,
+            kineto_correlation_cuda_runtime_map,
+            kineto_rf_id_to_kineto_op_map,
+            kineto_gpu_ops,
+            kineto_thread_info,
+            kineto_process_start_time,
+            kineto_process_end_time,
+        )
+        self.dump_pytorch_execution_trace_plus(pytorch_et_plus_data, output_file)
 
     def load_traces(self, pytorch_et_file: str, kineto_file: str) -> Tuple[List[PyTorchOperator], Dict]:
         """
@@ -534,7 +544,20 @@ class TraceLinker:
             self.logger.debug(f"Last CPU node before timestamp {timestamp} found: {last_cpu_node}")
         return last_cpu_node_rf_id
 
-    def link_traces(self) -> None:
+    def link_traces(
+        self,
+        pytorch_et_file: str,
+        pytorch_ops: List[PyTorchOperator],
+        kineto_cpu_ops: List[KinetoOperator],
+        sorted_kineto_cpu_ops: List[KinetoOperator],
+        sorted_kineto_cpu_op_ts: List[int],
+        kineto_correlation_cuda_runtime_map: Dict[int, KinetoOperator],
+        kineto_rf_id_to_kineto_op_map: Dict[int, KinetoOperator],
+        kineto_gpu_ops: List[KinetoOperator],
+        kineto_thread_info: Dict[int, Tuple[int, int]],
+        kineto_process_start_time: int,
+        kineto_process_end_time: int,
+    ) -> Dict:
         """
         Link PyTorch Execution Traces (ET) and Kineto Traces to produce an enhanced PyTorch Execution Trace (ET+).
 
@@ -542,41 +565,42 @@ class TraceLinker:
         """
         self.logger.info("Starting the process of linking PyTorch and Kineto traces.")
         (
-            self.kineto_cpu_ops,
-            self.sorted_kineto_cpu_ops,
-            self.sorted_kineto_cpu_op_ts,
+            kineto_cpu_ops,
+            sorted_kineto_cpu_ops,
+            sorted_kineto_cpu_op_ts,
         ) = self.add_thread_and_process_annotations(
-            self.kineto_cpu_ops,
-            self.sorted_kineto_cpu_ops,
-            self.sorted_kineto_cpu_op_ts,
-            self.kineto_thread_info,
-            self.kineto_process_start_time,
-            self.kineto_process_end_time,
+            kineto_cpu_ops,
+            sorted_kineto_cpu_ops,
+            sorted_kineto_cpu_op_ts,
+            kineto_thread_info,
+            kineto_process_start_time,
+            kineto_process_end_time,
         )
         (
-            self.pytorch_op_id_to_kineto_ops_map,
-            self.pytorch_op_id_to_inclusive_dur_map,
-            self.pytorch_op_id_to_exclusive_dur_map,
-            self.pytorch_op_id_to_timestamp_map,
-            self.pytorch_op_id_to_inter_thread_dep_map,
+            pytorch_op_id_to_kineto_ops_map,
+            pytorch_op_id_to_inclusive_dur_map,
+            pytorch_op_id_to_exclusive_dur_map,
+            pytorch_op_id_to_timestamp_map,
+            pytorch_op_id_to_inter_thread_dep_map,
         ) = self.map_pytorch_to_kineto_ops(
-            self.pytorch_ops,
-            self.kineto_cpu_ops,
-            self.sorted_kineto_cpu_ops,
-            self.sorted_kineto_cpu_op_ts,
-            self.kineto_correlation_cuda_runtime_map,
-            self.kineto_rf_id_to_kineto_op_map,
-            self.kineto_gpu_ops,
+            pytorch_ops,
+            kineto_cpu_ops,
+            sorted_kineto_cpu_ops,
+            sorted_kineto_cpu_op_ts,
+            kineto_correlation_cuda_runtime_map,
+            kineto_rf_id_to_kineto_op_map,
+            kineto_gpu_ops,
         )
-        self.pytorch_et_plus_data = self.construct_et_plus_data(
-            self.pytorch_et_file,
-            self.pytorch_op_id_to_kineto_ops_map,
-            self.pytorch_op_id_to_inclusive_dur_map,
-            self.pytorch_op_id_to_exclusive_dur_map,
-            self.pytorch_op_id_to_timestamp_map,
-            self.pytorch_op_id_to_inter_thread_dep_map,
+        pytorch_et_plus_data = self.construct_et_plus_data(
+            pytorch_et_file,
+            pytorch_op_id_to_kineto_ops_map,
+            pytorch_op_id_to_inclusive_dur_map,
+            pytorch_op_id_to_exclusive_dur_map,
+            pytorch_op_id_to_timestamp_map,
+            pytorch_op_id_to_inter_thread_dep_map,
         )
         self.logger.info("Traces have been successfully linked.")
+        return pytorch_et_plus_data
 
     def add_thread_and_process_annotations(
         self,
@@ -1036,25 +1060,26 @@ class TraceLinker:
 
         return updated_gpu_ops
 
-    def dump_pytorch_execution_trace_plus(self, output_file: str) -> None:
+    def dump_pytorch_execution_trace_plus(self, pytorch_et_plus_data: Dict, output_file: str) -> None:
         """
         Dump the enhanced PyTorch Execution Trace (ET+) data to a file.
 
         Args:
+            pytorch_et_plus_data (Dict): The ET+ data to be dumped.
             output_file (str): The file path where the ET+ data will be saved.
         """
         self.logger.info(f"Starting to dump ET+ data to {output_file}.")
 
-        if self.pytorch_et_plus_data is None:
+        if pytorch_et_plus_data is None:
             self.logger.error("ET+ data not constructed. Please run construct_et_plus_data first.")
             return
 
-        if "nodes" in self.pytorch_et_plus_data:
-            self.pytorch_et_plus_data["nodes"] = sorted(self.pytorch_et_plus_data["nodes"], key=lambda x: x["id"])
+        if "nodes" in pytorch_et_plus_data:
+            pytorch_et_plus_data["nodes"] = sorted(pytorch_et_plus_data["nodes"], key=lambda x: x["id"])
 
         try:
             with open(output_file, "w") as file:
-                json.dump(self.pytorch_et_plus_data, file, indent=4)
+                json.dump(pytorch_et_plus_data, file, indent=4)
             self.logger.info(f"ET+ data dumped to {output_file}.")
         except IOError as e:
             self.logger.error(f"Failed to dump ET+ data to {output_file}. Error: {e}")

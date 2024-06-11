@@ -262,8 +262,7 @@ def test_construct_et_plus_data(mock_json_load, mock_open, mock_process_op_and_d
 @patch("builtins.open", new_callable=MagicMock)
 @patch("json.dump")
 def test_dump_pytorch_execution_trace_plus(mock_json_dump, mock_open, trace_linker):
-    trace_linker.pytorch_et_plus_data = {"nodes": [{"id": 1}, {"id": 2}]}
-    trace_linker.dump_pytorch_execution_trace_plus("output.json")
+    trace_linker.dump_pytorch_execution_trace_plus({"nodes": [{"id": 1}, {"id": 2}]}, "output.json")
 
     mock_open.assert_called_once_with("output.json", "w")
     mock_open.return_value.__enter__.assert_called_once()
