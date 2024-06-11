@@ -60,17 +60,15 @@ class TraceLinker:
         logger (logging.Logger): Logger for the class.
     """
 
-    def __init__(self, pytorch_et_file: str, kineto_file: str, log_level: str = "INFO") -> None:
+    def __init__(self, log_level: str = "INFO") -> None:
         """
-        Initialize the TraceLinker with paths to the PyTorch and Kineto trace files, and a log level.
+        Initialize the TraceLinker with a log level.
 
         Args:
-            pytorch_et_file (str): Path to the PyTorch execution trace file.
-            kineto_file (str): Path to the Kineto trace file.
             log_level (str): Logging level for the class.
         """
-        self.pytorch_et_file: str = pytorch_et_file
-        self.kineto_file: str = kineto_file
+        self.pytorch_et_file: str = ""
+        self.kineto_file: str = ""
         self.pytorch_ops: List[PyTorchOperator] = []
         self.kineto_cpu_ops: List[KinetoOperator] = []
         self.sorted_kineto_cpu_ops: List[KinetoOperator] = []
@@ -94,24 +92,68 @@ class TraceLinker:
         self.logger: logging.Logger = logging.getLogger(__name__)
         self.logger.setLevel(log_level.upper())
 
-    def load_traces(self) -> None:
-        """Load both PyTorch Execution Traces and Kineto Traces."""
-        self.pytorch_ops = self.load_pytorch_et()
-        kineto_data = self.load_kineto_trace()
-        self.update_kineto_data(kineto_data)
+    def link(self, pytorch_et_file: str, kineto_file: str, output_file: str) -> None:
+        """
+        High-level method to link traces and produce the ET+ file.
 
-    def load_pytorch_et(self) -> List[PyTorchOperator]:
+        Args:
+            pytorch_et_file (str): Path to the PyTorch execution trace file.
+            kineto_file (str): Path to the Kineto trace file.
+            output_file (str): Path for the output PyTorch execution trace plus file.
+        """
+        self.pytorch_et_file = pytorch_et_file
+        self.kineto_file = kineto_file
+        self.pytorch_ops, kineto_data = self.load_traces(pytorch_et_file, kineto_file)
+
+        (
+            self.kineto_cpu_ops,
+            self.kineto_tid_cpu_ops_map,
+            self.kineto_correlation_cuda_runtime_map,
+            self.kineto_gpu_ops,
+            self.kineto_id_arrow_op_map,
+            self.kineto_id_cuda_launch_op_map,
+            self.kineto_process_start_time,
+            self.kineto_process_end_time,
+            self.kineto_thread_info,
+            self.kineto_rf_id_to_kineto_op_map,
+            self.sorted_kineto_cpu_ops,
+            self.sorted_kineto_cpu_op_ts,
+        ) = self.update_kineto_data(kineto_data)
+
+        self.kineto_tid_cpu_ops_map = self.enforce_inter_thread_order(self.kineto_tid_cpu_ops_map)
+        self.link_traces()
+        self.dump_pytorch_execution_trace_plus(output_file)
+
+    def load_traces(self, pytorch_et_file: str, kineto_file: str) -> Tuple[List[PyTorchOperator], Dict]:
+        """
+        Load both PyTorch Execution Traces and Kineto Traces.
+
+        Args:
+            pytorch_et_file (str): Path to the PyTorch execution trace file.
+            kineto_file (str): Path to the Kineto trace file.
+
+        Returns:
+            Tuple: A tuple containing the list of PyTorch operators and the kineto data dictionary.
+        """
+        pytorch_ops = self.load_pytorch_et(pytorch_et_file)
+        kineto_data = self.load_kineto_trace(kineto_file)
+        return pytorch_ops, kineto_data
+
+    def load_pytorch_et(self, pytorch_et_file: str) -> List[PyTorchOperator]:
         """
         Load and process the PyTorch Execution Trace.
 
         This method handles multiple iterations in the trace and extracts the nodes, considering the specified
         annotation for segmenting the iterations.
 
-        Returns
+        Args:
+            pytorch_et_file (str): Path to the PyTorch execution trace file.
+
+        Returns:
             List[PyTorchOperator]: List of PyTorch operators.
         """
         self.logger.info("Starting to load PyTorch Execution Trace.")
-        pytorch_et = load_execution_trace_file(self.pytorch_et_file)
+        pytorch_et = load_execution_trace_file(pytorch_et_file)
 
         root_node = pytorch_et.get_nodes()[1]  # Root node is usually 1-based
         pytorch_ops = self.extract_pytorch_ops(root_node)
@@ -143,18 +185,21 @@ class TraceLinker:
         traverse(node)
         return sorted(nodes, key=lambda x: x.id)
 
-    def load_kineto_trace(self) -> Dict:
+    def load_kineto_trace(self, kineto_file: str) -> Dict:
         """
         Load and process the Kineto Trace.
 
         This method parses the Kineto trace file, creating KinetoOperator instances for each operator in the trace.
         It then categorizes and segments these operators for further processing and linking with PyTorch operators.
 
-        Returns
+        Args:
+            kineto_file (str): Path to the Kineto trace file.
+
+        Returns:
             Dict: Dictionary containing various data structures needed for linking traces.
         """
         self.logger.info("Starting to load Kineto Trace.")
-        kineto_trace_data = read_dictionary_from_json_file(self.kineto_file)
+        kineto_trace_data = read_dictionary_from_json_file(kineto_file)
         sorted_kineto_ops = sorted(
             [KinetoOperator(op) for op in kineto_trace_data["traceEvents"]],
             key=lambda op: op.timestamp,
@@ -343,27 +388,47 @@ class TraceLinker:
 
         return merged
 
-    def update_kineto_data(self, kineto_data: Dict) -> None:
+    def update_kineto_data(self, kineto_data: Dict) -> Tuple:
         """
         Update the variables of the TraceLinker class using the data structures from the kineto_data dictionary.
 
         Args:
             kineto_data (Dict): Dictionary containing categorized operators and timing boundaries.
-        """
-        self.kineto_cpu_ops = kineto_data["kineto_cpu_ops"]
-        self.kineto_tid_cpu_ops_map = kineto_data["kineto_tid_cpu_ops_map"]
-        self.kineto_correlation_cuda_runtime_map = kineto_data["kineto_correlation_cuda_runtime_map"]
-        self.kineto_gpu_ops = kineto_data["kineto_gpu_ops"]
-        self.kineto_id_arrow_op_map = kineto_data["kineto_id_arrow_op_map"]
-        self.kineto_id_cuda_launch_op_map = kineto_data["kineto_id_cuda_launch_op_map"]
-        self.kineto_process_start_time = kineto_data["kineto_process_start_time"]
-        self.kineto_process_end_time = kineto_data["kineto_process_end_time"]
-        self.kineto_thread_info = kineto_data["kineto_thread_info"]
-        self.kineto_rf_id_to_kineto_op_map = {op.rf_id: op for op in self.kineto_cpu_ops if op.rf_id is not None}
-        self.sorted_kineto_cpu_ops = kineto_data["sorted_kineto_cpu_ops"]
-        self.sorted_kineto_cpu_op_ts = kineto_data["sorted_kineto_cpu_op_ts"]
 
-    def enforce_inter_thread_order(self, threshold: int = 1000) -> None:
+        Returns:
+            Tuple: Contains all updated variables from the kineto_data dictionary.
+        """
+        kineto_cpu_ops = kineto_data["kineto_cpu_ops"]
+        kineto_tid_cpu_ops_map = kineto_data["kineto_tid_cpu_ops_map"]
+        kineto_correlation_cuda_runtime_map = kineto_data["kineto_correlation_cuda_runtime_map"]
+        kineto_gpu_ops = kineto_data["kineto_gpu_ops"]
+        kineto_id_arrow_op_map = kineto_data["kineto_id_arrow_op_map"]
+        kineto_id_cuda_launch_op_map = kineto_data["kineto_id_cuda_launch_op_map"]
+        kineto_process_start_time = kineto_data["kineto_process_start_time"]
+        kineto_process_end_time = kineto_data["kineto_process_end_time"]
+        kineto_thread_info = kineto_data["kineto_thread_info"]
+        kineto_rf_id_to_kineto_op_map = {op.rf_id: op for op in kineto_cpu_ops if op.rf_id is not None}
+        sorted_kineto_cpu_ops = kineto_data["sorted_kineto_cpu_ops"]
+        sorted_kineto_cpu_op_ts = kineto_data["sorted_kineto_cpu_op_ts"]
+
+        return (
+            kineto_cpu_ops,
+            kineto_tid_cpu_ops_map,
+            kineto_correlation_cuda_runtime_map,
+            kineto_gpu_ops,
+            kineto_id_arrow_op_map,
+            kineto_id_cuda_launch_op_map,
+            kineto_process_start_time,
+            kineto_process_end_time,
+            kineto_thread_info,
+            kineto_rf_id_to_kineto_op_map,
+            sorted_kineto_cpu_ops,
+            sorted_kineto_cpu_op_ts,
+        )
+
+    def enforce_inter_thread_order(
+        self, kineto_tid_cpu_ops_map: Dict[int, List[KinetoOperator]], threshold: int = 1000
+    ) -> Dict[int, List[KinetoOperator]]:
         """
         Enforce order between groups of operators in different threads.
 
@@ -376,39 +441,18 @@ class TraceLinker:
         on the last CPU operator from other threads, enforcing order and dependency across threads.
 
         Args:
+            kineto_tid_cpu_ops_map (Dict[int, List[KinetoOperator]]): Kineto CPU operators grouped by thread ID.
             threshold (int): Threshold for significant gap detection in microseconds, used to define group boundaries.
+
+        Returns:
+            Dict[int, List[KinetoOperator]]: Updated map with enforced inter-thread order.
         """
         self.logger.info("Enforcing inter-thread order in Kineto traces.")
 
-        def process_thread(
-            tid: int,
-            ops: List[KinetoOperator],
-            ops_by_tid: Dict[int, List[KinetoOperator]],
-        ) -> None:
-            self.logger.info(f"Thread {tid}: Identifying gaps for dependency linking with threshold {threshold}us.")
-            sorted_ops = sorted(ops, key=lambda op: op.timestamp)
-            last_cpu_node_rf_id = None
-
-            for i, op in enumerate(sorted_ops):
-                if (
-                    i == 0
-                    or (sorted_ops[i].timestamp - sorted_ops[i - 1].timestamp - sorted_ops[i - 1].inclusive_dur)
-                    > threshold
-                ):
-                    last_cpu_node_rf_id = self.find_last_cpu_node_before_timestamp(ops_by_tid, tid, op.timestamp)
-                    if last_cpu_node_rf_id:
-                        self.logger.debug(
-                            f"Thread {tid}: Linking op '{op.name}' to CPU node before gap with rf_id "
-                            f"'{last_cpu_node_rf_id}'."
-                        )
-
-                if last_cpu_node_rf_id:
-                    op.inter_thread_dep = last_cpu_node_rf_id
-
         with ThreadPoolExecutor() as executor:
             futures = {
-                executor.submit(process_thread, tid, ops, self.kineto_tid_cpu_ops_map): tid
-                for tid, ops in self.kineto_tid_cpu_ops_map.items()
+                executor.submit(self.process_thread, tid, ops, kineto_tid_cpu_ops_map, threshold): tid
+                for tid, ops in kineto_tid_cpu_ops_map.items()
             }
 
             for future in as_completed(futures):
@@ -418,6 +462,39 @@ class TraceLinker:
                     self.logger.debug(f"Thread {tid} dependencies processed.")
                 except Exception as e:
                     self.logger.error(f"Error processing thread {tid}: {e}")
+
+        return kineto_tid_cpu_ops_map
+
+    def process_thread(
+        self, tid: int, ops: List[KinetoOperator], ops_by_tid: Dict[int, List[KinetoOperator]], threshold: int
+    ) -> None:
+        """
+        Process a single thread's operators to enforce inter-thread order.
+
+        Args:
+            tid (int): Thread ID.
+            ops (List[KinetoOperator]): List of Kineto operators for the thread.
+            ops_by_tid (Dict[int, List[KinetoOperator]]): Kineto operators grouped by thread ID.
+            threshold (int): Threshold for significant gap detection in microseconds.
+        """
+        self.logger.info(f"Thread {tid}: Identifying gaps for dependency linking with threshold {threshold}us.")
+        sorted_ops = sorted(ops, key=lambda op: op.timestamp)
+        last_cpu_node_rf_id = None
+
+        for i, op in enumerate(sorted_ops):
+            if (
+                i == 0
+                or (sorted_ops[i].timestamp - sorted_ops[i - 1].timestamp - sorted_ops[i - 1].inclusive_dur) > threshold
+            ):
+                last_cpu_node_rf_id = self.find_last_cpu_node_before_timestamp(ops_by_tid, tid, op.timestamp)
+                if last_cpu_node_rf_id:
+                    self.logger.debug(
+                        f"Thread {tid}: Linking op '{op.name}' to CPU node before gap with rf_id "
+                        f"'{last_cpu_node_rf_id}'."
+                    )
+
+            if last_cpu_node_rf_id:
+                op.inter_thread_dep = last_cpu_node_rf_id
 
     def find_last_cpu_node_before_timestamp(
         self,
