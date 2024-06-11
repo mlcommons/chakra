@@ -110,6 +110,7 @@ class PyTorchNode:
         self.exclusive_dur = node_data.get("exclusive_dur", 0)
         self.ts = node_data.get("ts")
         self.inter_thread_dep = node_data.get("inter_thread_dep")
+        self.sync_dep = node_data.get("sync_dep")
         self.cat = node_data.get("cat")
         self.stream = node_data.get("stream", 0)
         # In Colletive comms nodes, pg_name is in node_data if exists.
