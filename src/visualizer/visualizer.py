@@ -26,12 +26,7 @@ def escape_label(label: str) -> str:
 
 
 def main() -> None:
-    """
-    Main function for the Execution Trace Visualizer.
-
-    This function parses command-line arguments, reads the input Chakra execution trace file,
-    and generates an output graph file in the specified format (PDF, DOT, or GraphML).
-    """
+    """Generate an output graph file in the specified format (PDF, DOT, or GraphML)."""
     parser = argparse.ArgumentParser(description="Execution Trace Visualizer")
     parser.add_argument("--input_filename", type=str, required=True, help="Input Chakra execution trace filename")
     parser.add_argument(
