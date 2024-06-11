@@ -204,16 +204,14 @@ def test_process_dependent_gpu_ops(trace_linker, orig_op_id, cpu_op, kineto_gpu_
         gpu_op.stream = gpu_op_data["stream"]
         kineto_gpu_op_objects.append(gpu_op)
 
-    trace_linker.pytorch_op_id_to_kineto_ops_map[orig_op_id] = kineto_gpu_op_objects
+    pytorch_op_id_to_kineto_ops_map = {orig_op_id: kineto_gpu_op_objects}
 
     # Override the generate_new_id method to return the expected IDs
     original_generate_new_id = trace_linker.id_assigner.generate_new_id
     trace_linker.id_assigner.generate_new_id = MagicMock(side_effect=expected_ids)
 
     # Call the method
-    updated_gpu_ops = trace_linker.process_dependent_gpu_ops(
-        cpu_op, orig_op_id, trace_linker.pytorch_op_id_to_kineto_ops_map
-    )
+    updated_gpu_ops = trace_linker.process_dependent_gpu_ops(cpu_op, orig_op_id, pytorch_op_id_to_kineto_ops_map)
 
     # Restore the original generate_new_id method
     trace_linker.id_assigner.generate_new_id = original_generate_new_id
@@ -247,8 +245,8 @@ def test_construct_et_plus_data(mock_json_load, mock_open, mock_process_op_and_d
     pytorch_op_id_to_timestamp_map = {1: 1000, 2: 2000}
     pytorch_op_id_to_inter_thread_dep_map = {1: None, 2: None}
 
-    trace_linker.pytorch_et_plus_data = trace_linker.construct_et_plus_data(
-        trace_linker.pytorch_et_file,
+    pytorch_et_plus_data = trace_linker.construct_et_plus_data(
+        "path/to/pytorch_et_file",
         pytorch_op_id_to_kineto_ops_map,
         pytorch_op_id_to_inclusive_dur_map,
         pytorch_op_id_to_exclusive_dur_map,
@@ -256,14 +254,14 @@ def test_construct_et_plus_data(mock_json_load, mock_open, mock_process_op_and_d
         pytorch_op_id_to_inter_thread_dep_map,
     )
 
-    assert trace_linker.pytorch_et_plus_data["nodes"] == [{"id": 1}, {"id": 2}, {"id": 3}, {"id": 4}]
+    assert pytorch_et_plus_data["nodes"] == [{"id": 1}, {"id": 2}, {"id": 3}, {"id": 4}]
 
 
 @patch("builtins.open", new_callable=MagicMock)
 @patch("json.dump")
 def test_dump_pytorch_execution_trace_plus(mock_json_dump, mock_open, trace_linker):
     trace_linker.pytorch_et_plus_data = {"nodes": [{"id": 1}, {"id": 2}]}
-    trace_linker.dump_pytorch_execution_trace_plus("output.json")
+    trace_linker.dump_pytorch_execution_trace_plus(trace_linker.pytorch_et_plus_data, "output.json")
 
     mock_open.assert_called_once_with("output.json", "w")
     mock_open.return_value.__enter__.assert_called_once()
@@ -317,15 +315,20 @@ def test_find_parent_cpu_op(mock_find_closest_op, trace_linker):
     kineto_runtime_op.tid = 1
     kineto_runtime_op.name = "runtime_op"
 
-    trace_linker.kineto_correlation_cuda_runtime_map = {123: kineto_runtime_op}
+    kineto_correlation_cuda_runtime_map = {123: kineto_runtime_op}
 
     mock_find_closest_op.return_value = kineto_runtime_op
 
-    result = trace_linker.find_parent_cpu_op(kineto_gpu_op, trace_linker.kineto_correlation_cuda_runtime_map)
+    sorted_kineto_cpu_ops = [MagicMock(spec=KinetoOperator)]
+    sorted_kineto_cpu_op_ts = [100]
+
+    result = trace_linker.find_parent_cpu_op(
+        kineto_gpu_op, kineto_correlation_cuda_runtime_map, sorted_kineto_cpu_ops, sorted_kineto_cpu_op_ts
+    )
 
     assert result == kineto_runtime_op
     mock_find_closest_op.assert_called_once_with(
-        kineto_gpu_op, trace_linker.sorted_kineto_cpu_ops, kineto_runtime_op.timestamp
+        kineto_gpu_op, sorted_kineto_cpu_ops, sorted_kineto_cpu_op_ts, kineto_runtime_op.timestamp
     )
 
 
@@ -356,11 +359,16 @@ def test_group_gpu_ops_by_cpu_launchers(trace_linker):
     kineto_runtime_op2.name = "runtime_op2"
     kineto_runtime_op2.correlation = 456
 
-    trace_linker.kineto_correlation_cuda_runtime_map = {123: kineto_runtime_op1, 456: kineto_runtime_op2}
+    kineto_correlation_cuda_runtime_map = {123: kineto_runtime_op1, 456: kineto_runtime_op2}
+    sorted_kineto_cpu_ops = [kineto_runtime_op1, kineto_runtime_op2]
+    sorted_kineto_cpu_op_ts = [kineto_runtime_op1.timestamp, kineto_runtime_op2.timestamp]
 
     with patch.object(trace_linker, "find_parent_cpu_op", side_effect=[kineto_runtime_op1, kineto_runtime_op2]):
         result = trace_linker.group_gpu_ops_by_cpu_launchers(
-            [kineto_gpu_op1, kineto_gpu_op2], trace_linker.kineto_correlation_cuda_runtime_map
+            [kineto_gpu_op1, kineto_gpu_op2],
+            kineto_correlation_cuda_runtime_map,
+            sorted_kineto_cpu_ops,
+            sorted_kineto_cpu_op_ts,
         )
 
     assert result == {"cpu_op1": [kineto_gpu_op1], "cpu_op2": [kineto_gpu_op2]}
