@@ -7,7 +7,7 @@ class KinetoOperator:
     """
     Represents a single operator in a Kineto trace.
 
-    Attributes:
+    Attributes
         id (Optional[int]): Identifier of the operator.
         category (str): Category of the operator.
         name (str): Name of the operator.
@@ -28,7 +28,7 @@ class KinetoOperator:
 
     def __init__(self, kineto_op: Dict[str, Any]) -> None:
         """
-        Initializes a new instance of the KinetoOperator class.
+        Initialize a new instance of the KinetoOperator class.
 
         Args:
             kineto_op (Dict[str, Any]): The dictionary representing the
@@ -55,7 +55,7 @@ class KinetoOperator:
         """
         Represent the KinetoOperator as a string.
 
-        Returns:
+        Returns
             str: A string representation of the KinetoOperator.
         """
         return (
@@ -69,14 +69,15 @@ class KinetoOperator:
 
     def is_cpu_op(self) -> bool:
         """
-        Determines if the operator is simulatable based on its category and name.
+        Determine if the operator is simulatable based on its category and name.
+
         The categories 'cpu_op' and 'user_annotation' are considered CPU operators.
         Notably, 'user_annotation' operators often include the duration of CPU operator launch times.
         Ignoring the duration measured in 'user_annotation' can lead to inaccuracies in simulation.
         An exception to this is 'ProfilerStep', which should be completely ignored.
         Ideally, a more general rule should be developed to identify such exception nodes.
 
-        Returns:
+        Returns
             bool: True if the operator is simulatable, False otherwise.
         """
         simulatable_categories = {"cpu_op", "user_annotation"}
@@ -87,9 +88,9 @@ class KinetoOperator:
 
     def is_cuda_launch_op(self) -> bool:
         """
-        Determines whether the operator is a kernel-launching CUDA runtime operator.
+        Determine whether the operator is a kernel-launching CUDA runtime operator.
 
-        Returns:
+        Returns
             bool: True if it's a launch operation, otherwise False.
         """
         cuda_launch_categories = {"cuda_runtime", "cuda_driver"}
@@ -105,9 +106,9 @@ class KinetoOperator:
 
     def is_gpu_op(self) -> bool:
         """
-        Checks if the operator is a GPU-side operator based on its category.
+        Check if the operator is a GPU-side operator based on its category.
 
-        Returns:
+        Returns
             bool: True if it's a GPU-side operation, otherwise False.
         """
         gpu_categories = {"kernel", "gpu_memcpy"}
@@ -115,9 +116,9 @@ class KinetoOperator:
 
     def is_arrow_op(self) -> bool:
         """
-        Checks if the operator is categorized as 'ac2g', which stands for arrows from CPU to GPU.
+        Check if the operator is categorized as 'ac2g', which stands for arrows from CPU to GPU.
 
-        Returns:
+        Returns
             bool: True if the operator is an 'ac2g' type, otherwise False.
         """
         return self.category == "ac2g"

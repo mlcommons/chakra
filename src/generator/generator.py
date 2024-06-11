@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import argparse
 
 from ...schema.protobuf.et_def_pb2 import (

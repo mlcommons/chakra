@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import json
 import logging
 from typing import IO, Dict, List, Optional, Set, Tuple
@@ -28,7 +26,7 @@ class PyTorchConverter:
     compatible with Chakra, a performance analysis tool. It handles the intricate mappings and transformations required
     to accurately represent the execution in a different format.
 
-    Attributes:
+    Attributes
         input_filename (str): Input file name containing PyTorch execution trace.
         output_filename (str): Output file name for the converted Chakra trace.
         logger (logging.Logger): Logger for logging information during conversion.
@@ -36,8 +34,7 @@ class PyTorchConverter:
 
     def __init__(self, input_filename: str, output_filename: str, logger: logging.Logger) -> None:
         """
-        Initializes the PyTorch to Chakra converter. It sets up necessary
-        attributes and prepares the environment for the conversion process.
+        Initialize the PyTorch to Chakra converter. It sets up necessary attributes and prepares the environment.
 
         Args:
             input_filename (str): Name of the input file containing PyTorch execution trace.
@@ -49,10 +46,7 @@ class PyTorchConverter:
         self.logger = logger
 
     def convert(self) -> None:
-        """
-        Converts PyTorch execution traces into the Chakra format. Orchestrates the conversion process including trace
-        loading, trace opening, phase end node construction, node splitting, and node conversion.
-        """
+        """Convert PyTorch execution traces into the Chakra format."""
         pytorch_et_data = self.load_pytorch_execution_traces()
         (
             pytorch_schema,
@@ -85,15 +79,15 @@ class PyTorchConverter:
 
     def load_pytorch_execution_traces(self) -> Dict:
         """
-        Loads PyTorch execution traces from a file.
+        Load PyTorch execution traces from a file.
 
-        Reads and parses the PyTorch execution trace data from a file, creating PyTorchNode objects and establishing
+        Read and parse the PyTorch execution trace data from a file, creating PyTorchNode objects and establishing
         node relationships.
 
-        Raises:
+        Raises
             Exception: If there is an IOError in opening the file.
 
-        Returns:
+        Returns
             Dict: The loaded PyTorch execution trace data.
         """
         self.logger.info("Loading PyTorch execution traces from file.")
@@ -108,12 +102,12 @@ class PyTorchConverter:
         self, pytorch_et_data: Dict
     ) -> Tuple[str, int, str, int, int, Dict[int, PyTorchNode]]:
         """
-        Parses and instantiates PyTorch nodes from execution trace data.
+        Parse and instantiate PyTorch nodes from execution trace data.
 
         Args:
             pytorch_et_data (Dict): The execution trace data.
 
-        Extracts node information, sorts nodes by timestamp, and establishes parent-child relationships among them.
+        Extract node information, sort nodes by timestamp, and establish parent-child relationships among them.
 
         Returns:
             Tuple: A tuple containing PyTorch schema, PID, time, start timestamp, finish timestamp, and dictionary of
@@ -136,7 +130,7 @@ class PyTorchConverter:
         self, pytorch_node_objects: Dict[int, PyTorchNode], pytorch_root_nids: List[int]
     ) -> Dict[int, PyTorchNode]:
         """
-        Establishes parent-child relationships among PyTorch nodes and counts the node types.
+        Establish parent-child relationships among PyTorch nodes and count the node types.
 
         Args:
             pytorch_node_objects (Dict[int, PyTorchNode]): Dictionary of PyTorch node objects.
@@ -165,9 +159,9 @@ class PyTorchConverter:
 
     def _initialize_node_type_counts(self) -> Dict[str, int]:
         """
-        Initializes counters for different types of nodes.
+        Initialize counters for different types of nodes.
 
-        Returns:
+        Returns
             Dict[str, int]: A dictionary with node type counters initialized to zero.
         """
         return {
@@ -181,7 +175,7 @@ class PyTorchConverter:
 
     def _is_root_node(self, pytorch_node: PyTorchNode) -> bool:
         """
-        Checks if a given PyTorch node is a root node.
+        Check if a given PyTorch node is a root node.
 
         Args:
             pytorch_node (PyTorchNode): The PyTorch node to check.
@@ -198,7 +192,7 @@ class PyTorchConverter:
         self, pytorch_node_objects: Dict[int, PyTorchNode], pytorch_node: PyTorchNode, parent_id: int
     ) -> None:
         """
-        Processes the parent-child relationships for PyTorch nodes.
+        Process the parent-child relationships for PyTorch nodes.
 
         Args:
             pytorch_node_objects (Dict[int, PyTorchNode]): Dictionary of PyTorch node objects.
@@ -219,7 +213,7 @@ class PyTorchConverter:
 
     def _update_node_type_counts(self, node_type_counts: Dict[str, int], pytorch_node: PyTorchNode) -> None:
         """
-        Updates the node type counts based on the current PyTorch node.
+        Update the node type counts based on the current PyTorch node.
 
         Args:
             node_type_counts (Dict[str, int]): Dictionary of node type counts.
@@ -237,7 +231,7 @@ class PyTorchConverter:
 
     def open_chakra_execution_trace(self, output_filename: str) -> IO[bytes]:
         """
-        Opens the Chakra execution trace file for writing.
+        Open the Chakra execution trace file for writing.
 
         Args:
             output_filename (str): Name of the output file for the converted Chakra trace.
@@ -259,7 +253,7 @@ class PyTorchConverter:
 
     def convert_nodes(self, pytorch_nodes: Dict[int, PyTorchNode], chakra_nodes: Dict[int, ChakraNode]) -> None:
         """
-        Converts PyTorch nodes to Chakra nodes.
+        Convert PyTorch nodes to Chakra nodes.
 
         This method traverses through the PyTorch nodes and converts them to Chakra nodes. It also handles special
         cases for GPU nodes and collective communication types.
@@ -287,7 +281,7 @@ class PyTorchConverter:
 
     def convert_to_chakra_node(self, chakra_nodes: Dict[int, ChakraNode], pytorch_node: PyTorchNode) -> ChakraNode:
         """
-        Converts a PyTorchNode to a ChakraNode.
+        Convert a PyTorchNode to a ChakraNode.
 
         Args:
             chakra_nodes (Dict[int, ChakraNode]): Dictionary of existing Chakra nodes.
@@ -326,7 +320,7 @@ class PyTorchConverter:
 
     def get_chakra_node_type_from_pytorch_node(self, pytorch_node: PyTorchNode) -> int:
         """
-        Determines the Chakra node type from a PyTorch node.
+        Determine the Chakra node type from a PyTorch node.
 
         Args:
             pytorch_node (PyTorchNode): The PyTorch node to determine the type of.
@@ -344,7 +338,7 @@ class PyTorchConverter:
 
     def get_collective_comm_type(self, name: str) -> int:
         """
-        Returns the collective communication type of the node.
+        Return the collective communication type of the node.
 
         Args:
             name (str): The name of the node.
@@ -374,7 +368,7 @@ class PyTorchConverter:
 
     def is_root_node(self, node: ChakraNode) -> bool:
         """
-        Determines whether a given node is a root node in the execution trace.
+        Determine whether a given node is a root node in the execution trace.
 
         In the context of PyTorch execution traces, root nodes are the starting points of execution graphs or execution
         traces. These nodes typically do not have parent nodes and act as the original sources of execution flow. This
@@ -396,9 +390,9 @@ class PyTorchConverter:
         chakra_node: ChakraNode,
     ) -> None:
         """
-        Converts control dependencies to data dependencies in Chakra nodes.
+        Convert control dependencies to data dependencies in Chakra nodes.
 
-        Traverses nodes based on control dependencies (parent nodes) and encodes data dependencies appropriately. This
+        Traverse nodes based on control dependencies (parent nodes) and encode data dependencies appropriately. This
         method is crucial for converting the dependency structure from PyTorch execution traces to Chakra execution
         traces. In PyTorch traces, control dependencies are represented by a parent field in each node, denoting the
         parent node ID. This structure indicates which functions (operators) are called by a particular operator.
@@ -483,7 +477,7 @@ class PyTorchConverter:
 
     def remove_dangling_nodes(self, chakra_nodes: Dict[int, ChakraNode]) -> Dict[int, ChakraNode]:
         """
-        Removes any dangling nodes from the chakra_nodes dictionary.
+        Remove any dangling nodes from the chakra_nodes dictionary.
 
         A node is considered dangling if it has no parents and no children.
 
@@ -512,7 +506,7 @@ class PyTorchConverter:
 
     def update_parent_to_children_map(self, chakra_nodes: Dict[int, ChakraNode]) -> Dict[int, List[int]]:
         """
-        Updates the parent_to_children_map based on the data dependencies of each node.
+        Update the parent_to_children_map based on the data dependencies of each node.
 
         This map is used to efficiently simulate node execution based on data dependencies.
         """
@@ -526,13 +520,13 @@ class PyTorchConverter:
 
     def identify_cyclic_dependencies(self, chakra_nodes: Dict[int, ChakraNode]) -> None:
         """
-        Identifies if there are any cyclic dependencies among Chakra nodes.
+        Identify if there are any cyclic dependencies among Chakra nodes.
 
         This method checks for cycles in the graph of Chakra nodes using a depth-first search (DFS) algorithm. It logs
         an error message and raises an exception if a cycle is detected, ensuring the graph is a Directed Acyclic Graph
         (DAG).
 
-        Raises:
+        Raises
             Exception: If a cyclic dependency is detected among the Chakra nodes.
         """
         visited = set()
@@ -581,9 +575,9 @@ class PyTorchConverter:
         chakra_nodes: Dict[int, ChakraNode],
     ) -> None:
         """
-        Writes the Chakra execution trace by encoding global metadata and nodes.
+        Write the Chakra execution trace by encoding global metadata and nodes.
 
-        Encodes and writes both the metadata and individual nodes to create a
+        Encode and write both the metadata and individual nodes to create a
         complete execution trace.
         """
         self.logger.info("Writing Chakra execution trace.")
@@ -603,7 +597,7 @@ class PyTorchConverter:
         pytorch_finish_ts: int,
     ) -> None:
         """
-        Encodes and writes global metadata for the Chakra execution trace.
+        Encode and write global metadata for the Chakra execution trace.
 
         This process includes encoding metadata like schema, process ID, timestamps,
         and other relevant information for the Chakra execution trace.
@@ -622,7 +616,7 @@ class PyTorchConverter:
 
     def _encode_and_write_nodes(self, chakra_et: IO[bytes], chakra_nodes: Dict[int, ChakraNode]) -> None:
         """
-        Encodes and writes nodes for the Chakra execution trace.
+        Encode and write nodes for the Chakra execution trace.
 
         Each node from the PyTorch execution trace is encoded and written into the Chakra format. This includes node
         IDs, names, types, dependencies, and other attributes.
@@ -640,9 +634,9 @@ class PyTorchConverter:
 
     def close_chakra_execution_trace(self, chakra_et: IO[bytes]) -> None:
         """
-        Closes the Chakra execution trace file if it is open.
+        Close the Chakra execution trace file if it is open.
 
-        Ensures proper closure of the trace file to preserve data integrity.
+        Ensure proper closure of the trace file to preserve data integrity.
 
         Args:
             chakra_et (IO[bytes]): File handle for the Chakra execution trace output file.
@@ -658,7 +652,7 @@ class PyTorchConverter:
         parent_to_children_map: Dict[int, List[int]],
     ) -> None:
         """
-        Simulates the execution of Chakra nodes based on data dependencies.
+        Simulate the execution of Chakra nodes based on data dependencies.
 
         This method considers both CPU and GPU nodes. Nodes are issued for execution based on the readiness determined
         by dependency resolution. A simplistic global clock is used to model the execution time.

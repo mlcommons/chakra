@@ -6,6 +6,15 @@ from .pytorch_tensor import PyTorchTensor
 
 
 class PyTorchNodeType(Enum):
+    """
+    Enum representing the type of a PyTorch node in an execution trace.
+
+    Attributes
+        CPU_OP (int): Represents a CPU operation.
+        GPU_OP (int): Represents a GPU operation.
+        LABEL (int): Represents a non-operator node (e.g., labels).
+    """
+
     CPU_OP = 1
     GPU_OP = 2
     LABEL = 3  # Non-operator nodes
@@ -15,7 +24,7 @@ class PyTorchNode:
     """
     Represents a node in a PyTorch execution trace, initialized based on a schema version.
 
-    Attributes:
+    Attributes
         schema (str): Schema version used for initialization.
         data_deps (List[PyTorchNode]): List of data-dependent parent nodes.
         children (List[PyTorchNode]): List of child nodes.
@@ -39,8 +48,7 @@ class PyTorchNode:
 
     def __init__(self, schema: str, node_data: Dict[str, Any]) -> None:
         """
-        Initializes a PyTorchNode object using the node data and schema version
-        provided.
+        Initialize a PyTorchNode object using the node data and schema version provided.
 
         Args:
             schema (str): The schema version based on which the node will be initialized.
@@ -57,9 +65,9 @@ class PyTorchNode:
 
     def __repr__(self) -> str:
         """
-        Provides a string representation of the PyTorchNode.
+        Provide a string representation of the PyTorchNode.
 
-        Returns:
+        Returns
             str: String representation of the node.
         """
         return (
@@ -69,7 +77,7 @@ class PyTorchNode:
 
     def parse_data(self, node_data: Dict[str, Any]) -> None:
         """
-        Parses node data based on the provided schema version.
+        Parse node data based on the provided schema version.
 
         Args:
             node_data (Dict[str, Any]): The node data to be parsed.
@@ -101,9 +109,9 @@ class PyTorchNode:
 
     def get_op_type(self) -> PyTorchNodeType:
         """
-        Determines the type of PyTorch operation.
+        Determine the type of PyTorch operation.
 
-        Returns:
+        Returns
             PyTorchNodeType: The type of the PyTorch operation.
         """
         if self.is_gpu_op():
@@ -115,25 +123,25 @@ class PyTorchNode:
 
     def is_cpu_op(self) -> bool:
         """
-        Checks if the node is a CPU operator.
+        Check if the node is a CPU operator.
 
-        Returns:
+        Returns
             bool: True if the node is a CPU operator, False otherwise.
         """
         return self.get_op_type() == PyTorchNodeType.CPU_OP
 
     def is_gpu_op(self) -> bool:
         """
-        Checks if the node is a GPU operator.
+        Check if the node is a GPU operator.
 
-        Returns:
+        Returns
             bool: True if the node is a GPU operator, False otherwise.
         """
         return self.cat is not None
 
     def add_data_dep(self, parent_node: "PyTorchNode") -> None:
         """
-        Adds a data-dependent parent node to this node.
+        Add a data-dependent parent node to this node.
 
         Args:
             parent_node (PyTorchNode): The parent node to be added.
@@ -142,7 +150,7 @@ class PyTorchNode:
 
     def add_child(self, child_node: "PyTorchNode") -> None:
         """
-        Adds a child node to this node.
+        Add a child node to this node.
 
         Args:
             child_node (PyTorchNode): The child node to be added.
@@ -151,7 +159,7 @@ class PyTorchNode:
 
     def add_gpu_child(self, gpu_child_node: "PyTorchNode") -> None:
         """
-        Adds a child GPU node for this node.
+        Add a child GPU node for this node.
 
         Args:
             gpu_child_node (Optional[PyTorchNode]): The child GPU node to be added.
@@ -160,18 +168,18 @@ class PyTorchNode:
 
     def is_record_param_comms_op(self) -> bool:
         """
-        Checks if the node is a record_param_comms operator.
+        Check if the node is a record_param_comms operator.
 
-        Returns:
+        Returns
             bool: True if the node is a record_param_comms operator, False otherwise.
         """
         return "record_param_comms" in self.name
 
     def is_nccl_op(self) -> bool:
         """
-        Checks if the node is a NCCL operator.
+        Check if the node is a NCCL operator.
 
-        Returns:
+        Returns
             bool: True if the node is a NCCL operator, False otherwise.
         """
         return "nccl:" in self.name
@@ -179,9 +187,9 @@ class PyTorchNode:
     @property
     def comm_size(self) -> int:
         """
-        Calculates the communication size for the given input types and shapes.
+        Calculate the communication size for the given input types and shapes.
 
-        Returns:
+        Returns
             int: The calculated communication size.
         """
         comm_size = 0
@@ -195,7 +203,7 @@ class PyTorchNode:
     @staticmethod
     def get_data_type_size(data_type: str) -> int:
         """
-        Returns the data type size of a given data type in string.
+        Return the data type size of a given data type in string.
 
         Args:
             data_type (str): The data type as a string.

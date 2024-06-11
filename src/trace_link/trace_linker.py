@@ -29,7 +29,7 @@ class TraceLinker:
     """
     Links PyTorch Execution Traces (ET) and Kineto Traces to generate PyTorch ET plus.
 
-    Attributes:
+    Attributes
         pytorch_et_file (str): Path to the PyTorch execution trace file.
         kineto_file (str): Path to the Kineto trace file.
         pytorch_ops (List[PyTorchOperator]): PyTorch operators.
@@ -62,7 +62,7 @@ class TraceLinker:
 
     def __init__(self, pytorch_et_file: str, kineto_file: str, log_level: str = "INFO") -> None:
         """
-        Initializes the TraceLinker with paths to the PyTorch and Kineto trace files, and a log level.
+        Initialize the TraceLinker with paths to the PyTorch and Kineto trace files, and a log level.
 
         Args:
             pytorch_et_file (str): Path to the PyTorch execution trace file.
@@ -95,21 +95,19 @@ class TraceLinker:
         self.logger.setLevel(log_level.upper())
 
     def load_traces(self) -> None:
-        """
-        Loads both PyTorch Execution Traces and Kineto Traces.
-        """
+        """Load both PyTorch Execution Traces and Kineto Traces."""
         self.pytorch_ops = self.load_pytorch_et()
         kineto_data = self.load_kineto_trace()
         self.update_kineto_data(kineto_data)
 
     def load_pytorch_et(self) -> List[PyTorchOperator]:
         """
-        Loads and processes the PyTorch Execution Trace.
+        Load and process the PyTorch Execution Trace.
 
         This method handles multiple iterations in the trace and extracts the nodes, considering the specified
         annotation for segmenting the iterations.
 
-        Returns:
+        Returns
             List[PyTorchOperator]: List of PyTorch operators.
         """
         self.logger.info("Starting to load PyTorch Execution Trace.")
@@ -124,7 +122,7 @@ class TraceLinker:
 
     def extract_pytorch_ops(self, node: PyTorchOperator) -> List[PyTorchOperator]:
         """
-        Extracts and sorts nodes from the PyTorch execution trace recursively.
+        Extract and sort nodes from the PyTorch execution trace recursively.
 
         This method traverses the execution trace starting from the provided node, extracting all the operator nodes
         recursively, and then returns them sorted by their identifiers.
@@ -147,11 +145,12 @@ class TraceLinker:
 
     def load_kineto_trace(self) -> Dict:
         """
-        Loads and processes the Kineto Trace.
+        Load and process the Kineto Trace.
+
         This method parses the Kineto trace file, creating KinetoOperator instances for each operator in the trace.
         It then categorizes and segments these operators for further processing and linking with PyTorch operators.
 
-        Returns:
+        Returns
             Dict: Dictionary containing various data structures needed for linking traces.
         """
         self.logger.info("Starting to load Kineto Trace.")
@@ -177,9 +176,10 @@ class TraceLinker:
 
     def construct_kineto_data_structures(self, kineto_ops: List[KinetoOperator]) -> Dict:
         """
-        Constructs necessary data structures required for trace linking from the provided Kineto operators. This method
-        identifies process start time, end time, thread start time, and end time, and also categorizes operators into
-        CPU, GPU, and other relevant groups.
+        Construct necessary data structures required for trace linking from the provided Kineto operators.
+
+        This method identifies process start time, end time, thread start time, and end time, and also categorizes
+        operators into CPU, GPU, and other relevant groups.
 
         Args:
             kineto_ops (List[KinetoOperator]): List of Kineto operators to categorize.
@@ -256,9 +256,10 @@ class TraceLinker:
 
     def calculate_exclusive_dur(self, kineto_tid_cpu_ops_map: Dict[int, List[KinetoOperator]]) -> None:
         """
-        Calculates the exclusive duration of each operator in the Kineto traces in parallel. The exclusive duration is
-        defined as the total duration of the operator minus any time spent in child operators, effectively representing
-        the time spent exclusively in that operator.
+        Calculate the exclusive duration of each operator in the Kineto traces in parallel.
+
+        The exclusive duration is defined as the total duration of the operator minus any time spent in child operators,
+        effectively representing the time spent exclusively in that operator.
 
         Args:
             kineto_tid_cpu_ops_map (Dict[int, List[KinetoOperator]]): Map of thread IDs to their corresponding Kineto
@@ -316,7 +317,7 @@ class TraceLinker:
     @staticmethod
     def merge_overlapping_intervals(intervals: List[Tuple[int, int]]) -> List[Tuple[int, int]]:
         """
-        Merges overlapping intervals into a single interval.
+        Merge overlapping intervals into a single interval.
 
         Args:
             intervals (List[Tuple[int, int]]): List of intervals.
@@ -344,8 +345,7 @@ class TraceLinker:
 
     def update_kineto_data(self, kineto_data: Dict) -> None:
         """
-        Updates the instance variables of the TraceLinker class using the data structures from the kineto_data
-        dictionary.
+        Update the variables of the TraceLinker class using the data structures from the kineto_data dictionary.
 
         Args:
             kineto_data (Dict): Dictionary containing categorized operators and timing boundaries.
@@ -365,10 +365,12 @@ class TraceLinker:
 
     def enforce_inter_thread_order(self, threshold: int = 1000) -> None:
         """
-        Enforces order between groups of operators in different threads. In Kineto traces with multiple threads,
-        operators are executed in turns, creating groups. This function identifies these groups by detecting
-        significant gaps in execution within each thread. It then establishes dependencies between these groups across
-        different threads, ensuring the final Chakra execution traces reflect inter-thread dependencies realistically.
+        Enforce order between groups of operators in different threads.
+
+        In Kineto traces with multiple threads, operators are executed in turns, creating groups. This function
+        identifies these groups by detecting significant gaps in execution within each thread. It then establishes
+        dependencies between these groups across different threads, ensuring the final Chakra execution traces reflect
+        inter-thread dependencies realistically.
 
         An isolated group is formed when there's a significant gap in execution within a thread. Each new group relies
         on the last CPU operator from other threads, enforcing order and dependency across threads.
@@ -424,8 +426,9 @@ class TraceLinker:
         timestamp: int,
     ) -> Optional[int]:
         """
-        Finds the last CPU node ID before a given timestamp in threads other than the excluded one. This ID is used
-        to establish dependencies between groups across threads.
+        Find the last CPU node ID before a given timestamp in threads other than the excluded one.
+
+        This ID is used to establish dependencies between groups across threads.
 
         Args:
             ops_by_tid (Dict[int, List[KinetoOperator]]): Operators grouped by thread ID.
@@ -456,8 +459,9 @@ class TraceLinker:
 
     def link_traces(self) -> None:
         """
-        Initiates the linking process between PyTorch Execution Traces (ET) and Kineto Traces to produce an enhanced
-        PyTorch Execution Trace (ET+). This process relies on the assumption of an 'exact match' between these traces.
+        Link PyTorch Execution Traces (ET) and Kineto Traces to produce an enhanced PyTorch Execution Trace (ET+).
+
+        This process relies on the assumption of an 'exact match' between these traces.
         """
         self.logger.info("Starting the process of linking PyTorch and Kineto traces.")
         (
@@ -507,8 +511,9 @@ class TraceLinker:
         kineto_process_end_time: int,
     ) -> Tuple[List[KinetoOperator], List[KinetoOperator], List[int]]:
         """
-        Adds thread and process annotations to Kineto operators based on previously tracked timing information. These
-        annotations are crucial for aligning Kineto operators with PyTorch ET nodes, ensuring completeness and
+        Add thread and process annotations to Kineto operators based on previously tracked timing information.
+
+        These annotations are crucial for aligning Kineto operators with PyTorch ET nodes, ensuring completeness and
         compatibility of trace data for analysis. This method uses the process start and end times, as well as thread
         start and end times, collected during the categorization process to insert appropriate annotations directly
         into the Kineto operators list.
@@ -576,10 +581,7 @@ class TraceLinker:
         kineto_rf_id_to_kineto_op_map: Dict[int, KinetoOperator],
         kineto_gpu_ops: List[KinetoOperator],
     ) -> Tuple[Dict[int, List[KinetoOperator]], Dict[int, int], Dict[int, int], Dict[int, int], Dict[int, int]]:
-        """
-        Maps PyTorch ET nodes to corresponding Kineto operators, ensuring each PyTorch node has a matching Kineto
-        operator.
-        """
+        """Map PyTorch ET nodes to corresponding Kineto operators."""
         self.logger.info("Mapping PyTorch ET nodes to Kineto operators.")
         cpu_ev_idx_to_gpu_ops_map = self.group_gpu_ops_by_cpu_launchers(
             kineto_gpu_ops, kineto_correlation_cuda_runtime_map
@@ -631,7 +633,7 @@ class TraceLinker:
         self, kineto_gpu_ops: List[KinetoOperator], kineto_correlation_cuda_runtime_map: Dict[int, KinetoOperator]
     ) -> Dict[int, List[KinetoOperator]]:
         """
-        Groups GPU operators based on their corresponding CPU launchers.
+        Group GPU operators based on their corresponding CPU launchers.
 
         This is determined by the 'ev_idx' which links GPU operators to their initiating CPU launcher events.
 
@@ -672,9 +674,10 @@ class TraceLinker:
         self, kineto_gpu_op: KinetoOperator, kineto_correlation_cuda_runtime_map: Dict[int, KinetoOperator]
     ) -> Optional[KinetoOperator]:
         """
-        Finds the parent CPU operator for a given GPU operator by identifying the corresponding CUDA runtime operator
-        through the correlation ID. It then locates the closest preceding CPU operator based on the CUDA runtime's
-        timestamp, considering the temporal distance between the GPU operation's start and the initiating CPU operation.
+        Find the parent CPU operator for a given GPU operator by identifying the corresponding CUDA runtime operator.
+
+        It then locates the closest preceding CPU operator based on the CUDA runtime's timestamp, considering the
+        temporal distance between the GPU operation's start and the initiating CPU operation.
 
         Args:
             kineto_gpu_op (KinetoOperator): The GPU operator.
@@ -715,8 +718,7 @@ class TraceLinker:
         self, kineto_gpu_op: KinetoOperator, kineto_ops: List[KinetoOperator], ts: int
     ) -> Optional[KinetoOperator]:
         """
-        Finds the Kineto operator that is closest in start time to a given timestamp and has a duration that covers
-        the timestamp.
+        Find the Kineto operator that is closest in start time to a given timestamp and that covers the timestamp.
 
         Args:
             kineto_gpu_op (KinetoOperator): The GPU operator being compared.
@@ -771,7 +773,7 @@ class TraceLinker:
         kineto_rf_id_to_kineto_op_map: Dict[int, KinetoOperator],
     ) -> Tuple[List[KinetoOperator], int, int, int, Optional[int]]:
         """
-        Links a PyTorch operator to its corresponding Kineto operator and any associated GPU operators.
+        Link a PyTorch operator to its corresponding Kineto operator and any associated GPU operators.
 
         Args:
             pytorch_op (PyTorchOperator): PyTorch operator to link.
@@ -805,7 +807,7 @@ class TraceLinker:
 
     def link_gpu_ops(self, pytorch_op: PyTorchOperator, kineto_gpu_ops: List[KinetoOperator]) -> None:
         """
-        Links GPU operators to a PyTorch operator.
+        Link GPU operators to a PyTorch operator.
 
         Args:
             pytorch_op (PyTorchOperator): The PyTorch operator to link to.
@@ -824,8 +826,7 @@ class TraceLinker:
         pytorch_op_id_to_inter_thread_dep_map: Dict[int, int],
     ) -> Dict:
         """
-        Constructs the enhanced PyTorch Execution Trace (ET+) data structure by integrating Kineto data into the
-        original PyTorch Execution Trace.
+        Construct the enhanced PyTorch Execution Trace (ET+) data structure.
 
         This method enriches the PyTorch execution trace with detailed performance data from the Kineto trace, offering
         a comprehensive view of the execution.
@@ -878,8 +879,7 @@ class TraceLinker:
         pytorch_op_id_to_inter_thread_dep_map: Dict[int, int],
     ) -> List[Dict]:
         """
-        Processes a single operator in the PyTorch ET data, assigns a new unique ID, and processes any dependent GPU
-        operators.
+        Process a single operator in the PyTorch ET data, assign a new unique ID, and process any dependent operators.
 
         Args:
             op (Dict): The operator to be processed.
@@ -921,8 +921,9 @@ class TraceLinker:
         self, cpu_op: Dict, orig_op_id: int, pytorch_op_id_to_kineto_ops_map: Dict[int, List[KinetoOperator]]
     ) -> List[Dict]:
         """
-        Creates and returns a list of GPU operators that are dependent on a specific CPU operator, sorted by their
-        timestamp. The GPU operators are deep copies of the existing operators with updated IDs and other relevant
+        Create and return a list of GPU operators that are dependent on a specific CPU operator.
+
+        The GPU operators are deep copies of the existing operators with updated IDs and other relevant
         fields from the CPU operator.
 
         Args:
@@ -960,7 +961,7 @@ class TraceLinker:
 
     def dump_pytorch_execution_trace_plus(self, output_file: str) -> None:
         """
-        Dumps the enhanced PyTorch Execution Trace (ET+) data to a file.
+        Dump the enhanced PyTorch Execution Trace (ET+) data to a file.
 
         Args:
             output_file (str): The file path where the ET+ data will be saved.

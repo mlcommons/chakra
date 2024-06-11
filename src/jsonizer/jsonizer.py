@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import argparse
 
 from google.protobuf.json_format import MessageToJson
