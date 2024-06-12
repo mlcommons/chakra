@@ -75,7 +75,7 @@ TEST_F(ETFeederTest, RemoveTest) {
 
 TEST_F(ETFeederTest, RemoveAndGetNextTest) {
   SetUp("tests/data/chakra.0.et");
-  std::shared_ptr<Chakra::ETFeederNode> node = trace->lookupNode(5);
+  std::shared_ptr<Chakra::ETFeederNode> node = trace->lookupNode(216);
   ASSERT_EQ(node->id(), 216);
   trace->removeNode(216);
   node = trace->getNextIssuableNode();
