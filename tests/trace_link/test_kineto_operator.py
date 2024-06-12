@@ -43,28 +43,32 @@ def test_repr_method(sample_operator_data):
     expected_repr = (
         "KinetoOperator(id=None, category=Kernel, name=cudaLaunchKernel, phase=X, "
         "inclusive_dur=100, exclusive_dur=100, timestamp=1590000000, external_id=123, ev_idx=456, "
-        "tid=1234, parent_pytorch_op_id=None, inter_thread_dep=None, stream=7, rf_id=12, "
+        "tid=1234, parent_pytorch_op_id=None, inter_thread_dep=None, sync_dep=[], stream=7, rf_id=12, "
         "correlation=99)"
     )
     assert repr(operator) == expected_repr
 
-@pytest.mark.parametrize("category, name, expected", [
-    ("cuda_driver", "cuLaunchKernel", True),
-    ("cuda_driver", "cuLaunchKernelEx", True),
-    ("cuda_driver", "cudaLaunchKernel", True),
-    ("cuda_driver", "cudaLaunchKernelExC", True),
-    ("cuda_runtime", "cuLaunchKernel", True),
-    ("cuda_runtime", "cuLaunchKernelEx", True),
-    ("cuda_runtime", "cudaLaunchKernel", True),
-    ("cuda_runtime", "cudaLaunchKernelExC", True),
-    ("cuda_runtime", "cudaMemcpy", True),
-    ("cuda_runtime", "cudaMemcpyAsync", True),
-    ("cuda_runtime", "cudaMemcpyFromSymbol", True),
-    ("cuda_runtime", "cudaMemcpyToSymbol", True),
-    ("cpu_op", "cudaLaunchKernel", False),
-    ("cuda_runtime", "someOtherOperation", False),
-    ("some_other_category", "cudaLaunchKernel", False)
-])
+
+@pytest.mark.parametrize(
+    "category, name, expected",
+    [
+        ("cuda_driver", "cuLaunchKernel", True),
+        ("cuda_driver", "cuLaunchKernelEx", True),
+        ("cuda_driver", "cudaLaunchKernel", True),
+        ("cuda_driver", "cudaLaunchKernelExC", True),
+        ("cuda_runtime", "cuLaunchKernel", True),
+        ("cuda_runtime", "cuLaunchKernelEx", True),
+        ("cuda_runtime", "cudaLaunchKernel", True),
+        ("cuda_runtime", "cudaLaunchKernelExC", True),
+        ("cuda_runtime", "cudaMemcpy", True),
+        ("cuda_runtime", "cudaMemcpyAsync", True),
+        ("cuda_runtime", "cudaMemcpyFromSymbol", True),
+        ("cuda_runtime", "cudaMemcpyToSymbol", True),
+        ("cpu_op", "cudaLaunchKernel", False),
+        ("cuda_runtime", "someOtherOperation", False),
+        ("some_other_category", "cudaLaunchKernel", False),
+    ],
+)
 def test_is_cuda_launch_op(category, name, expected):
     """Test the is_cuda_launch_op method with various inputs."""
     operator_data = {
