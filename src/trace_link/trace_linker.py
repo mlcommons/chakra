@@ -2,10 +2,13 @@ import bisect
 import copy
 import json
 import logging
+import os
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Optional, Tuple
 
+from hta.analyzers.critical_path_analysis import CPEdgeType
+from hta.trace_analysis import TraceAnalysis
 from param_bench.train.compute.python.tools.execution_trace import (
     EXECUTION_TRACE_PROCESS_ANNOTATION,
     EXECUTION_TRACE_THREAD_ANNOTATION,
@@ -45,11 +48,12 @@ class TraceLinker:
         self.logger: logging.Logger = logging.getLogger(__name__)
         self.logger.setLevel(log_level.upper())
 
-    def link(self, pytorch_et_file: str, kineto_file: str, output_file: str) -> None:
+    def link(self, rank: int, pytorch_et_file: str, kineto_file: str, output_file: str) -> None:
         """
         High-level method to link traces and produce the ET+ file.
 
         Args:
+            rank (int): Rank for the input traces.
             pytorch_et_file (str): Path to the PyTorch execution trace file.
             kineto_file (str): Path to the Kineto trace file.
             output_file (str): Path for the output PyTorch execution trace plus file.
@@ -69,9 +73,13 @@ class TraceLinker:
             kineto_rf_id_to_kineto_op_map,
             sorted_kineto_cpu_ops,
             sorted_kineto_cpu_op_ts,
+            kineto_external_id_to_kineto_op_map,
         ) = self.update_kineto_data(kineto_data)
 
+        sync_deps = self.load_sync_dependencies(rank, kineto_file)
         kineto_tid_cpu_ops_map = self.enforce_inter_thread_order(kineto_tid_cpu_ops_map)
+        self.enforce_sync_dep(kineto_tid_cpu_ops_map, sync_deps)
+
         pytorch_et_plus_data = self.link_traces(
             pytorch_et_file,
             pytorch_ops,
@@ -84,6 +92,7 @@ class TraceLinker:
             kineto_thread_info,
             kineto_process_start_time,
             kineto_process_end_time,
+            kineto_external_id_to_kineto_op_map,
         )
         self.dump_pytorch_execution_trace_plus(pytorch_et_plus_data, output_file)
 
@@ -206,6 +215,7 @@ class TraceLinker:
         kineto_gpu_ops = []
         kineto_id_arrow_op_map = {}
         kineto_id_cuda_launch_op_map = {}
+        kineto_external_id_to_kineto_op_map = {}
 
         for op in kineto_ops:
             if op.is_cpu_op():
@@ -247,6 +257,9 @@ class TraceLinker:
                 thread_start_end[0] = min(thread_start_end[0], op.timestamp)
                 thread_start_end[1] = max(thread_start_end[1], op.timestamp + op.inclusive_dur)
 
+            if op.external_id is not None:
+                kineto_external_id_to_kineto_op_map[op.external_id] = op
+
         kineto_rf_id_to_kineto_op_map = {op.rf_id: op for op in kineto_cpu_ops if op.rf_id is not None}
 
         return {
@@ -262,6 +275,7 @@ class TraceLinker:
             "kineto_rf_id_to_kineto_op_map": kineto_rf_id_to_kineto_op_map,
             "sorted_kineto_cpu_ops": [],
             "sorted_kineto_cpu_op_ts": [],
+            "kineto_external_id_to_kineto_op_map": kineto_external_id_to_kineto_op_map,
         }
 
     def calculate_exclusive_dur(self, kineto_tid_cpu_ops_map: Dict[int, List[KinetoOperator]]) -> None:
@@ -375,6 +389,7 @@ class TraceLinker:
         kineto_rf_id_to_kineto_op_map = {op.rf_id: op for op in kineto_cpu_ops if op.rf_id is not None}
         sorted_kineto_cpu_ops = kineto_data["sorted_kineto_cpu_ops"]
         sorted_kineto_cpu_op_ts = kineto_data["sorted_kineto_cpu_op_ts"]
+        kineto_external_id_to_kineto_op_map = kineto_data["kineto_external_id_to_kineto_op_map"]
 
         return (
             kineto_cpu_ops,
@@ -389,7 +404,54 @@ class TraceLinker:
             kineto_rf_id_to_kineto_op_map,
             sorted_kineto_cpu_ops,
             sorted_kineto_cpu_op_ts,
+            kineto_external_id_to_kineto_op_map,
         )
+
+    def load_sync_dependencies(
+        self, rank: int, kineto_file: str, annotation: str = "ProfilerStep", instance_id: int = 0
+    ) -> Dict[int, List[int]]:
+        """
+        Load synchronization dependencies using Holistic Trace Analysis (HTA).
+
+        Holistic Trace Analysis (HTA) provides various features for trace analysis, one of which is critical path
+        analysis. This feature identifies dependencies between GPU and CPU operators that are in the critical path.
+        This method leverages HTA's critical path analysis to determine synchronization points and dependencies,
+        returning them as a dictionary.
+
+        Args:
+            rank (int): Rank for the input Kineto trace.
+            kineto_file (str): Path to the Kineto trace file.
+            annotation (str): Annotation to use for the analysis. Defaults to "ProfilerStep".
+            instance_id (int): Instance ID for the analysis. Defaults to 0.
+
+        Returns:
+            Dict[int, List[int]]: A dictionary mapping end event's external ID to a list of start event's external IDs
+                that have synchronization dependencies.
+        """
+        sync_dependencies = {}
+        trace_analysis = TraceAnalysis(trace_dir=os.path.dirname(kineto_file))
+        cp_graph, success = trace_analysis.critical_path_analysis(
+            rank=rank, annotation=annotation, instance_id=instance_id
+        )
+        if not success:
+            self.logger.error("Failed to load Critical Path Graph")
+
+        raw_events = trace_analysis.t.get_raw_trace_for_one_rank(rank=rank)["traceEvents"]
+        for edge in cp_graph.critical_path_edges_set:
+            if edge.type in [CPEdgeType.SYNC_DEPENDENCY]:
+                start_event_id, end_event_id = cp_graph.get_events_for_edge(edge)
+                start_event, end_event = raw_events[start_event_id], raw_events[end_event_id]
+                if "External id" in end_event["args"] and "External id" in start_event["args"]:
+                    end_event_external_id = end_event["args"]["External id"]
+                    start_event_external_id = start_event["args"]["External id"]
+                    sync_dependencies.setdefault(end_event_external_id, []).append(start_event_external_id)
+                else:
+                    self.logger.warning(
+                        f"Synchronization dependency from event {start_event_id} to event {end_event_id} will "
+                        "not be considered due to missing external IDs."
+                    )
+
+        return sync_dependencies
 
     def enforce_inter_thread_order(
         self, kineto_tid_cpu_ops_map: Dict[int, List[KinetoOperator]], threshold: int = 1000
@@ -416,7 +478,9 @@ class TraceLinker:
 
         with ThreadPoolExecutor() as executor:
             futures = {
-                executor.submit(self.process_thread_inter_thread_order, tid, ops, kineto_tid_cpu_ops_map, threshold): tid
+                executor.submit(
+                    self.process_thread_inter_thread_order, tid, ops, kineto_tid_cpu_ops_map, threshold
+                ): tid
                 for tid, ops in kineto_tid_cpu_ops_map.items()
             }
 
@@ -499,6 +563,73 @@ class TraceLinker:
             self.logger.debug(f"Last CPU node before timestamp {timestamp} found: {last_cpu_node}")
         return last_cpu_node_rf_id
 
+    def enforce_sync_dep(
+        self,
+        kineto_tid_cpu_ops_map: Dict[int, List[KinetoOperator]],
+        sync_deps: Dict[int, List[int]],
+    ):
+        """
+        Enforces synchronization order by storing Kineto ops that have synchronization dependency.
+
+        Args:
+            kineto_tid_cpu_ops_map (Dict[int, List[KinetoOperator]]): Kineto CPU operators grouped by thread ID.
+            sync_deps (Dict[int, List[int]]): A dictionary mapping end event's external ID to a list of start event's
+                external IDs that have synchronization dependencies.
+        """
+        self.logger.info("Enforcing sync order in Kineto traces.")
+
+        with ThreadPoolExecutor() as executor:
+            futures = {
+                executor.submit(self.process_thread_sync_dep, tid, ops, sync_deps): tid
+                for tid, ops in kineto_tid_cpu_ops_map.items()
+            }
+
+            for future in as_completed(futures):
+                tid = futures[future]
+                try:
+                    future.result()
+                    self.logger.debug(f"Thread {tid} sync dependencies processed.")
+                except Exception as e:
+                    self.logger.error(f"Error processing thread {tid}: {e}")
+
+    def process_thread_sync_dep(
+        self,
+        tid: int,
+        ops: List[KinetoOperator],
+        sync_deps: Dict[int, List[int]],
+    ) -> None:
+        """
+        Process synchronization dependencies for a specific thread.
+
+        This method identifies synchronization dependencies for each operator within the current thread
+        and updates the `sync_dep` attribute of each operator accordingly.
+
+        Args:
+            tid (int): The current thread ID being processed.
+            ops (List[KinetoOperator]): Kineto operators.
+            sync_deps (Dict[int, List[int]]): A dictionary mapping end event's external ID to a list of start event's
+                external IDs that have synchronization dependencies.
+        """
+        self.logger.info(f"Thread {tid}: Identifying synchronization dependency.")
+        for op in ops:
+            op.sync_dep = self.find_sync_start_events(sync_deps, op.external_id)
+
+    def find_sync_start_events(self, sync_deps: Dict[int, List[int]], end_external_id: int) -> List[int]:
+        """
+        Find the starting events that have synchronization dependencies with a given ending event.
+
+        Args:
+            sync_deps (Dict[int, List[int]]): A dictionary mapping end event's external ID to a list of start event's
+                external IDs that have synchronization dependencies.
+            end_external_id (int): The external ID of the ending event.
+
+        Returns:
+            List[int]: The list of start event external IDs that need to be synchronized with the given ending event.
+        """
+        if end_external_id in sync_deps:
+            return sync_deps[end_external_id]
+        return []
+
     def link_traces(
         self,
         pytorch_et_file: str,
@@ -512,11 +643,32 @@ class TraceLinker:
         kineto_thread_info: Dict[int, Tuple[int, int]],
         kineto_process_start_time: int,
         kineto_process_end_time: int,
+        kineto_external_id_to_kineto_op_map: Dict[int, KinetoOperator],
     ) -> Dict:
         """
         Link PyTorch Execution Traces (ET) and Kineto Traces to produce an enhanced PyTorch Execution Trace (ET+).
 
         This process relies on the assumption of an 'exact match' between these traces.
+
+        Args:
+            pytorch_et_file (str): Path to the PyTorch execution trace file.
+            pytorch_ops (List[PyTorchOperator]): List of PyTorch operators.
+            kineto_cpu_ops (List[KinetoOperator]): List of Kineto CPU operators.
+            sorted_kineto_cpu_ops (List[KinetoOperator]): Sorted list of Kineto CPU operators.
+            sorted_kineto_cpu_op_ts (List[int]): Sorted list of timestamps for the Kineto CPU operators.
+            kineto_correlation_cuda_runtime_map (Dict[int, KinetoOperator]): Mapping between correlation IDs and
+                kernel-launching CUDA runtime operators.
+            kineto_rf_id_to_kineto_op_map (Dict[int, KinetoOperator]): Mapping between rf_id and Kineto operators.
+            kineto_gpu_ops (List[KinetoOperator]): List of Kineto GPU operators.
+            kineto_thread_info (Dict[int, Tuple[int, int]]): Information about threads, mapping thread IDs to a tuple
+                of start and end times.
+            kineto_process_start_time (int): Start time of the process, based on the earliest operator timestamp.
+            kineto_process_end_time (int): End time of the process, based on the latest operator timestamp.
+            kineto_external_id_to_kineto_op_map (Dict[int, KinetoOperator]): Mapping between external ID and Kineto
+                operators.
+
+        Returns:
+            Dict: The enhanced PyTorch Execution Trace (ET+).
         """
         self.logger.info("Starting the process of linking PyTorch and Kineto traces.")
         (
@@ -537,6 +689,7 @@ class TraceLinker:
             pytorch_op_id_to_exclusive_dur_map,
             pytorch_op_id_to_timestamp_map,
             pytorch_op_id_to_inter_thread_dep_map,
+            pytorch_op_id_to_sync_dep_map,
         ) = self.map_pytorch_to_kineto_ops(
             pytorch_ops,
             kineto_cpu_ops,
@@ -545,6 +698,7 @@ class TraceLinker:
             kineto_correlation_cuda_runtime_map,
             kineto_rf_id_to_kineto_op_map,
             kineto_gpu_ops,
+            kineto_external_id_to_kineto_op_map,
         )
         pytorch_et_plus_data = self.construct_et_plus_data(
             pytorch_et_file,
@@ -553,6 +707,7 @@ class TraceLinker:
             pytorch_op_id_to_exclusive_dur_map,
             pytorch_op_id_to_timestamp_map,
             pytorch_op_id_to_inter_thread_dep_map,
+            pytorch_op_id_to_sync_dep_map,
         )
         self.logger.info("Traces have been successfully linked.")
         return pytorch_et_plus_data
@@ -636,7 +791,15 @@ class TraceLinker:
         kineto_correlation_cuda_runtime_map: Dict[int, KinetoOperator],
         kineto_rf_id_to_kineto_op_map: Dict[int, KinetoOperator],
         kineto_gpu_ops: List[KinetoOperator],
-    ) -> Tuple[Dict[int, List[KinetoOperator]], Dict[int, int], Dict[int, int], Dict[int, int], Dict[int, int]]:
+        kineto_external_id_to_kineto_op_map,
+    ) -> Tuple[
+        Dict[int, List[KinetoOperator]],
+        Dict[int, int],
+        Dict[int, int],
+        Dict[int, int],
+        Dict[int, int],
+        Dict[int, List[int]],
+    ]:
         """Map PyTorch ET nodes to corresponding Kineto operators."""
         self.logger.info("Mapping PyTorch ET nodes to Kineto operators.")
         cpu_ev_idx_to_gpu_ops_map = self.group_gpu_ops_by_cpu_launchers(
@@ -648,6 +811,7 @@ class TraceLinker:
         pytorch_op_id_to_exclusive_dur_map = {}
         pytorch_op_id_to_timestamp_map = {}
         pytorch_op_id_to_inter_thread_dep_map = {}
+        pytorch_op_id_to_sync_dep_map = {}
 
         pytorch_ops_count = len(pytorch_ops)
         kineto_ops_count = len(kineto_cpu_ops)
@@ -674,7 +838,14 @@ class TraceLinker:
                     pytorch_op_id_to_exclusive_dur_map[pytorch_op.id],
                     pytorch_op_id_to_timestamp_map[pytorch_op.id],
                     pytorch_op_id_to_inter_thread_dep_map[pytorch_op.id],
-                ) = self.link_ops(pytorch_op, kineto_op, cpu_ev_idx_to_gpu_ops_map, kineto_rf_id_to_kineto_op_map)
+                    pytorch_op_id_to_sync_dep_map[pytorch_op.id],
+                ) = self.link_ops(
+                    pytorch_op,
+                    kineto_op,
+                    cpu_ev_idx_to_gpu_ops_map,
+                    kineto_rf_id_to_kineto_op_map,
+                    kineto_external_id_to_kineto_op_map,
+                )
 
         self.logger.info("Completed mapping of PyTorch operators to Kineto operators.")
         return (
@@ -683,6 +854,7 @@ class TraceLinker:
             pytorch_op_id_to_exclusive_dur_map,
             pytorch_op_id_to_timestamp_map,
             pytorch_op_id_to_inter_thread_dep_map,
+            pytorch_op_id_to_sync_dep_map,
         )
 
     def group_gpu_ops_by_cpu_launchers(
@@ -850,7 +1022,8 @@ class TraceLinker:
         kineto_op: KinetoOperator,
         cpu_ev_idx_to_gpu_ops_map: Dict[int, List[KinetoOperator]],
         kineto_rf_id_to_kineto_op_map: Dict[int, KinetoOperator],
-    ) -> Tuple[List[KinetoOperator], int, int, int, Optional[int]]:
+        kineto_external_id_to_kineto_op_map: Dict[int, KinetoOperator],
+    ) -> Tuple[List[KinetoOperator], int, int, int, Optional[int], List[int]]:
         """
         Link a PyTorch operator to its corresponding Kineto operator and any associated GPU operators.
 
@@ -859,6 +1032,8 @@ class TraceLinker:
             kineto_op (KinetoOperator): Corresponding Kineto operator.
             cpu_ev_idx_to_gpu_ops_map (Dict[int, List[KinetoOperator]]): GPU ops mapping.
             kineto_rf_id_to_kineto_op_map (Dict[int, KinetoOperator]): Kineto operator mapping.
+            kineto_external_id_to_kineto_op_map (Dict[int, KinetoOperator]): Mapping from external id to
+                KinetoOperators.
 
         Returns:
             Tuple containing:
@@ -867,22 +1042,70 @@ class TraceLinker:
                 - int: The exclusive duration of the linked Kineto operator.
                 - int: The timestamp of the linked Kineto operator.
                 - Optional[int]: The inter-thread dependency ID if present.
+                - List[int]: List of synchronization dependency IDs.
         """
         kineto_op.pytorch_op = pytorch_op
         linked_gpu_ops = cpu_ev_idx_to_gpu_ops_map.get(kineto_op.ev_idx, [])
         inclusive_dur = kineto_op.inclusive_dur
         exclusive_dur = kineto_op.exclusive_dur
         timestamp = kineto_op.timestamp
-        inter_thread_dep = None
 
-        if kineto_op.inter_thread_dep:
-            inter_thread_dep_kineto_op = kineto_rf_id_to_kineto_op_map[kineto_op.inter_thread_dep]
-            if inter_thread_dep_kineto_op.pytorch_op:
-                inter_thread_dep = inter_thread_dep_kineto_op.pytorch_op.id
+        inter_thread_dep = self.get_inter_thread_dep(kineto_op, kineto_rf_id_to_kineto_op_map)
+        sync_dep = self.get_sync_dep(kineto_op, kineto_external_id_to_kineto_op_map)
 
         self.link_gpu_ops(pytorch_op, linked_gpu_ops)
 
-        return linked_gpu_ops, inclusive_dur, exclusive_dur, timestamp, inter_thread_dep
+        return linked_gpu_ops, inclusive_dur, exclusive_dur, timestamp, inter_thread_dep, sync_dep
+
+    def get_inter_thread_dep(self, kineto_op, kineto_rf_id_to_kineto_op_map):
+        """
+        Retrieve the inter-thread dependency ID for a given Kineto operator.
+
+        This method finds the corresponding PyTorch operator ID for the inter-thread dependency
+        if it exists.
+
+        Args:
+            kineto_op (KinetoOperator): The Kineto operator being processed.
+            kineto_rf_id_to_kineto_op_map (Dict[int, KinetoOperator]): Mapping from rf_id to Kineto operators.
+
+        Returns:
+            Optional[int]: The PyTorch operator ID for the inter-thread dependency if it exists,
+                           otherwise None.
+        """
+        if kineto_op.inter_thread_dep:
+            inter_thread_dep_kineto_op = kineto_rf_id_to_kineto_op_map[kineto_op.inter_thread_dep]
+            if inter_thread_dep_kineto_op.pytorch_op:
+                return inter_thread_dep_kineto_op.pytorch_op.id
+        return None
+
+    def get_sync_dep(self, kineto_op, kineto_external_id_to_kineto_op_map):
+        """
+        Retrieve the synchronization dependencies for a given Kineto operator.
+
+        This method finds the corresponding PyTorch operator IDs for all synchronization dependencies
+        if they exist.
+
+        Args:
+            kineto_op (KinetoOperator): The Kineto operator being processed.
+            kineto_external_id_to_kineto_op_map (Dict[int, KinetoOperator]): Mapping from external ID to
+                                                                             Kineto operators.
+
+        Returns:
+            List[int]: A list of PyTorch operator IDs for the synchronization dependencies.
+        """
+        sync_dep = []
+        if kineto_op.sync_dep:
+            for external_id in kineto_op.sync_dep:
+                sync_dep_kineto_op = kineto_external_id_to_kineto_op_map[external_id]
+                if sync_dep_kineto_op.pytorch_op and (sync_dep_kineto_op.pytorch_op.id != kineto_op.pytorch_op.id):
+                    sync_dep.append(sync_dep_kineto_op.pytorch_op.id)
+                    self.logger.info(
+                        f"Added Synchronization Dependency (PyTorch ID) : {kineto_op.pytorch_op.id} -> "
+                        f"{sync_dep_kineto_op.pytorch_op.id}"
+                    )
+                else:
+                    self.logger.warning(f"Missing sync dependency {sync_dep_kineto_op}")
+        return sync_dep
 
     def link_gpu_ops(self, pytorch_op: PyTorchOperator, kineto_gpu_ops: List[KinetoOperator]) -> None:
         """
@@ -903,6 +1126,7 @@ class TraceLinker:
         pytorch_op_id_to_exclusive_dur_map: Dict[int, int],
         pytorch_op_id_to_timestamp_map: Dict[int, int],
         pytorch_op_id_to_inter_thread_dep_map: Dict[int, int],
+        pytorch_op_id_to_sync_dep_map: Dict[int, List[int]],
     ) -> Dict:
         """
         Construct the enhanced PyTorch Execution Trace (ET+) data structure.
@@ -919,6 +1143,8 @@ class TraceLinker:
             pytorch_op_id_to_timestamp_map (Dict[int, int]): Timestamp map for PyTorch ops.
             pytorch_op_id_to_inter_thread_dep_map (Dict[int, int]): Mapping of PyTorch operator IDs to IDs of latest CPU
                 node from other threads before the gap.
+            pytorch_op_id_to_sync_dep_map (Dict[int, List[int]]): Mapping of PyTorch operator IDs to IDs of nodes with
+                synchronization dependency.
 
         Returns:
             Dict: The constructed ET+ data.
@@ -937,6 +1163,7 @@ class TraceLinker:
                 pytorch_op_id_to_exclusive_dur_map,
                 pytorch_op_id_to_timestamp_map,
                 pytorch_op_id_to_inter_thread_dep_map,
+                pytorch_op_id_to_sync_dep_map,
             )
         pytorch_et_data["nodes"] += gpu_ops
 
@@ -956,6 +1183,7 @@ class TraceLinker:
         pytorch_op_id_to_exclusive_dur_map: Dict[int, int],
         pytorch_op_id_to_timestamp_map: Dict[int, int],
         pytorch_op_id_to_inter_thread_dep_map: Dict[int, int],
+        pytorch_op_id_to_sync_dep_map: Dict[int, List[int]],
     ) -> List[Dict]:
         """
         Process a single operator in the PyTorch ET data, assign a new unique ID, and process any dependent operators.
@@ -969,6 +1197,8 @@ class TraceLinker:
             pytorch_op_id_to_timestamp_map (Dict[int, int]): Timestamp map for PyTorch ops.
             pytorch_op_id_to_inter_thread_dep_map (Dict[int, int]): Mapping of PyTorch operator IDs to IDs of latest CPU
                 node from other threads before the gap.
+            pytorch_op_id_to_sync_dep_map (Dict[int, List[int]]): Mapping of PyTorch operator IDs to IDs of nodes with
+                synchronization dependency.
 
         Returns:
             List[Dict]: A list of GPU operators processed and linked to the given operator.
@@ -988,6 +1218,11 @@ class TraceLinker:
                 )
             else:
                 op["inter_thread_dep"] = None
+
+        if orig_op_id in pytorch_op_id_to_sync_dep_map:
+            op["sync_dep"] = [self.id_assigner.lookup_new_id(dep) for dep in pytorch_op_id_to_sync_dep_map[orig_op_id]]
+        else:
+            op["sync_dep"] = []
 
         # Process and append dependent GPU operators
         if orig_op_id in pytorch_op_id_to_kineto_ops_map:

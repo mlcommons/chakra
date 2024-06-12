@@ -14,6 +14,7 @@ def main() -> None:
         description="Link PyTorch execution trace with Kineto trace to produce Chakra traces."
         "For more information, see the guide at https://github.com/mlcommons/chakra/wiki/Chakra-Execution-Trace-Collection-%E2%80%90-A-Comprehensive-Guide-on-Merging-PyTorch-and-Kineto-Traces"
     )
+    parser.add_argument("--rank", type=int, required=True, help="Rank for the input traces")
     parser.add_argument(
         "--pytorch-et-file",
         type=str,
@@ -32,7 +33,7 @@ def main() -> None:
     args = parser.parse_args()
 
     linker = TraceLinker(args.log_level)
-    linker.link(args.pytorch_et_file, args.kineto_file, args.output_file)
+    linker.link(args.rank, args.pytorch_et_file, args.kineto_file, args.output_file)
 
 
 if __name__ == "__main__":

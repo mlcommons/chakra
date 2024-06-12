@@ -26,6 +26,15 @@ jobs:
         git checkout c83ce8429110a86549c40fec5a01acbd9fbd54a4
         pip install .
 
+    - name: Install HTA
+      run: |
+        git clone https://github.com/facebookresearch/HolisticTraceAnalysis.git
+        cd HolisticTraceAnalysis
+        git checkout 5c7898abbc52a1d4051ef6c93365477feb6c08a8
+        git submodule update --init
+        pip install -r requirements.txt
+        pip install -e .
+
     - name: Install Dependencies
       run: |
         pip install -r requirements-dev.txt

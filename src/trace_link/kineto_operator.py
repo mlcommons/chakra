@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from param_bench.train.compute.python.tools.execution_trace import Node as PyTorchOperator
 
@@ -21,6 +21,7 @@ class KinetoOperator:
         pytorch_op (Optional[PyTorchOperator]): Corresponding PyTorch operator object.
         parent_pytorch_op_id (Optional[int]): ID of the parent PyTorch operator.
         inter_thread_dep (Optional[int]): Identifier for inter-thread dependencies.
+        sync_dep (Optional[List[int]]): IDs of the nodes that this node depends on.
         stream (Optional[int]): CUDA stream identifier associated with the operator.
         rf_id (Optional[int]): Record function identifier.
         correlation (int): Identifier used to correlate CUDA runtime and GPU operations.
@@ -47,6 +48,7 @@ class KinetoOperator:
         self.pytorch_op: Optional[PyTorchOperator] = None
         self.parent_pytorch_op_id: Optional[int] = None
         self.inter_thread_dep: Optional[int] = None
+        self.sync_dep: Optional[List[int]] = None
         self.stream: Optional[int] = kineto_op.get("args", {}).get("stream", None)
         self.rf_id: Optional[int] = kineto_op.get("args", {}).get("Record function id", None)
         self.correlation: int = kineto_op.get("args", {}).get("correlation", -1)
@@ -64,7 +66,7 @@ class KinetoOperator:
             f"exclusive_dur={self.exclusive_dur}, timestamp={self.timestamp}, "
             f"external_id={self.external_id}, ev_idx={self.ev_idx}, tid={self.tid}, "
             f"parent_pytorch_op_id={self.parent_pytorch_op_id}, inter_thread_dep={self.inter_thread_dep}, "
-            f"stream={self.stream}, rf_id={self.rf_id}, correlation={self.correlation})"
+            f"sync_dep={self.sync_dep}, stream={self.stream}, rf_id={self.rf_id}, correlation={self.correlation})"
         )
 
     def is_cpu_op(self) -> bool:
