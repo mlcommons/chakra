@@ -405,7 +405,7 @@ def test_calculate_exclusive_dur(trace_linker):
 
 
 @patch("chakra.src.trace_link.trace_linker.TraceLinker.find_last_cpu_node_before_timestamp")
-def test_process_thread(mock_find_last, trace_linker):
+def test_process_thread_inter_thread_order(mock_find_last, trace_linker):
     mock_op1 = MagicMock(spec=KinetoOperator)
     mock_op1.timestamp = 100
     mock_op1.inclusive_dur = 50
@@ -421,7 +421,7 @@ def test_process_thread(mock_find_last, trace_linker):
     mock_op2.rf_id = 2
 
     ops_by_tid = {1: [mock_op1, mock_op2]}
-    trace_linker.process_thread(1, [mock_op1, mock_op2], ops_by_tid, 1000)
+    trace_linker.process_thread_inter_thread_order(1, [mock_op1, mock_op2], ops_by_tid, 1000)
 
     mock_find_last.assert_called()
 
