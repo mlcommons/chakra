@@ -74,12 +74,12 @@ TEST_F(ETFeederTest, RemoveTest) {
 }
 
 TEST_F(ETFeederTest, RemoveAndGetNextTest) {
-  SetUp("tests/data/llama_chakra.3.et");
+  SetUp("tests/data/chakra.0.et");
   std::shared_ptr<Chakra::ETFeederNode> node = trace->lookupNode(5);
-  ASSERT_EQ(node->id(), 5);
-  trace->removeNode(5);
+  ASSERT_EQ(node->id(), 216);
+  trace->removeNode(216);
   node = trace->getNextIssuableNode();
-  ASSERT_EQ(node->id(), 5);
+  ASSERT_EQ(node->id(), 216);
 }
 
 TEST_F(ETFeederTest, FreeChildrenTest) {
@@ -94,9 +94,9 @@ TEST_F(ETFeederTest, FreeChildrenTest) {
 }
 
 TEST_F(ETFeederTest, HasNodesToIssueTest) {
-  SetUp("tests/data/llama_chakra.3.et");
+  SetUp("tests/data/chakra.0.et");
   std::shared_ptr<Chakra::ETFeederNode> node = trace->getNextIssuableNode();
-  ASSERT_EQ(node->id(), 5);
+  ASSERT_EQ(node->id(), 216);
   ASSERT_TRUE(trace->hasNodesToIssue());
   trace->removeNode(5);
   ASSERT_TRUE(trace->hasNodesToIssue());
