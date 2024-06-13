@@ -31,7 +31,6 @@ class TraceLinker:
 
     Attributes
         id_assigner (UniqueIdAssigner): Assigns unique IDs to operators.
-        pytorch_et_plus_data (Optional[Dict]): PyTorch ET plus data.
         logger (logging.Logger): Logger for the class.
     """
 
@@ -43,7 +42,6 @@ class TraceLinker:
             log_level (str): Logging level for the class.
         """
         self.id_assigner = UniqueIdAssigner()
-        self.pytorch_et_plus_data: Optional[Dict] = None
         self.logger: logging.Logger = logging.getLogger(__name__)
         self.logger.setLevel(log_level.upper())
 
