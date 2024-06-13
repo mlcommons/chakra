@@ -1,6 +1,6 @@
 from typing import Any, Dict, Optional
 
-from param_bench.train.compute.python.tools.execution_trace import Node as PyTorchOperator
+from .execution_trace import Node as PyTorchOperator
 
 
 class KinetoOperator:

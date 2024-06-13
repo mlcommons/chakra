@@ -6,14 +6,14 @@ import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Optional, Tuple
 
-from param_bench.train.compute.python.tools.execution_trace import (
+from .execution_trace import (
     EXECUTION_TRACE_PROCESS_ANNOTATION,
     EXECUTION_TRACE_THREAD_ANNOTATION,
 )
-from param_bench.train.compute.python.tools.execution_trace import (
+from .execution_trace import (
     Node as PyTorchOperator,
 )
-from param_bench.train.compute.python.tools.utility import (
+from .utility import (
     load_execution_trace_file,
     read_dictionary_from_json_file,
 )
