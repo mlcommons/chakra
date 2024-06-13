@@ -17,6 +17,8 @@ jobs:
       run: |
         sudo apt update
         sudo apt install libgtest-dev
+    - name: Extract trace for feeder tests
+      run: tar -xvf tests/data/feeder_tests_trace.tar.gz
     - name: Build
       run: |
         SCRIPT_DIR=.
