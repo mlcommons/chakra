@@ -416,7 +416,7 @@ class TraceLinker:
 
         with ThreadPoolExecutor() as executor:
             futures = {
-                executor.submit(self.process_thread, tid, ops, kineto_tid_cpu_ops_map, threshold): tid
+                executor.submit(self.process_thread_inter_thread_order, tid, ops, kineto_tid_cpu_ops_map, threshold): tid
                 for tid, ops in kineto_tid_cpu_ops_map.items()
             }
 
@@ -430,7 +430,7 @@ class TraceLinker:
 
         return kineto_tid_cpu_ops_map
 
-    def process_thread(
+    def process_thread_inter_thread_order(
         self, tid: int, ops: List[KinetoOperator], ops_by_tid: Dict[int, List[KinetoOperator]], threshold: int
     ) -> None:
         """
