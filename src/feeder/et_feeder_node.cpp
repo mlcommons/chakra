@@ -14,7 +14,7 @@ ETFeederNode::ETFeederNode(std::shared_ptr<ChakraProtoMsg::Node> node) {
     const string& attr_name = attr.name();
 
     if (attr_name == "is_cpu_op") {
-      this->is_cpu_op_ = static_cast<bool>(attr.bool_val());
+      this->is_cpu_op_ = static_cast<bool>(attr.int32_val());
     } else if (attr_name == "num_ops") {
       this->num_ops_ = static_cast<uint64_t>(attr.int64_val());
     } else if (attr_name == "tensor_size") {
