@@ -298,6 +298,18 @@ class PyTorchConverter:
         if pytorch_node.parent in chakra_nodes:
             chakra_node.ctrl_deps.append(pytorch_node.parent)
         chakra_node.duration_micros = int(pytorch_node.exclusive_dur)
+
+        """
+        Quick and straightforward solution to identify an operator that covers more than 90% of the runtime. These are
+        usually user_annotation operators and should be ignored. One such case is Optimizer.step, which we filter out
+        in this code. Ideally, we should identify any user annotation nodes that cover more than 90% of the runtime and
+        then set their runtime to 0.
+
+        Note: We will cover this with a more general solution.
+        """
+        if "Optimizer.step" in pytorch_node.name:
+            chakra_node.duration_micros = 0
+
         chakra_node.inputs.values = str(pytorch_node.inputs["values"])
         chakra_node.inputs.shapes = str(pytorch_node.inputs["shapes"])
         chakra_node.inputs.types = str(pytorch_node.inputs["types"])
