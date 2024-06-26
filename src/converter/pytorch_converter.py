@@ -8,6 +8,8 @@ from ...schema.protobuf.et_def_pb2 import (
     ALL_TO_ALL,
     BROADCAST,
     COMM_COLL_NODE,
+    COMM_RECV_NODE,
+    COMM_SEND_NODE,
     COMP_NODE,
     REDUCE_SCATTER,
     GlobalMetadata,
@@ -277,6 +279,13 @@ class PyTorchConverter:
                             ]
                         )
 
+                    elif chakra_node.type in {COMM_SEND_NODE, COMM_RECV_NODE}:
+                        chakra_gpu_node.attr.extend(
+                            [
+                                ChakraAttr(name="comm_size", int64_val=pytorch_gpu_node.comm_size),
+                            ]
+                        )
+
                     chakra_nodes[chakra_gpu_node.id] = chakra_gpu_node
 
     def convert_to_chakra_node(self, chakra_nodes: Dict[int, ChakraNode], pytorch_node: PyTorchNode) -> ChakraNode:
@@ -340,6 +349,12 @@ class PyTorchConverter:
         Returns:
             int: The corresponding Chakra node type.
         """
+        if "sendrecv" in pytorch_node.name.lower():
+            return COMM_SEND_NODE
+        if "send" in pytorch_node.name.lower():
+            return COMM_SEND_NODE
+        if "recv" in pytorch_node.name.lower():
+            return COMM_RECV_NODE
         if (
             pytorch_node.is_gpu_op()
             and ("ncclKernel" in pytorch_node.name or "ncclDevKernel" in pytorch_node.name)
