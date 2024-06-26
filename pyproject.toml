@@ -19,63 +19,13 @@ Documentation = "https://github.com/mlcommons/chakra/README.md"
 Repository = "https://github.com/mlcommons/chakra.git"
 
 [tool.setuptools.package-dir]
-"chakra.schema.protobuf" = "schema/protobuf"
-"chakra.src.converter" = "src/converter"
-"chakra.src.generator" = "src/generator"
-"chakra.src.jsonizer" = "src/jsonizer"
-"chakra.src.third_party" = "src/third_party"
-"chakra.src.timeline_visualizer" = "src/timeline_visualizer"
-"chakra.src.trace_link" = "src/trace_link"
-"chakra.src.visualizer" = "src/visualizer"
+"chakra.et_def" = "et_def"
+"chakra.et_converter" = "et_converter"
+"chakra.et_visualizer" = "et_visualizer"
+"chakra.timeline_visualizer" = "timeline_visualizer"
+"chakra.et_generator" = "utils/et_generator"
+"chakra.et_jsonizer" = "utils/et_jsonizer"
+"chakra.third_party.utils" = "third_party/utils"
 
 [tool.setuptools.package-data]
-"chakra.schema.protobuf" = ["et_def.proto"]
-
-[project.scripts]
-chakra_converter = "chakra.src.converter.converter:main"
-chakra_generator = "chakra.src.generator.generator:main"
-chakra_jsonizer = "chakra.src.jsonizer.jsonizer:main"
-chakra_timeline_visualizer = "chakra.src.timeline_visualizer.timeline_visualizer:main"
-chakra_trace_link = "chakra.src.trace_link.trace_link:main"
-chakra_visualizer = "chakra.src.visualizer.visualizer:main"
-
-[tool.ruff]
-target-version = "py39"
-line-length = 120
-exclude = [
-    "src/converter/text_converter.py",
-    "src/third_party/utils/protolib.py",
-]
-
-[tool.ruff.lint]
-select = ["I", "B", "E", "D", "F", "SIM", "W", "C90", "EXE"]
-ignore = [
-    "D407", # Missing dashed underline after section
-    "D203", # conflicts with D211
-    "D212", # conflicts with D213
-    "D413", # Missing blank line after last section
-
-    # TODO: Remove these once we have docstrings
-    "D100", # Missing docstring in public module
-    "D102", # Missing docstring in public method
-    "D103", # Missing docstring in public function
-    "D104", # Missing docstring in public package
-    "D107", # Missing docstring in `__init__`
-]
-
-[tool.ruff.lint.per-file-ignores]
-"**/tests/*" = ["D"]
-
-[tool.ruff.format]
-indent-style = "space"
-
-[tool.pyright]
-typeCheckingMode = "basic"
-exclude = [
-    "**/__pycache__",
-    "**/build/",
-    "setup.py",
-    "src/third_party/utils/protolib.py"
-]
-reportMissingImports = false
-reportAttributeAccessIssue = false
+"chakra.et_def" = ["et_def_pb2.pyi", "et_def.proto"]
