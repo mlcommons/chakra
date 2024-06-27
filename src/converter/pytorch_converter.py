@@ -264,11 +264,11 @@ class PyTorchConverter:
             if (pytorch_node.get_op_type() == PyTorchNodeType.CPU_OP) or (
                 pytorch_node.get_op_type() == PyTorchNodeType.LABEL
             ):
-                chakra_node = self.convert_to_chakra_node(chakra_nodes, pytorch_node)
+                chakra_node = self.convert_to_chakra_node(pytorch_nodes, chakra_nodes, pytorch_node)
                 chakra_nodes[chakra_node.id] = chakra_node
 
                 for pytorch_gpu_node in pytorch_node.gpu_children:
-                    chakra_gpu_node = self.convert_to_chakra_node(chakra_nodes, pytorch_gpu_node)
+                    chakra_gpu_node = self.convert_to_chakra_node(pytorch_nodes, chakra_nodes, pytorch_gpu_node)
 
                     if chakra_gpu_node.type == COMM_COLL_NODE:
                         collective_comm_type = self.get_collective_comm_type(pytorch_gpu_node.name)
@@ -288,11 +288,14 @@ class PyTorchConverter:
 
                     chakra_nodes[chakra_gpu_node.id] = chakra_gpu_node
 
-    def convert_to_chakra_node(self, chakra_nodes: Dict[int, ChakraNode], pytorch_node: PyTorchNode) -> ChakraNode:
+    def convert_to_chakra_node(
+        self, pytorch_nodes: Dict[int, PyTorchNode], chakra_nodes: Dict[int, ChakraNode], pytorch_node: PyTorchNode
+    ) -> ChakraNode:
         """
         Convert a PyTorchNode to a ChakraNode.
 
         Args:
+            pytorch_nodes (Dict[int, PyTorchNode]): Dictionary of PyTorch nodes.
             chakra_nodes (Dict[int, ChakraNode]): Dictionary of existing Chakra nodes.
             pytorch_node (PyTorchNode): The PyTorch node to convert.
 
@@ -303,7 +306,7 @@ class PyTorchConverter:
         chakra_node = ChakraNode()
         chakra_node.id = pytorch_node.id
         chakra_node.name = pytorch_node.name
-        chakra_node.type = self.get_chakra_node_type_from_pytorch_node(pytorch_node)
+        chakra_node.type = self.get_chakra_node_type_from_pytorch_node(pytorch_nodes, pytorch_node)
         if pytorch_node.parent in chakra_nodes:
             chakra_node.ctrl_deps.append(pytorch_node.parent)
         chakra_node.duration_micros = int(pytorch_node.exclusive_dur)
@@ -339,28 +342,33 @@ class PyTorchConverter:
         )
         return chakra_node
 
-    def get_chakra_node_type_from_pytorch_node(self, pytorch_node: PyTorchNode) -> int:
+    def get_chakra_node_type_from_pytorch_node(
+        self, pytorch_nodes: Dict[int, PyTorchNode], pytorch_node: PyTorchNode
+    ) -> int:
         """
         Determine the Chakra node type from a PyTorch node.
 
         Args:
+            pytorch_nodes (Dict[int, PyTorchNode]): Dictionary of PyTorch nodes.
             pytorch_node (PyTorchNode): The PyTorch node to determine the type of.
 
         Returns:
             int: The corresponding Chakra node type.
         """
-        if "sendrecv" in pytorch_node.name.lower():
-            return COMM_SEND_NODE
-        if "send" in pytorch_node.name.lower():
-            return COMM_SEND_NODE
-        if "recv" in pytorch_node.name.lower():
-            return COMM_RECV_NODE
-        if (
-            pytorch_node.is_gpu_op()
-            and ("ncclKernel" in pytorch_node.name or "ncclDevKernel" in pytorch_node.name)
-            or (("c10d::" in pytorch_node.name) or ("nccl:" in pytorch_node.name))
-        ):
-            return COMM_COLL_NODE
+        if pytorch_node.is_gpu_op():
+            if "ncclDevKernel_SendRecv" in pytorch_node.name:
+                parent_node = pytorch_nodes[pytorch_node.parent]
+                keyword = (
+                    pytorch_nodes[parent_node.parent].name
+                    if parent_node.name == "record_param_comms"
+                    else parent_node.name
+                )
+                if "send" in keyword:
+                    return COMM_SEND_NODE
+                if "recv" in keyword:
+                    return COMM_RECV_NODE
+            if "ncclKernel" in pytorch_node.name or "ncclDevKernel" in pytorch_node.name:
+                return COMM_COLL_NODE
         return COMP_NODE
 
     def get_collective_comm_type(self, name: str) -> int:

@@ -232,19 +232,33 @@ def test_close_chakra_execution_trace(mock_file: MagicMock, mock_logger: logging
     [
         ({"name": "ncclKernel", "is_gpu_op": True}, COMM_COLL_NODE),
         ({"name": "ncclDevKernel", "is_gpu_op": True}, COMM_COLL_NODE),
-        ({"name": "c10d::all_reduce", "is_gpu_op": True}, COMM_COLL_NODE),
+        ({"name": "c10d::all_reduce", "is_gpu_op": True}, COMP_NODE),
         ({"name": "other_op", "is_gpu_op": False}, COMP_NODE),
     ],
 )
 def test_get_chakra_node_type_from_pytorch_node(
     mock_logger: logging.Logger, pytorch_node_data: Dict, expected_type: int
 ) -> None:
-    pytorch_node = MagicMock()
+    # Create a mock PyTorchNode with the required attributes
+    pytorch_node = MagicMock(spec=PyTorchNode)
     pytorch_node.name = pytorch_node_data["name"]
     pytorch_node.is_gpu_op = MagicMock(return_value=pytorch_node_data["is_gpu_op"])
 
+    # Create a mock pytorch_nodes dictionary with actual PyTorchNode instances
+    mock_pytorch_node_data = {
+        "id": 0,
+        "name": "mock_node",
+        "ctrl_deps": None,
+        "exclusive_dur": 0,
+        "inputs": {"values": [], "shapes": [], "types": []},
+        "outputs": {"values": [], "shapes": [], "types": []},
+        "attrs": [],
+    }
+    mock_pytorch_node = PyTorchNode("1.0.2-chakra.0.0.4", mock_pytorch_node_data)
+    pytorch_nodes = {0: mock_pytorch_node, 1: pytorch_node}
+
     converter = PyTorchConverter("input.json", "output.json", mock_logger)
-    node_type = converter.get_chakra_node_type_from_pytorch_node(pytorch_node)
+    node_type = converter.get_chakra_node_type_from_pytorch_node(pytorch_nodes, pytorch_node)
     assert node_type == expected_type
 
 
