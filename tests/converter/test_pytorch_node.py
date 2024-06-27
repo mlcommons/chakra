@@ -149,6 +149,6 @@ def test_pytorch_node_parsing_1_0_3_chakra_0_0_4(sample_node_data_1_0_3_chakra_0
 
 
 def test_pytorch_node_unsupported_schema(sample_node_data_unsupported_schema) -> None:
-    schema = "1.1.0-chakra.0.0.4"
+    schema = "9999.9999.9999-chakra.0.0.4"
     with pytest.raises(ValueError, match=f"Unsupported schema version '{schema}'"):
         PyTorchNode(schema, sample_node_data_unsupported_schema)
