@@ -270,7 +270,7 @@ class PyTorchConverter:
                 for pytorch_gpu_node in pytorch_node.gpu_children:
                     chakra_gpu_node = self.convert_to_chakra_node(chakra_nodes, pytorch_gpu_node)
 
-                    if chakra_node.type == COMM_COLL_NODE:
+                    if chakra_gpu_node.type == COMM_COLL_NODE:
                         collective_comm_type = self.get_collective_comm_type(pytorch_gpu_node.name)
                         chakra_gpu_node.attr.extend(
                             [
@@ -279,7 +279,7 @@ class PyTorchConverter:
                             ]
                         )
 
-                    elif chakra_node.type in {COMM_SEND_NODE, COMM_RECV_NODE}:
+                    elif chakra_gpu_node.type in {COMM_SEND_NODE, COMM_RECV_NODE}:
                         chakra_gpu_node.attr.extend(
                             [
                                 ChakraAttr(name="comm_size", int64_val=pytorch_gpu_node.comm_size),
