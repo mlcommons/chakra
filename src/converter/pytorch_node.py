@@ -195,9 +195,15 @@ class PyTorchNode:
         comm_size = 0
         for input_value, input_type in zip(self.inputs["values"], self.inputs["types"]):
             if "Tensor" in input_type:
-                tensor = PyTorchTensor(input_value)
-                input_size = tensor.num_elem * tensor.elem_bytes
-                comm_size += input_size
+                if input_type.startswith("GenericList[Tensor"):
+                    for inner_value in input_value:
+                        tensor = PyTorchTensor(inner_value)
+                        input_size = tensor.num_elem * tensor.elem_bytes
+                        comm_size += input_size
+                else:
+                    tensor = PyTorchTensor(input_value)
+                    input_size = tensor.num_elem * tensor.elem_bytes
+                    comm_size += input_size
         return comm_size
 
     @staticmethod
