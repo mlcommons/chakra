@@ -1,0 +1,37 @@
+name: Feeder tests
+
+on: [ push, pull_request ]
+
+jobs:
+  feeder-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+    - name: Install protoc
+      run: |
+        sudo apt update
+        sudo apt install protobuf-compiler libprotobuf-dev
+    - name: Install Google Test Framework
+      run: |
+        sudo apt update
+        sudo apt install libgtest-dev
+    - name: Extract trace for feeder tests
+      run: tar -xvf tests/data/feeder_tests_trace.tar.gz
+    - name: Build
+      run: |
+        SCRIPT_DIR=.
+        BUILD_DIR="${SCRIPT_DIR:?}"/build
+        CHAKRA_ET_DIR="${SCRIPT_DIR:?}"/schema/protobuf
+        protoc et_def.proto \
+          --proto_path="${CHAKRA_ET_DIR:?}" \
+          --cpp_out="${CHAKRA_ET_DIR:?}"
+        g++ -Wall -I src/third_party/utils -I schema/protobuf -I src/feeder -c schema/protobuf/et_def.pb.cc -o schema/protobuf/et_def.pb.o
+        g++ -Wall -I src/third_party/utils -I schema/protobuf -I src/feeder -c src/feeder/et_feeder.cpp -o src/feeder/et_feeder.o
+        g++ -Wall -I src/third_party/utils -I schema/protobuf -I src/feeder -c src/feeder/et_feeder_node.cpp -o src/feeder/et_feeder_node.o
+        g++ -Wall -I src/third_party/utils -I schema/protobuf -I src/feeder -c src/third_party/utils/protoio.cc -o src/third_party/utils/protoio.o
+        g++ -Wall -I src/third_party/utils -I schema/protobuf -I src/feeder -c tests/feeder/tests.cpp -o tests/feeder/tests.o
+        g++ -Wall -I src/third_party/utils -I schema/protobuf -I src/feeder -o feeder_tests schema/protobuf/et_def.pb.o src/feeder/et_feeder.o src/feeder/et_feeder_node.o src/third_party/utils/protoio.o tests/feeder/tests.o -lgtest -lgtest_main -lprotobuf -lpthread
+    - name: Run tests
+      run: ./feeder_tests
