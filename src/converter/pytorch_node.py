@@ -18,6 +18,7 @@ class PyTorchNodeType(Enum):
     CPU_OP = 1
     GPU_OP = 2
     LABEL = 3  # Non-operator nodes
+    METADATA = 4
 
 
 class PyTorchNode:
@@ -114,7 +115,9 @@ class PyTorchNode:
         Returns
             PyTorchNodeType: The type of the PyTorch operation.
         """
-        if self.is_gpu_op():
+        if "process_group:init" in self.name:
+            return PyTorchNodeType.METADATA
+        elif self.is_gpu_op():
             return PyTorchNodeType.GPU_OP
         elif hasattr(self, "op_schema") or hasattr(self, "outputs"):
             return PyTorchNodeType.CPU_OP

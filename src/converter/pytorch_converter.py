@@ -261,8 +261,10 @@ class PyTorchConverter:
         cases for GPU nodes and collective communication types.
         """
         for _, pytorch_node in pytorch_nodes.items():
-            if (pytorch_node.get_op_type() == PyTorchNodeType.CPU_OP) or (
-                pytorch_node.get_op_type() == PyTorchNodeType.LABEL
+            if (
+                (pytorch_node.get_op_type() == PyTorchNodeType.CPU_OP)
+                or (pytorch_node.get_op_type() == PyTorchNodeType.LABEL)
+                or (pytorch_node.get_op_type() == PyTorchNodeType.METADATA)
             ):
                 chakra_node = self.convert_to_chakra_node(pytorch_nodes, chakra_nodes, pytorch_node)
                 chakra_nodes[chakra_node.id] = chakra_node
