@@ -6,14 +6,14 @@ import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Optional, Tuple
 
-from param_bench.train.compute.python.tools.execution_trace import (
+from et_replay.lib.execution_trace import (
     EXECUTION_TRACE_PROCESS_ANNOTATION,
     EXECUTION_TRACE_THREAD_ANNOTATION,
 )
-from param_bench.train.compute.python.tools.execution_trace import (
+from et_replay.lib.execution_trace import (
     Node as PyTorchOperator,
 )
-from param_bench.train.compute.python.tools.utility import (
+from et_replay.lib.utils import (
     load_execution_trace_file,
     read_dictionary_from_json_file,
 )
@@ -416,7 +416,9 @@ class TraceLinker:
 
         with ThreadPoolExecutor() as executor:
             futures = {
-                executor.submit(self.process_thread_inter_thread_order, tid, ops, kineto_tid_cpu_ops_map, threshold): tid
+                executor.submit(
+                    self.process_thread_inter_thread_order, tid, ops, kineto_tid_cpu_ops_map, threshold
+                ): tid
                 for tid, ops in kineto_tid_cpu_ops_map.items()
             }
 
