@@ -30,8 +30,9 @@ Installing PARAM is necessary for Chakra to function properly as it imports esse
 
 ```bash
 $ git clone git@github.com:facebookresearch/param.git
-$ cd param/train/compute/python/
-$ git checkout c83ce8429110a86549c40fec5a01acbd9fbd54a4
+$ cd param/et_replay
+$ git checkout 884a1f0154a16e2c170e456f8027f2646c9108ae
+$ sed -i '' '13d' pyproject.toml
 $ pip install .
 ```
 
