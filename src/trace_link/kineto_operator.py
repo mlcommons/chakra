@@ -95,12 +95,14 @@ class KinetoOperator:
         """
         cuda_launch_categories = {"cuda_runtime", "cuda_driver"}
         cuda_launch_operations = {
+            "cuLaunchKernel",
+            "cuLaunchKernelEx",
             "cudaLaunchKernel",
             "cudaLaunchKernelExC",
             "cudaMemcpy",
             "cudaMemcpyAsync",
-            "cudaMemcpyToSymbol",
             "cudaMemcpyFromSymbol",
+            "cudaMemcpyToSymbol",
         }
         return self.category in cuda_launch_categories and self.name in cuda_launch_operations
 
