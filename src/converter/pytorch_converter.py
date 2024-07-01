@@ -337,7 +337,7 @@ class PyTorchConverter:
                 ChakraAttr(name="tid", int64_val=pytorch_node.tid),
                 ChakraAttr(name="fw_tid", int64_val=pytorch_node.fw_tid),
                 ChakraAttr(name="op_schema", string_val=pytorch_node.op_schema),
-                ChakraAttr(name="is_cpu_op", int32_val=not pytorch_node.is_gpu_op()),
+                ChakraAttr(name="is_cpu_op", bool_val=not pytorch_node.is_gpu_op()),
             ]
         )
         return chakra_node
