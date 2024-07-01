@@ -765,7 +765,15 @@ class TraceLinker:
             ValueError: If no CUDA runtime operator is found for the given correlation ID.
         """
         if kineto_gpu_op.correlation not in kineto_correlation_cuda_runtime_map:
-            warning_msg = f"No CUDA runtime operator found for correlation ID {kineto_gpu_op.correlation}."
+            warning_msg = (
+                f"No CUDA runtime operator found for correlation ID {kineto_gpu_op.correlation}. "
+                "This is not a common case, and there should be a corresponding CUDA runtime operator for a given GPU "
+                "kernel operator. It can be a case where CUDA runtime operators are not properly identified and added "
+                "to the map, kineto_correlation_cuda_runtime_map. Please manually check if the corresponding CUDA "
+                "runtime operator with the correlation is dropped by mistake. It is likely that it is because of "
+                "incomplete map, cuda_launch_operations, in is_cuda_launch_op. Please update the map properly to cover"
+                " all CUDA runtime launch operators."
+            )
             self.logger.warning(warning_msg)
             return None
 
