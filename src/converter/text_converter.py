@@ -52,13 +52,12 @@ class Layer:
 
 class TextConverter:
     def __init__(
-        self, input_filename: str, output_filename: str, num_npus: int, num_passes: int, logger: logging.Logger
+        self, input_filename: str, output_filename: str, num_npus: int, num_passes: int
     ) -> None:
         self.input_filename = input_filename
         self.output_filename = output_filename
         self.num_npus = num_npus
         self.num_passes = num_passes
-        self.logger = logger
         self.next_node_id = 0
 
     def get_global_metadata(self):
