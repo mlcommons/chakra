@@ -13,7 +13,8 @@ class KinetoOperator:
         name (str): Name of the operator.
         phase (Optional[str]): Execution phase of the operator.
         inclusive_dur (int): Total duration of the operator, including its children.
-        exclusive_dur (int): Duration of the operator execution alone. Corresponds to the self time field in chrome://tracing.
+        exclusive_dur (int): Duration of the operator execution alone. Corresponds to the self time field in
+            chrome://tracing.
         timestamp (int): Start time of the operator in microseconds.
         external_id (int): An external identifier associated with the operator.
         ev_idx (int): Event index of the operator.
