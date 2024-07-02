@@ -105,6 +105,24 @@ class KinetoOperator:
         """
         return self.category == "cuda_driver"
 
+    def is_ac2g_op(self) -> bool:
+        """
+        Check if the operator is categorized as 'ac2g', which stands for arrows from CPU to GPU.
+
+        Excerpt from https://pytorch.org/docs/stable/torch.compiler_profiling_torch_compile.html
+        ```
+            Every kernel on the GPU occurs after being launched by code running on the CPU. The profiler can draw
+            connections (i.e. "flows") between the GPU and CPU events to show which CPU event launched a GPU kernel.
+            This is particularly helpful because, with a few exceptions, GPU kernels are launched asynchronously.
+
+            To view a flow connection, click on a GPU kernel and click "ac2g".
+        ````
+
+        Returns
+            bool: True if the operator is an 'ac2g' type, otherwise False.
+        """
+        return self.category == "ac2g"
+
     def is_kernel_launch_op(self) -> bool:
         """
         Determine whether the operator is a kernel-launching CUDA runtime operator.
@@ -135,21 +153,3 @@ class KinetoOperator:
         """
         gpu_categories = {"kernel", "gpu_memcpy"}
         return self.category in gpu_categories
-
-    def is_ac2g_op(self) -> bool:
-        """
-        Check if the operator is categorized as 'ac2g', which stands for arrows from CPU to GPU.
-
-        Excerpt from https://pytorch.org/docs/stable/torch.compiler_profiling_torch_compile.html
-        ```
-            Every kernel on the GPU occurs after being launched by code running on the CPU. The profiler can draw
-            connections (i.e. "flows") between the GPU and CPU events to show which CPU event launched a GPU kernel.
-            This is particularly helpful because, with a few exceptions, GPU kernels are launched asynchronously.
-
-            To view a flow connection, click on a GPU kernel and click "ac2g".
-        ````
-
-        Returns
-            bool: True if the operator is an 'ac2g' type, otherwise False.
-        """
-        return self.category == "ac2g"
