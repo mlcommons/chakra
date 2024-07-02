@@ -2,16 +2,15 @@ import argparse
 import logging
 import sys
 import traceback
-from logging import FileHandler
 
 from .pytorch_converter import PyTorchConverter
 from .text_converter import TextConverter
 
 
-def get_logger(log_filename: str) -> logging.Logger:
+def setup_logging(log_filename: str) -> None:
     formatter = logging.Formatter("%(levelname)s [%(asctime)s] %(message)s", datefmt="%m/%d/%Y %I:%M:%S %p")
 
-    file_handler = FileHandler(log_filename, mode="w")
+    file_handler = logging.FileHandler(log_filename, mode="w")
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(formatter)
 
@@ -19,12 +18,7 @@ def get_logger(log_filename: str) -> logging.Logger:
     stream_handler.setLevel(logging.WARNING)
     stream_handler.setFormatter(formatter)
 
-    logger = logging.getLogger(__file__)
-    logger.setLevel(logging.DEBUG)
-    logger.addHandler(file_handler)
-    logger.addHandler(stream_handler)
-
-    return logger
+    logging.basicConfig(level=logging.DEBUG, handlers=[file_handler, stream_handler])
 
 
 def main() -> None:
@@ -45,26 +39,26 @@ def main() -> None:
     parser.add_argument("--log_filename", type=str, default="debug.log", help="Log filename")
     args = parser.parse_args()
 
-    logger = get_logger(args.log_filename)
-    logger.debug(" ".join(sys.argv))
+    setup_logging(args.log_filename)
+    logging.debug(" ".join(sys.argv))
 
     try:
         if args.input_type == "Text":
-            converter = TextConverter(args.input_filename, args.output_filename, args.num_npus, args.num_passes, logger)
+            converter = TextConverter(args.input_filename, args.output_filename, args.num_npus, args.num_passes)
             converter.convert()
         elif args.input_type == "PyTorch":
-            converter = PyTorchConverter(args.input_filename, args.output_filename, logger)
+            converter = PyTorchConverter(args.input_filename, args.output_filename)
             converter.convert()
         else:
             supported_types = ["Text", "PyTorch"]
-            logger.error(
+            logging.error(
                 f"The input type '{args.input_type}' is not supported. "
                 f"Supported types are: {', '.join(supported_types)}."
             )
             sys.exit(1)
     except Exception:
         traceback.print_exc()
-        logger.debug(traceback.format_exc())
+        logging.debug(traceback.format_exc())
         sys.exit(1)
 
 

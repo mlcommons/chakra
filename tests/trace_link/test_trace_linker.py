@@ -18,7 +18,6 @@ def trace_linker():
 
 def test_initialization(trace_linker):
     assert isinstance(trace_linker.id_assigner, UniqueIdAssigner)
-    assert trace_linker.logger.name == "chakra.src.trace_link.trace_linker"
 
 
 @patch("chakra.src.trace_link.trace_linker.TraceLinker.load_pytorch_et")
