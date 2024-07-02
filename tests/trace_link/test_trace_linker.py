@@ -4,11 +4,11 @@ import pytest
 from chakra.src.trace_link.kineto_operator import KinetoOperator
 from chakra.src.trace_link.trace_linker import TraceLinker
 from chakra.src.trace_link.unique_id_assigner import UniqueIdAssigner
-from param_bench.train.compute.python.tools.execution_trace import (
+from et_replay.lib.execution_trace import (
     EXECUTION_TRACE_PROCESS_ANNOTATION,
     EXECUTION_TRACE_THREAD_ANNOTATION,
 )
-from param_bench.train.compute.python.tools.execution_trace import Node as PyTorchOperator
+from et_replay.lib.execution_trace import Node as PyTorchOperator
 
 
 @pytest.fixture
