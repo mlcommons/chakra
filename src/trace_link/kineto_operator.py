@@ -86,14 +86,32 @@ class KinetoOperator:
             return True
         return False
 
-    def is_cuda_launch_op(self) -> bool:
+    def is_cuda_runtime_op(self) -> bool:
+        """
+        Determine whether the operator is a CUDA runtime operator.
+
+        Returns
+            bool: True if it's a CUDA runtime operator, otherwise False.
+        """
+        return self.category == "cuda_runtime"
+
+    def is_cuda_driver_op(self) -> bool:
+        """
+        Determine whether the operator is a CUDA driver operator.
+
+        Returns
+            bool: True if it's a CUDA driver operator, otherwise False.
+        """
+        return self.category == "cuda_driver"
+
+    def is_kernel_launch_op(self) -> bool:
         """
         Determine whether the operator is a kernel-launching CUDA runtime operator.
 
         Returns
             bool: True if it's a launch operation, otherwise False.
         """
-        cuda_launch_categories = {"cuda_runtime", "cuda_driver"}
+        cuda_launch_categories = self.is_cuda_runtime_op() or self.is_cuda_driver_op()
         cuda_launch_operations = {
             "cuLaunchKernel",
             "cuLaunchKernelEx",
@@ -105,7 +123,7 @@ class KinetoOperator:
             "cudaMemcpyToSymbol",
             "cudaLaunchCooperativeKernel",
         }
-        return self.category in cuda_launch_categories and self.name in cuda_launch_operations
+        return cuda_launch_categories and self.name in cuda_launch_operations
 
     def is_gpu_op(self) -> bool:
         """
