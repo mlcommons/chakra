@@ -224,7 +224,7 @@ class TraceLinker:
                 kineto_gpu_ops.append(op)
                 logging.debug(f"Added GPU op: {op.name}")
 
-            elif op.is_arrow_op():
+            elif op.is_ac2g_op():  # arrow from CPU to GPU
                 assert (op.phase == "s") or (op.phase == "f")
                 if op.id is None:
                     error_msg = (
