@@ -31,7 +31,6 @@ class TraceLinker:
 
     Attributes
         id_assigner (UniqueIdAssigner): Assigns unique IDs to operators.
-        logger (logging.Logger): Logger for the class.
     """
 
     def __init__(self, log_level: str = "INFO") -> None:
@@ -42,8 +41,7 @@ class TraceLinker:
             log_level (str): Logging level for the class.
         """
         self.id_assigner = UniqueIdAssigner()
-        self.logger: logging.Logger = logging.getLogger(__name__)
-        self.logger.setLevel(log_level.upper())
+        logging.basicConfig(level=log_level.upper())
 
     def link(self, pytorch_et_file: str, kineto_file: str, output_file: str) -> None:
         """
@@ -115,13 +113,13 @@ class TraceLinker:
         Returns:
             List[PyTorchOperator]: List of PyTorch operators.
         """
-        self.logger.info("Starting to load PyTorch Execution Trace.")
+        logging.info("Starting to load PyTorch Execution Trace.")
         pytorch_et = load_execution_trace_file(pytorch_et_file)
 
         root_node = pytorch_et.get_nodes()[1]  # Root node is usually 1-based
         pytorch_ops = self.extract_pytorch_ops(root_node)
-        self.logger.info(f"Original ops in PyTorch ET: {len(pytorch_ops)}")
-        self.logger.info("PyTorch Execution Trace loaded successfully.")
+        logging.info(f"Original ops in PyTorch ET: {len(pytorch_ops)}")
+        logging.info("PyTorch Execution Trace loaded successfully.")
 
         return pytorch_ops
 
@@ -161,7 +159,7 @@ class TraceLinker:
         Returns:
             Dict: Dictionary containing various data structures needed for linking traces.
         """
-        self.logger.info("Starting to load Kineto Trace.")
+        logging.info("Starting to load Kineto Trace.")
         kineto_trace_data = read_dictionary_from_json_file(kineto_file)
         sorted_kineto_ops = sorted(
             [KinetoOperator(op) for op in kineto_trace_data["traceEvents"]],
@@ -174,12 +172,12 @@ class TraceLinker:
         kineto_data["sorted_kineto_cpu_ops"] = sorted(kineto_data["kineto_cpu_ops"], key=lambda op: op.timestamp)
         kineto_data["sorted_kineto_cpu_op_ts"] = [op.timestamp for op in kineto_data["sorted_kineto_cpu_ops"]]
 
-        self.logger.info(
+        logging.info(
             f"Processed Kineto trace with {len(kineto_data['kineto_cpu_ops'])} CPU ops, "
             f"{len(kineto_data['kineto_id_cuda_launch_op_map'])} CPU launcher ops, "
             f"and {len(kineto_data['kineto_gpu_ops'])} GPU ops."
         )
-        self.logger.info("Kineto Trace loaded successfully.")
+        logging.info("Kineto Trace loaded successfully.")
         return kineto_data
 
     def construct_kineto_data_structures(self, kineto_ops: List[KinetoOperator]) -> Dict:
@@ -195,7 +193,7 @@ class TraceLinker:
         Returns:
             Dict: Dictionary containing categorized operators and timing boundaries.
         """
-        self.logger.info("Categorizing Kineto operators and calculating timing boundaries.")
+        logging.info("Categorizing Kineto operators and calculating timing boundaries.")
         process_start_time = sys.maxsize
         process_end_time = 0
         thread_info = {}
@@ -211,7 +209,7 @@ class TraceLinker:
             if op.is_cpu_op():
                 kineto_cpu_ops.append(op)
                 kineto_tid_cpu_ops_map.setdefault(op.tid, []).append(op)
-                self.logger.debug(f"Added CPU or user annotation op: {op.name}")
+                logging.debug(f"Added CPU or user annotation op: {op.name}")
 
             elif op.is_cuda_launch_op():
                 kineto_id_cuda_launch_op_map[op.external_id] = op
@@ -220,11 +218,11 @@ class TraceLinker:
                         f"Duplicate correlation ID {op.correlation} found in self.kineto_id_cuda_launch_op_map."
                     )
                 kineto_correlation_cuda_runtime_map[op.correlation] = op
-                self.logger.debug(f"Added CPU launcher op: {op.name}")
+                logging.debug(f"Added CPU launcher op: {op.name}")
 
             elif op.is_gpu_op():
                 kineto_gpu_ops.append(op)
-                self.logger.debug(f"Added GPU op: {op.name}")
+                logging.debug(f"Added GPU op: {op.name}")
 
             elif op.is_arrow_op():
                 assert (op.phase == "s") or (op.phase == "f")
@@ -234,7 +232,7 @@ class TraceLinker:
                         "should generally be populated for 'ac2g' operators. Please verify the validity of "
                         "the Kineto trace and the 'op' data."
                     )
-                    self.logger.error(error_msg)
+                    logging.error(error_msg)
                     raise KeyError(error_msg)
 
                 kineto_id_arrow_op_map[op.id] = op
@@ -275,10 +273,10 @@ class TraceLinker:
             kineto_tid_cpu_ops_map (Dict[int, List[KinetoOperator]]): Map of thread IDs to their corresponding Kineto
                 operators.
         """
-        self.logger.info("Calculating exclusive durations for Kineto operators in parallel.")
+        logging.info("Calculating exclusive durations for Kineto operators in parallel.")
 
         def process_ops_for_thread(ops: List[KinetoOperator]) -> None:
-            self.logger.info(f"Processing {len(ops)} operators in thread.")
+            logging.info(f"Processing {len(ops)} operators in thread.")
             sorted_ops = sorted(ops, key=lambda op: (op.timestamp, op.inclusive_dur))
             for i, op in enumerate(sorted_ops):
                 exclusive_dur = op.inclusive_dur
@@ -307,11 +305,11 @@ class TraceLinker:
                         f"(ts: {op.timestamp}, inclusive_dur: {op.inclusive_dur}, rf_id: {op.rf_id}): "
                         f"Duration cannot be less than zero."
                     )
-                    self.logger.error(error_msg)
+                    logging.error(error_msg)
                     raise ValueError(error_msg)
 
                 op.exclusive_dur = exclusive_dur
-                self.logger.debug(
+                logging.debug(
                     f"Node '{op.name}' (ts: {op.timestamp}, inclusive_dur: {op.inclusive_dur}, "
                     f"rf_id: {op.rf_id}) exclusive duration: {op.exclusive_dur} microseconds."
                 )
@@ -322,7 +320,7 @@ class TraceLinker:
             for future in as_completed(futures):
                 future.result()  # Wait for all threads to complete and handle any exceptions
 
-        self.logger.info("Exclusive durations for Kineto operators calculated successfully.")
+        logging.info("Exclusive durations for Kineto operators calculated successfully.")
 
     @staticmethod
     def merge_overlapping_intervals(intervals: List[Tuple[int, int]]) -> List[Tuple[int, int]]:
@@ -412,7 +410,7 @@ class TraceLinker:
         Returns:
             Dict[int, List[KinetoOperator]]: Updated map with enforced inter-thread order.
         """
-        self.logger.info("Enforcing inter-thread order in Kineto traces.")
+        logging.info("Enforcing inter-thread order in Kineto traces.")
 
         with ThreadPoolExecutor() as executor:
             futures = {
@@ -426,9 +424,9 @@ class TraceLinker:
                 tid = futures[future]
                 try:
                     future.result()
-                    self.logger.debug(f"Thread {tid} dependencies processed.")
+                    logging.debug(f"Thread {tid} dependencies processed.")
                 except Exception as e:
-                    self.logger.error(f"Error processing thread {tid}: {e}")
+                    logging.error(f"Error processing thread {tid}: {e}")
 
         return kineto_tid_cpu_ops_map
 
@@ -444,7 +442,7 @@ class TraceLinker:
             ops_by_tid (Dict[int, List[KinetoOperator]]): Kineto operators grouped by thread ID.
             threshold (int): Threshold for significant gap detection in microseconds.
         """
-        self.logger.info(f"Thread {tid}: Identifying gaps for dependency linking with threshold {threshold}us.")
+        logging.info(f"Thread {tid}: Identifying gaps for dependency linking with threshold {threshold}us.")
         sorted_ops = sorted(ops, key=lambda op: op.timestamp)
         last_cpu_node_rf_id = None
 
@@ -455,7 +453,7 @@ class TraceLinker:
             ):
                 last_cpu_node_rf_id = self.find_last_cpu_node_before_timestamp(ops_by_tid, tid, op.timestamp)
                 if last_cpu_node_rf_id:
-                    self.logger.debug(
+                    logging.debug(
                         f"Thread {tid}: Linking op '{op.name}' to CPU node before gap with rf_id "
                         f"'{last_cpu_node_rf_id}'."
                     )
@@ -482,7 +480,7 @@ class TraceLinker:
         Returns:
             Optional[int]: The ID of the last CPU node found, or None if not found.
         """
-        self.logger.debug(f"Finding last CPU node before timestamp {timestamp} excluding thread {exclude_tid}.")
+        logging.debug(f"Finding last CPU node before timestamp {timestamp} excluding thread {exclude_tid}.")
         last_cpu_node = None
         last_cpu_node_rf_id = None
         latest_timestamp = 0
@@ -498,7 +496,7 @@ class TraceLinker:
                         latest_timestamp = op.timestamp
                         last_cpu_node_rf_id = op.rf_id
         if last_cpu_node:
-            self.logger.debug(f"Last CPU node before timestamp {timestamp} found: {last_cpu_node}")
+            logging.debug(f"Last CPU node before timestamp {timestamp} found: {last_cpu_node}")
         return last_cpu_node_rf_id
 
     def link_traces(
@@ -520,7 +518,7 @@ class TraceLinker:
 
         This process relies on the assumption of an 'exact match' between these traces.
         """
-        self.logger.info("Starting the process of linking PyTorch and Kineto traces.")
+        logging.info("Starting the process of linking PyTorch and Kineto traces.")
         (
             kineto_cpu_ops,
             sorted_kineto_cpu_ops,
@@ -556,7 +554,7 @@ class TraceLinker:
             pytorch_op_id_to_timestamp_map,
             pytorch_op_id_to_inter_thread_dep_map,
         )
-        self.logger.info("Traces have been successfully linked.")
+        logging.info("Traces have been successfully linked.")
         return pytorch_et_plus_data
 
     def add_thread_and_process_annotations(
@@ -576,7 +574,7 @@ class TraceLinker:
         start and end times, collected during the categorization process to insert appropriate annotations directly
         into the Kineto operators list.
         """
-        self.logger.info("Adding process and thread annotations to Kineto operators.")
+        logging.info("Adding process and thread annotations to Kineto operators.")
 
         # Insert process annotation operator. This operator represents the
         # overall time span of the trace process.
@@ -589,7 +587,7 @@ class TraceLinker:
             }
         )
         kineto_cpu_ops.insert(0, process_annotation_op)
-        self.logger.debug(
+        logging.debug(
             "Process annotation added with start time {} and duration {}.".format(
                 kineto_process_start_time,
                 kineto_process_end_time - kineto_process_start_time,
@@ -620,7 +618,7 @@ class TraceLinker:
                 kineto_cpu_ops.insert(position, thread_annotation_op)
             else:
                 kineto_cpu_ops.append(thread_annotation_op)
-            self.logger.debug(
+            logging.debug(
                 "Thread {} annotation added with start time {} and duration {}.".format(tid, start_ts, inclusive_dur)
             )
 
@@ -640,7 +638,7 @@ class TraceLinker:
         kineto_gpu_ops: List[KinetoOperator],
     ) -> Tuple[Dict[int, List[KinetoOperator]], Dict[int, int], Dict[int, int], Dict[int, int], Dict[int, int]]:
         """Map PyTorch ET nodes to corresponding Kineto operators."""
-        self.logger.info("Mapping PyTorch ET nodes to Kineto operators.")
+        logging.info("Mapping PyTorch ET nodes to Kineto operators.")
         cpu_ev_idx_to_gpu_ops_map = self.group_gpu_ops_by_cpu_launchers(
             kineto_gpu_ops, kineto_correlation_cuda_runtime_map, sorted_kineto_cpu_ops, sorted_kineto_cpu_op_ts
         )
@@ -655,7 +653,7 @@ class TraceLinker:
         kineto_ops_count = len(kineto_cpu_ops)
         if pytorch_ops_count > kineto_ops_count:
             # The specific comment is placed within the if block as requested.
-            self.logger.warning(
+            logging.warning(
                 f"Number of PyTorch operators ({pytorch_ops_count}) is larger than the number of Kineto operators "
                 f"({kineto_ops_count}). Expected PyTorch ops (CPU only) to be fewer than Kineto ops (CPU and GPU). "
                 f"Logging this rare but possible scenario."
@@ -665,7 +663,7 @@ class TraceLinker:
             if (pytorch_op.rf_id is not None) and (pytorch_op.rf_id in kineto_rf_id_to_kineto_op_map):
                 kineto_op = kineto_rf_id_to_kineto_op_map[pytorch_op.rf_id]
                 if kineto_op is None:
-                    self.logger.warning(
+                    logging.warning(
                         f"No corresponding Kineto op found for PyTorch op ID: "
                         f"{pytorch_op.id}, Name: '{pytorch_op.name}'."
                     )
@@ -678,7 +676,7 @@ class TraceLinker:
                     pytorch_op_id_to_inter_thread_dep_map[pytorch_op.id],
                 ) = self.link_ops(pytorch_op, kineto_op, cpu_ev_idx_to_gpu_ops_map, kineto_rf_id_to_kineto_op_map)
 
-        self.logger.info("Completed mapping of PyTorch operators to Kineto operators.")
+        logging.info("Completed mapping of PyTorch operators to Kineto operators.")
         return (
             pytorch_op_id_to_kineto_ops_map,
             pytorch_op_id_to_inclusive_dur_map,
@@ -720,7 +718,7 @@ class TraceLinker:
             )
             if not parent_cpu_op:
                 warning_msg = f"Missing parent CPU operator for GPU op '{gpu_op.name}'. Orphaned GPU operator."
-                self.logger.warning(warning_msg)
+                logging.warning(warning_msg)
                 continue
 
             if parent_cpu_op.ev_idx == "":
@@ -728,10 +726,10 @@ class TraceLinker:
                     f"Missing 'ev_idx' for CPU operator {parent_cpu_op.name}. "
                     f"Cannot link GPU op {gpu_op.name} to {parent_cpu_op.name}."
                 )
-                self.logger.warning(error_msg)
+                logging.warning(error_msg)
                 continue
 
-            self.logger.debug(f"group_gpu_ops_by_cpu_launchers '{parent_cpu_op.name}' -> '{gpu_op.name}'")
+            logging.debug(f"group_gpu_ops_by_cpu_launchers '{parent_cpu_op.name}' -> '{gpu_op.name}'")
 
             cpu_ev_idx_to_gpu_ops_map.setdefault(parent_cpu_op.ev_idx, []).append(gpu_op)
 
@@ -774,12 +772,12 @@ class TraceLinker:
                 "incomplete map, cuda_launch_operations, in is_cuda_launch_op. Please update the map properly to cover"
                 " all CUDA runtime launch operators."
             )
-            self.logger.warning(warning_msg)
+            logging.warning(warning_msg)
             return None
 
         kineto_runtime_op = kineto_correlation_cuda_runtime_map[kineto_gpu_op.correlation]
         kineto_gpu_op.tid = kineto_runtime_op.tid
-        self.logger.debug(
+        logging.debug(
             f"Found CUDA runtime operation '{kineto_runtime_op.name}' for GPU operator '{kineto_gpu_op.name}'."
         )
 
@@ -790,7 +788,7 @@ class TraceLinker:
             kineto_gpu_op, sorted_kineto_cpu_ops, sorted_kineto_cpu_op_ts, kineto_runtime_op.timestamp
         )
         if not parent_cpu_op:
-            self.logger.warning(
+            logging.warning(
                 f"No parent CPU operator found for GPU operator '{kineto_gpu_op.name}' "
                 f"linked to CUDA runtime operation '{kineto_runtime_op.name}' "
                 f"(ts: {kineto_runtime_op.timestamp})."
@@ -933,7 +931,7 @@ class TraceLinker:
         Returns:
             Dict: The constructed ET+ data.
         """
-        self.logger.info("Constructing ET+ data.")
+        logging.info("Constructing ET+ data.")
         with open(pytorch_et_file, "r") as file:
             pytorch_et_data = json.load(file)
 
@@ -1056,10 +1054,10 @@ class TraceLinker:
             pytorch_et_plus_data (Dict): The constructed ET+ data.
             output_file (str): The file path where the ET+ data will be saved.
         """
-        self.logger.info(f"Starting to dump ET+ data to {output_file}.")
+        logging.info(f"Starting to dump ET+ data to {output_file}.")
 
         if pytorch_et_plus_data is None:
-            self.logger.error("ET+ data not constructed. Please run construct_et_plus_data first.")
+            logging.error("ET+ data not constructed. Please run construct_et_plus_data first.")
             return
 
         if "nodes" in pytorch_et_plus_data:
@@ -1068,8 +1066,8 @@ class TraceLinker:
         try:
             with open(output_file, "w") as file:
                 json.dump(pytorch_et_plus_data, file, indent=4)
-            self.logger.info(f"ET+ data dumped to {output_file}.")
+            logging.info(f"ET+ data dumped to {output_file}.")
         except IOError as e:
-            self.logger.error(f"Failed to dump ET+ data to {output_file}. Error: {e}")
+            logging.error(f"Failed to dump ET+ data to {output_file}. Error: {e}")
         except Exception as e:
-            self.logger.error(f"An unexpected error occurred while dumping ET+ data. Error: {e}")
+            logging.error(f"An unexpected error occurred while dumping ET+ data. Error: {e}")

@@ -1,5 +1,4 @@
 import json
-import logging
 from typing import Dict
 from unittest.mock import MagicMock, mock_open, patch
 
@@ -16,13 +15,6 @@ from chakra.schema.protobuf.et_def_pb2 import (
 from chakra.schema.protobuf.et_def_pb2 import Node as ChakraNode
 from chakra.src.converter.pytorch_converter import PyTorchConverter
 from chakra.src.converter.pytorch_node import PyTorchNode
-
-
-@pytest.fixture
-def mock_logger() -> logging.Logger:
-    logger = logging.getLogger("PyTorchConverter")
-    logger.setLevel(logging.DEBUG)
-    return logger
 
 
 @pytest.fixture
@@ -81,26 +73,23 @@ def mock_chakra_node() -> ChakraNode:
     return node
 
 
-def test_initialization(mock_logger: logging.Logger) -> None:
-    converter = PyTorchConverter("input.json", "output.json", mock_logger)
+def test_initialization() -> None:
+    converter = PyTorchConverter("input.json", "output.json")
     assert converter.input_filename == "input.json"
     assert converter.output_filename == "output.json"
-    assert converter.logger == mock_logger
 
 
 @patch("builtins.open", new_callable=mock_open)
-def test_load_pytorch_execution_traces(
-    mock_file: MagicMock, mock_logger: logging.Logger, sample_pytorch_data: Dict
-) -> None:
+def test_load_pytorch_execution_traces(mock_file: MagicMock, sample_pytorch_data: Dict) -> None:
     mock_file.return_value.read.return_value = json.dumps(sample_pytorch_data)
-    converter = PyTorchConverter("input.json", "output.json", mock_logger)
+    converter = PyTorchConverter("input.json", "output.json")
     data = converter.load_pytorch_execution_traces()
     assert data == sample_pytorch_data
     mock_file.assert_called_once_with("input.json", "r")
 
 
-def test_parse_and_instantiate_nodes(mock_logger: logging.Logger, sample_pytorch_data: Dict) -> None:
-    converter = PyTorchConverter("input.json", "output.json", mock_logger)
+def test_parse_and_instantiate_nodes(sample_pytorch_data: Dict) -> None:
+    converter = PyTorchConverter("input.json", "output.json")
     (
         pytorch_schema,
         pytorch_pid,
@@ -142,8 +131,8 @@ def create_sample_graph(parent_id: int = 0, expected_child_id: int = 0) -> Dict[
 
 
 @pytest.mark.parametrize("parent_id, expected_child_id", [(1, 2), (None, None)])
-def test_establish_parent_child_relationships(mock_logger: MagicMock, parent_id: int, expected_child_id: int) -> None:
-    converter = PyTorchConverter("input.json", "output.json", mock_logger)
+def test_establish_parent_child_relationships(parent_id: int, expected_child_id: int) -> None:
+    converter = PyTorchConverter("input.json", "output.json")
     pytorch_nodes = create_sample_graph(parent_id, expected_child_id)
 
     pytorch_nodes = converter._establish_parent_child_relationships(pytorch_nodes, [])
@@ -154,8 +143,8 @@ def test_establish_parent_child_relationships(mock_logger: MagicMock, parent_id:
         assert len(pytorch_nodes[1].children) == 0
 
 
-def test_convert_nodes(mock_logger: logging.Logger, sample_pytorch_data: Dict) -> None:
-    converter = PyTorchConverter("input.json", "output.json", mock_logger)
+def test_convert_nodes(sample_pytorch_data: Dict) -> None:
+    converter = PyTorchConverter("input.json", "output.json")
     (
         pytorch_schema,
         pytorch_pid,
@@ -172,8 +161,8 @@ def test_convert_nodes(mock_logger: logging.Logger, sample_pytorch_data: Dict) -
     assert chakra_nodes[2].id == 2
 
 
-def test_convert_ctrl_dep_to_data_dep(mock_logger: logging.Logger, sample_pytorch_data: Dict) -> None:
-    converter = PyTorchConverter("input.json", "output.json", mock_logger)
+def test_convert_ctrl_dep_to_data_dep(sample_pytorch_data: Dict) -> None:
+    converter = PyTorchConverter("input.json", "output.json")
     (
         pytorch_schema,
         pytorch_pid,
@@ -191,8 +180,8 @@ def test_convert_ctrl_dep_to_data_dep(mock_logger: logging.Logger, sample_pytorc
 
 
 @patch("builtins.open", new_callable=mock_open)
-def test_write_chakra_et(mock_file: MagicMock, mock_logger: logging.Logger, sample_pytorch_data: Dict) -> None:
-    converter = PyTorchConverter("input.json", "output.json", mock_logger)
+def test_write_chakra_et(mock_file: MagicMock, sample_pytorch_data: Dict) -> None:
+    converter = PyTorchConverter("input.json", "output.json")
     converter.chakra_et = mock_file()
     (
         pytorch_schema,
@@ -218,8 +207,8 @@ def test_write_chakra_et(mock_file: MagicMock, mock_logger: logging.Logger, samp
 
 
 @patch("builtins.open", new_callable=mock_open)
-def test_close_chakra_execution_trace(mock_file: MagicMock, mock_logger: logging.Logger) -> None:
-    converter = PyTorchConverter("input.json", "output.json", mock_logger)
+def test_close_chakra_execution_trace(mock_file: MagicMock) -> None:
+    converter = PyTorchConverter("input.json", "output.json")
     file_handle = mock_file()
     file_handle.closed = False  # Simulate an open file
     converter.chakra_et = file_handle
@@ -236,9 +225,7 @@ def test_close_chakra_execution_trace(mock_file: MagicMock, mock_logger: logging
         ({"name": "other_op", "is_gpu_op": False}, COMP_NODE),
     ],
 )
-def test_get_chakra_node_type_from_pytorch_node(
-    mock_logger: logging.Logger, pytorch_node_data: Dict, expected_type: int
-) -> None:
+def test_get_chakra_node_type_from_pytorch_node(pytorch_node_data: Dict, expected_type: int) -> None:
     # Create a mock PyTorchNode with the required attributes
     pytorch_node = MagicMock(spec=PyTorchNode)
     pytorch_node.name = pytorch_node_data["name"]
@@ -257,7 +244,7 @@ def test_get_chakra_node_type_from_pytorch_node(
     mock_pytorch_node = PyTorchNode("1.0.2-chakra.0.0.4", mock_pytorch_node_data)
     pytorch_nodes = {0: mock_pytorch_node, 1: pytorch_node}
 
-    converter = PyTorchConverter("input.json", "output.json", mock_logger)
+    converter = PyTorchConverter("input.json", "output.json")
     node_type = converter.get_chakra_node_type_from_pytorch_node(pytorch_nodes, pytorch_node)
     assert node_type == expected_type
 
@@ -272,7 +259,7 @@ def test_get_chakra_node_type_from_pytorch_node(
         ("broadcast", BROADCAST),
     ],
 )
-def test_get_collective_comm_type(mock_logger: logging.Logger, name: str, expected_comm_type: int) -> None:
-    converter = PyTorchConverter("input.json", "output.json", mock_logger)
+def test_get_collective_comm_type(name: str, expected_comm_type: int) -> None:
+    converter = PyTorchConverter("input.json", "output.json")
     comm_type = converter.get_collective_comm_type(name)
     assert comm_type == expected_comm_type
