@@ -71,8 +71,8 @@ def test_repr_method(sample_operator_data):
         ("some_other_category", "cudaLaunchKernel", False),
     ],
 )
-def test_is_cuda_launch_op(category, name, expected):
-    """Test the is_cuda_launch_op method with various inputs."""
+def test_is_kernel_launch_op(category, name, expected):
+    """Test the is_kernel_launch_op method with various inputs."""
     operator_data = {
         "cat": category,
         "name": name,
@@ -83,4 +83,4 @@ def test_is_cuda_launch_op(category, name, expected):
         "args": {"External id": "123", "Ev Idx": "456", "stream": 7, "Record function id": 12, "correlation": 99},
     }
     operator = KinetoOperator(operator_data)
-    assert operator.is_cuda_launch_op() == expected
+    assert operator.is_kernel_launch_op() == expected
