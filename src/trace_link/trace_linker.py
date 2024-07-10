@@ -878,16 +878,33 @@ class TraceLinker:
         inclusive_dur = kineto_op.inclusive_dur
         exclusive_dur = kineto_op.exclusive_dur
         timestamp = kineto_op.timestamp
-        inter_thread_dep = None
 
-        if kineto_op.inter_thread_dep:
-            inter_thread_dep_kineto_op = kineto_rf_id_to_kineto_op_map[kineto_op.inter_thread_dep]
-            if inter_thread_dep_kineto_op.pytorch_op:
-                inter_thread_dep = inter_thread_dep_kineto_op.pytorch_op.id
+        inter_thread_dep = self.get_inter_thread_dep(kineto_op, kineto_rf_id_to_kineto_op_map)
 
         self.link_gpu_ops(pytorch_op, linked_gpu_ops)
 
         return linked_gpu_ops, inclusive_dur, exclusive_dur, timestamp, inter_thread_dep
+
+    def get_inter_thread_dep(self, kineto_op, kineto_rf_id_to_kineto_op_map):
+        """
+        Retrieve the inter-thread dependency ID for a given Kineto operator.
+
+        This method finds the corresponding PyTorch operator ID for the inter-thread dependency
+        if it exists.
+
+        Args:
+            kineto_op (KinetoOperator): The Kineto operator being processed.
+            kineto_rf_id_to_kineto_op_map (Dict[int, KinetoOperator]): Mapping from rf_id to Kineto operators.
+
+        Returns:
+            Optional[int]: The PyTorch operator ID for the inter-thread dependency if it exists,
+                           otherwise None.
+        """
+        if kineto_op.inter_thread_dep:
+            inter_thread_dep_kineto_op = kineto_rf_id_to_kineto_op_map[kineto_op.inter_thread_dep]
+            if inter_thread_dep_kineto_op.pytorch_op:
+                return inter_thread_dep_kineto_op.pytorch_op.id
+        return None
 
     def link_gpu_ops(self, pytorch_op: PyTorchOperator, kineto_gpu_ops: List[KinetoOperator]) -> None:
         """
