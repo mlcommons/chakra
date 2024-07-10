@@ -103,6 +103,7 @@ class KinetoOperator:
             "cudaMemcpyAsync",
             "cudaMemcpyFromSymbol",
             "cudaMemcpyToSymbol",
+            "cudaLaunchCooperativeKernel",
         }
         return self.category in cuda_launch_categories and self.name in cuda_launch_operations
 
