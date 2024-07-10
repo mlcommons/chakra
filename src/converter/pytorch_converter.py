@@ -244,7 +244,11 @@ class PyTorchConverter:
                             [
                                 ChakraAttr(name="comm_type", int64_val=collective_comm_type),
                                 ChakraAttr(name="comm_size", int64_val=pytorch_gpu_node.comm_size),
-                                *( [ChakraAttr(name="pg_name", string_val=pytorch_gpu_node.pg_name)] if pytorch_gpu_node.pg_name != "" else [] ),
+                                *(
+                                    [ChakraAttr(name="pg_name", string_val=pytorch_gpu_node.pg_name)]
+                                    if pytorch_gpu_node.pg_name != ""
+                                    else []
+                                ),
                             ]
                         )
 
@@ -252,7 +256,11 @@ class PyTorchConverter:
                         chakra_gpu_node.attr.extend(
                             [
                                 ChakraAttr(name="comm_size", int64_val=pytorch_gpu_node.comm_size),
-                                *( [ChakraAttr(name="pg_name", string_val=pytorch_gpu_node.pg_name)] if pytorch_gpu_node.pg_name != "" else [] ),
+                                *(
+                                    [ChakraAttr(name="pg_name", string_val=pytorch_gpu_node.pg_name)]
+                                    if pytorch_gpu_node.pg_name != ""
+                                    else []
+                                ),
                             ]
                         )
 

@@ -18,6 +18,7 @@ def main() -> None:
             "Merging-PyTorch-and-Kineto-Traces"
         )
     )
+    parser.add_argument("--rank", type=int, required=True, help="Rank for the input traces")
     parser.add_argument(
         "--chakra-host-trace",
         type=str,
@@ -43,10 +44,11 @@ def main() -> None:
     logging.basicConfig(level=args.log_level.upper())
 
     linker = TraceLinker()
-    linker.link(args.chakra_host_trace, args.chakra_device_trace, args.output_file)
+    linker.link(args.rank, args.chakra_host_trace, args.chakra_device_trace, args.output_file)
 
     logging.info(f"Linking process successful. Output file is available at {args.output_file}.")
     logging.info("Please run the chakra_converter for further postprocessing.")
+
 
 if __name__ == "__main__":
     main()

@@ -19,7 +19,7 @@ class PyTorchNodeType(Enum):
     CPU_OP = 1
     GPU_OP = 2
     LABEL = 3  # Non-operator nodes
-    METADATA = 4 # Metadata nodes
+    METADATA = 4  # Metadata nodes
 
 
 class PyTorchNode:
