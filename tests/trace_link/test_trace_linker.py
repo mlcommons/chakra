@@ -142,6 +142,28 @@ def test_find_last_cpu_node_before_timestamp(ops_by_tid, exclude_tid, timestamp,
     assert result == expected_result
 
 
+def test_get_inter_thread_dep(trace_linker):
+    kineto_op = MagicMock(spec=KinetoOperator)
+    kineto_op.inter_thread_dep = 1
+    inter_thread_dep_kineto_op = MagicMock(spec=KinetoOperator)
+    inter_thread_dep_kineto_op.pytorch_op = MagicMock(id=42)
+
+    kineto_rf_id_to_kineto_op_map = {1: inter_thread_dep_kineto_op}
+
+    result = trace_linker.get_inter_thread_dep(kineto_op, kineto_rf_id_to_kineto_op_map)
+    assert result == 42
+
+
+def test_get_inter_thread_dep_none(trace_linker):
+    kineto_op = MagicMock(spec=KinetoOperator)
+    kineto_op.inter_thread_dep = None
+
+    kineto_rf_id_to_kineto_op_map = {}
+
+    result = trace_linker.get_inter_thread_dep(kineto_op, kineto_rf_id_to_kineto_op_map)
+    assert result is None
+
+
 def test_link_gpu_ops(trace_linker):
     # Create a mock PyTorch operator
     pytorch_op = MagicMock(spec=PyTorchOperator)
