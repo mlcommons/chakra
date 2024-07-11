@@ -33,16 +33,18 @@ class PyTorchConverter:
         output_filename (str): Output file name for the converted Chakra trace.
     """
 
-    def __init__(self, input_filename: str, output_filename: str) -> None:
+    def __init__(self, input_filename: str, output_filename: str, simulate: bool = False) -> None:
         """
         Initialize the PyTorch to Chakra converter. It sets up necessary attributes and prepares the environment.
 
         Args:
             input_filename (str): Name of the input file containing PyTorch execution trace.
             output_filename (str): Name of the output file for the converted Chakra trace.
+            simulate (bool): Whether to run simulate_execution after conversion.
         """
         self.input_filename = input_filename
         self.output_filename = output_filename
+        self.simulate = simulate
 
     def convert(self) -> None:
         """Convert PyTorch execution traces into the Chakra format."""
@@ -74,7 +76,8 @@ class PyTorchConverter:
             chakra_nodes,
         )
         self.close_chakra_execution_trace(chakra_et)
-        self.simulate_execution(chakra_nodes, pytorch_nodes, parent_to_children_map)
+        if self.simulate:
+            self.simulate_execution(chakra_nodes, pytorch_nodes, parent_to_children_map)
 
     def load_pytorch_execution_traces(self) -> Dict:
         """

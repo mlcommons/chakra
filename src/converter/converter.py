@@ -36,6 +36,7 @@ def main() -> None:
     parser.add_argument(
         "--num_passes", type=int, default=None, required="Text" in sys.argv, help="Number of training passes"
     )
+    parser.add_argument("--simulate", action="store_true", help="Run simulate_execution if set")
     parser.add_argument("--log_filename", type=str, default="debug.log", help="Log filename")
     args = parser.parse_args()
 
@@ -47,7 +48,7 @@ def main() -> None:
             converter = TextConverter(args.input_filename, args.output_filename, args.num_npus, args.num_passes)
             converter.convert()
         elif args.input_type == "PyTorch":
-            converter = PyTorchConverter(args.input_filename, args.output_filename)
+            converter = PyTorchConverter(args.input_filename, args.output_filename, simulate=args.simulate)
             converter.convert()
         else:
             supported_types = ["Text", "PyTorch"]
