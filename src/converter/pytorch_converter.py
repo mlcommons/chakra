@@ -337,6 +337,8 @@ class PyTorchConverter:
                 ChakraAttr(name="is_cpu_op", bool_val=not pytorch_node.is_gpu_op()),
             ]
         )
+        if pytorch_node.stream is not None:
+            chakra_node.attr.append(ChakraAttr(name="stream", int64_val=pytorch_node.stream))
         return chakra_node
 
     def get_chakra_node_type_from_pytorch_node(
