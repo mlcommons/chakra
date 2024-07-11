@@ -103,6 +103,12 @@ class KinetoOperator:
             "cudaMemcpyAsync",
             "cudaMemcpyFromSymbol",
             "cudaMemcpyToSymbol",
+            "hipLaunchKernel",
+            "hipExtLaunchKernel",
+            "hipExtModuleLaunchKernel",
+            "hipModuleLaunchKernel",
+            "hipMemcpyWithStream",
+            "hipMemcpyAsync"
         }
         return self.category in cuda_launch_categories and self.name in cuda_launch_operations
 
