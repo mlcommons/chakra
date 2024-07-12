@@ -19,8 +19,8 @@ class KinetoOperator:
         external_id (int): An external identifier associated with the operator.
         ev_idx (int): Event index of the operator.
         tid (int): Thread identifier where the operator was executed.
-        pytorch_op (Optional[PyTorchOperator]): Corresponding PyTorch operator object.
-        parent_pytorch_op_id (Optional[int]): ID of the parent PyTorch operator.
+        host_op (Optional[PyTorchOperator]): Corresponding PyTorch operator object.
+        parent_host_op_id (Optional[int]): ID of the parent PyTorch operator.
         inter_thread_dep (Optional[int]): Identifier for inter-thread dependencies.
         stream (Optional[int]): CUDA stream identifier associated with the operator.
         rf_id (Optional[int]): Record function identifier.
@@ -45,8 +45,8 @@ class KinetoOperator:
         self.external_id: int = int(kineto_op.get("args", {}).get("External id", -1))
         self.ev_idx: int = int(kineto_op.get("args", {}).get("Ev Idx", -1))
         self.tid: int = kineto_op.get("tid", 0)
-        self.pytorch_op: Optional[PyTorchOperator] = None
-        self.parent_pytorch_op_id: Optional[int] = None
+        self.host_op: Optional[PyTorchOperator] = None
+        self.parent_host_op_id: Optional[int] = None
         self.inter_thread_dep: Optional[int] = None
         self.stream: Optional[int] = kineto_op.get("args", {}).get("stream", None)
         self.rf_id: Optional[int] = kineto_op.get("args", {}).get("Record function id", None)
@@ -64,7 +64,7 @@ class KinetoOperator:
             f"phase={self.phase}, inclusive_dur={self.inclusive_dur}, "
             f"exclusive_dur={self.exclusive_dur}, timestamp={self.timestamp}, "
             f"external_id={self.external_id}, ev_idx={self.ev_idx}, tid={self.tid}, "
-            f"parent_pytorch_op_id={self.parent_pytorch_op_id}, inter_thread_dep={self.inter_thread_dep}, "
+            f"parent_host_op_id={self.parent_host_op_id}, inter_thread_dep={self.inter_thread_dep}, "
             f"stream={self.stream}, rf_id={self.rf_id}, correlation={self.correlation})"
         )
 
