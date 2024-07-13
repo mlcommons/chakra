@@ -447,6 +447,16 @@ def test_process_thread_inter_thread_order(mock_find_last, trace_linker):
     mock_find_last.assert_called()
 
 
+@patch("concurrent.futures.Future.result")
+@patch("chakra.src.trace_link.trace_linker.TraceLinker.process_thread_inter_thread_order")
+def test_enforce_inter_thread_order_exception(mock_process_thread, mock_future_result, trace_linker):
+    mock_future_result.side_effect = Exception("Test Exception")
+    kineto_tid_cpu_ops_map = {1: [MagicMock(spec=KinetoOperator)]}
+
+    with pytest.raises(Exception, match="Test Exception"):
+        trace_linker.enforce_inter_thread_order(kineto_tid_cpu_ops_map)
+
+
 def test_extract_pytorch_ops(trace_linker):
     mock_root_node = MagicMock(spec=PyTorchOperator)
     mock_child_node = MagicMock(spec=PyTorchOperator)

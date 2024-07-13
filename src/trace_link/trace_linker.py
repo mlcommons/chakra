@@ -422,11 +422,8 @@ class TraceLinker:
 
             for future in as_completed(futures):
                 tid = futures[future]
-                try:
-                    future.result()
-                    logging.debug(f"Thread {tid} dependencies processed.")
-                except Exception as e:
-                    logging.error(f"Error processing thread {tid}: {e}")
+                future.result()
+                logging.debug(f"Thread {tid} dependencies processed.")
 
         return kineto_tid_cpu_ops_map
 

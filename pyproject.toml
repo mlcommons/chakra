@@ -79,3 +79,7 @@ exclude = [
 ]
 reportMissingImports = false
 reportAttributeAccessIssue = false
+
+[tool.vulture]
+ignore_names = ["mock_process_thread"]
+min_confidence = 100
