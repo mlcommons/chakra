@@ -50,6 +50,103 @@ def test_repr_method(sample_operator_data):
 
 
 @pytest.mark.parametrize(
+    "category, expected",
+    [
+        ("cpu_op", True),
+        ("user_annotation", True),
+        ("ProfilerStep", False),
+        ("cuda_runtime", False),
+        ("cuda_driver", False),
+    ],
+)
+def test_is_cpu_op(category, expected):
+    """Test the is_cpu_op method with various inputs."""
+    operator_data = {
+        "cat": category,
+        "name": "someOperation",
+        "ph": "X",
+        "dur": 100,
+        "ts": 1590000000,
+        "tid": 1234,
+        "args": {"External id": "123", "Ev Idx": "456", "stream": 7, "Record function id": 12, "correlation": 99},
+    }
+    operator = KinetoOperator(operator_data)
+    assert operator.is_cpu_op() == expected
+
+
+@pytest.mark.parametrize(
+    "category, expected",
+    [
+        ("cuda_runtime", True),
+        ("kernel", False),
+        ("cuda_driver", False),
+        ("cpu_op", False),
+    ],
+)
+def test_is_cuda_runtime_op(category, expected):
+    """Test the is_cuda_runtime_op method with various inputs."""
+    operator_data = {
+        "cat": category,
+        "name": "someOperation",
+        "ph": "X",
+        "dur": 100,
+        "ts": 1590000000,
+        "tid": 1234,
+        "args": {"External id": "123", "Ev Idx": "456", "stream": 7, "Record function id": 12, "correlation": 99},
+    }
+    operator = KinetoOperator(operator_data)
+    assert operator.is_cuda_runtime_op() == expected
+
+
+@pytest.mark.parametrize(
+    "category, expected",
+    [
+        ("cuda_driver", True),
+        ("kernel", False),
+        ("cuda_runtime", False),
+        ("cpu_op", False),
+    ],
+)
+def test_is_cuda_driver_op(category, expected):
+    """Test the is_cuda_driver_op method with various inputs."""
+    operator_data = {
+        "cat": category,
+        "name": "someOperation",
+        "ph": "X",
+        "dur": 100,
+        "ts": 1590000000,
+        "tid": 1234,
+        "args": {"External id": "123", "Ev Idx": "456", "stream": 7, "Record function id": 12, "correlation": 99},
+    }
+    operator = KinetoOperator(operator_data)
+    assert operator.is_cuda_driver_op() == expected
+
+
+@pytest.mark.parametrize(
+    "category, expected",
+    [
+        ("ac2g", True),
+        ("kernel", False),
+        ("cuda_runtime", False),
+        ("cpu_op", False),
+    ],
+)
+def test_is_ac2g_op(category, expected):
+    """Test the is_ac2g_op method with various inputs."""
+    operator_data = {
+        "cat": category,
+        "name": "someOperation",
+        "ph": "X",
+        "dur": 100,
+        "ts": 1590000000,
+        "tid": 1234,
+        "args": {"External id": "123", "Ev Idx": "456", "stream": 7, "Record function id": 12, "correlation": 99},
+    }
+    operator = KinetoOperator(operator_data)
+    assert operator.is_ac2g_op() == expected
+
+
+@pytest.mark.parametrize(
     "category, name, expected",
     [
         ("cuda_driver", "cuLaunchKernel", True),
@@ -71,8 +168,8 @@ def test_repr_method(sample_operator_data):
         ("some_other_category", "cudaLaunchKernel", False),
     ],
 )
-def test_is_cuda_launch_op(category, name, expected):
-    """Test the is_cuda_launch_op method with various inputs."""
+def test_is_kernel_launch_op(category, name, expected):
+    """Test the is_kernel_launch_op method with various inputs."""
     operator_data = {
         "cat": category,
         "name": name,
@@ -83,4 +180,28 @@ def test_is_cuda_launch_op(category, name, expected):
         "args": {"External id": "123", "Ev Idx": "456", "stream": 7, "Record function id": 12, "correlation": 99},
     }
     operator = KinetoOperator(operator_data)
-    assert operator.is_cuda_launch_op() == expected
+    assert operator.is_kernel_launch_op() == expected
+
+
+@pytest.mark.parametrize(
+    "category, expected",
+    [
+        ("kernel", True),
+        ("gpu_memcpy", True),
+        ("cuda_runtime", False),
+        ("cpu_op", False),
+    ],
+)
+def test_is_gpu_op(category, expected):
+    """Test the is_gpu_op method with various inputs."""
+    operator_data = {
+        "cat": category,
+        "name": "someOperation",
+        "ph": "X",
+        "dur": 100,
+        "ts": 1590000000,
+        "tid": 1234,
+        "args": {"External id": "123", "Ev Idx": "456", "stream": 7, "Record function id": 12, "correlation": 99},
+    }
+    operator = KinetoOperator(operator_data)
+    assert operator.is_gpu_op() == expected

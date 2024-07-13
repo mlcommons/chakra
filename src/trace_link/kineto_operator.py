@@ -13,7 +13,8 @@ class KinetoOperator:
         name (str): Name of the operator.
         phase (Optional[str]): Execution phase of the operator.
         inclusive_dur (int): Total duration of the operator, including its children.
-        exclusive_dur (int): Duration of the operator execution alone. Corresponds to the self time field in chrome://tracing.
+        exclusive_dur (int): Duration of the operator execution alone. Corresponds to the self time field in
+            chrome://tracing.
         timestamp (int): Start time of the operator in microseconds.
         external_id (int): An external identifier associated with the operator.
         ev_idx (int): Event index of the operator.
@@ -86,14 +87,50 @@ class KinetoOperator:
             return True
         return False
 
-    def is_cuda_launch_op(self) -> bool:
+    def is_cuda_runtime_op(self) -> bool:
+        """
+        Determine whether the operator is a CUDA runtime operator.
+
+        Returns
+            bool: True if it's a CUDA runtime operator, otherwise False.
+        """
+        return self.category == "cuda_runtime"
+
+    def is_cuda_driver_op(self) -> bool:
+        """
+        Determine whether the operator is a CUDA driver operator.
+
+        Returns
+            bool: True if it's a CUDA driver operator, otherwise False.
+        """
+        return self.category == "cuda_driver"
+
+    def is_ac2g_op(self) -> bool:
+        """
+        Check if the operator is categorized as 'ac2g', which stands for arrows from CPU to GPU.
+
+        Excerpt from https://pytorch.org/docs/stable/torch.compiler_profiling_torch_compile.html
+        ```
+            Every kernel on the GPU occurs after being launched by code running on the CPU. The profiler can draw
+            connections (i.e. "flows") between the GPU and CPU events to show which CPU event launched a GPU kernel.
+            This is particularly helpful because, with a few exceptions, GPU kernels are launched asynchronously.
+
+            To view a flow connection, click on a GPU kernel and click "ac2g".
+        ````
+
+        Returns
+            bool: True if the operator is an 'ac2g' type, otherwise False.
+        """
+        return self.category == "ac2g"
+
+    def is_kernel_launch_op(self) -> bool:
         """
         Determine whether the operator is a kernel-launching CUDA runtime operator.
 
         Returns
             bool: True if it's a launch operation, otherwise False.
         """
-        cuda_launch_categories = {"cuda_runtime", "cuda_driver"}
+        cuda_launch_categories = self.is_cuda_runtime_op() or self.is_cuda_driver_op()
         cuda_launch_operations = {
             "cuLaunchKernel",
             "cuLaunchKernelEx",
@@ -105,7 +142,7 @@ class KinetoOperator:
             "cudaMemcpyToSymbol",
             "cudaLaunchCooperativeKernel",
         }
-        return self.category in cuda_launch_categories and self.name in cuda_launch_operations
+        return cuda_launch_categories and self.name in cuda_launch_operations
 
     def is_gpu_op(self) -> bool:
         """
@@ -116,12 +153,3 @@ class KinetoOperator:
         """
         gpu_categories = {"kernel", "gpu_memcpy"}
         return self.category in gpu_categories
-
-    def is_arrow_op(self) -> bool:
-        """
-        Check if the operator is categorized as 'ac2g', which stands for arrows from CPU to GPU.
-
-        Returns
-            bool: True if the operator is an 'ac2g' type, otherwise False.
-        """
-        return self.category == "ac2g"

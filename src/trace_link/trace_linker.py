@@ -211,7 +211,7 @@ class TraceLinker:
                 kineto_tid_cpu_ops_map.setdefault(op.tid, []).append(op)
                 logging.debug(f"Added CPU or user annotation op: {op.name}")
 
-            elif op.is_cuda_launch_op():
+            elif op.is_kernel_launch_op():
                 kineto_id_cuda_launch_op_map[op.external_id] = op
                 if op.correlation in kineto_correlation_cuda_runtime_map:
                     raise ValueError(
@@ -224,7 +224,7 @@ class TraceLinker:
                 kineto_gpu_ops.append(op)
                 logging.debug(f"Added GPU op: {op.name}")
 
-            elif op.is_arrow_op():
+            elif op.is_ac2g_op():  # arrow from CPU to GPU
                 assert (op.phase == "s") or (op.phase == "f")
                 if op.id is None:
                     error_msg = (
@@ -795,8 +795,8 @@ class TraceLinker:
                 "kernel operator. It can be a case where CUDA runtime operators are not properly identified and added "
                 "to the map, kineto_correlation_cuda_runtime_map. Please manually check if the corresponding CUDA "
                 "runtime operator with the correlation is dropped by mistake. It is likely that it is because of "
-                "incomplete map, cuda_launch_operations, in is_cuda_launch_op. Please update the map properly to cover"
-                " all CUDA runtime launch operators."
+                "incomplete map, cuda_launch_operations, in is_kernel_launch_op. Please update the map properly to "
+                "cover all CUDA runtime launch operators."
             )
             logging.warning(warning_msg)
             return None
