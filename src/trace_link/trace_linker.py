@@ -517,6 +517,24 @@ class TraceLinker:
         Link PyTorch Execution Traces (ET) and Kineto Traces to produce an enhanced PyTorch Execution Trace (ET+).
 
         This process relies on the assumption of an 'exact match' between these traces.
+
+        Args:
+            pytorch_et_file (str): Path to the PyTorch execution trace file.
+            pytorch_ops (List[PyTorchOperator]): List of PyTorch operators.
+            kineto_cpu_ops (List[KinetoOperator]): List of Kineto CPU operators.
+            sorted_kineto_cpu_ops (List[KinetoOperator]): Sorted list of Kineto CPU operators.
+            sorted_kineto_cpu_op_ts (List[int]): Sorted list of timestamps for the Kineto CPU operators.
+            kineto_correlation_cuda_runtime_map (Dict[int, KinetoOperator]): Mapping between correlation IDs and
+                kernel-launching CUDA runtime operators.
+            kineto_rf_id_to_kineto_op_map (Dict[int, KinetoOperator]): Mapping between rf_id and Kineto operators.
+            kineto_gpu_ops (List[KinetoOperator]): List of Kineto GPU operators.
+            kineto_thread_info (Dict[int, Tuple[int, int]]): Information about threads, mapping thread IDs to a tuple
+                of start and end times.
+            kineto_process_start_time (int): Start time of the process, based on the earliest operator timestamp.
+            kineto_process_end_time (int): End time of the process, based on the latest operator timestamp.
+
+        Returns:
+            Dict: The enhanced PyTorch Execution Trace (ET+).
         """
         logging.info("Starting the process of linking PyTorch and Kineto traces.")
         (
@@ -636,7 +654,13 @@ class TraceLinker:
         kineto_correlation_cuda_runtime_map: Dict[int, KinetoOperator],
         kineto_rf_id_to_kineto_op_map: Dict[int, KinetoOperator],
         kineto_gpu_ops: List[KinetoOperator],
-    ) -> Tuple[Dict[int, List[KinetoOperator]], Dict[int, int], Dict[int, int], Dict[int, int], Dict[int, int]]:
+    ) -> Tuple[
+        Dict[int, List[KinetoOperator]],
+        Dict[int, int],
+        Dict[int, int],
+        Dict[int, int],
+        Dict[int, int],
+    ]:
         """Map PyTorch ET nodes to corresponding Kineto operators."""
         logging.info("Mapping PyTorch ET nodes to Kineto operators.")
         cpu_ev_idx_to_gpu_ops_map = self.group_gpu_ops_by_cpu_launchers(
@@ -674,7 +698,12 @@ class TraceLinker:
                     pytorch_op_id_to_exclusive_dur_map[pytorch_op.id],
                     pytorch_op_id_to_timestamp_map[pytorch_op.id],
                     pytorch_op_id_to_inter_thread_dep_map[pytorch_op.id],
-                ) = self.link_ops(pytorch_op, kineto_op, cpu_ev_idx_to_gpu_ops_map, kineto_rf_id_to_kineto_op_map)
+                ) = self.link_ops(
+                    pytorch_op,
+                    kineto_op,
+                    cpu_ev_idx_to_gpu_ops_map,
+                    kineto_rf_id_to_kineto_op_map,
+                )
 
         logging.info("Completed mapping of PyTorch operators to Kineto operators.")
         return (
