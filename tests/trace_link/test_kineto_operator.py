@@ -48,23 +48,29 @@ def test_repr_method(sample_operator_data):
     )
     assert repr(operator) == expected_repr
 
-@pytest.mark.parametrize("category, name, expected", [
-    ("cuda_driver", "cuLaunchKernel", True),
-    ("cuda_driver", "cuLaunchKernelEx", True),
-    ("cuda_driver", "cudaLaunchKernel", True),
-    ("cuda_driver", "cudaLaunchKernelExC", True),
-    ("cuda_runtime", "cuLaunchKernel", True),
-    ("cuda_runtime", "cuLaunchKernelEx", True),
-    ("cuda_runtime", "cudaLaunchKernel", True),
-    ("cuda_runtime", "cudaLaunchKernelExC", True),
-    ("cuda_runtime", "cudaMemcpy", True),
-    ("cuda_runtime", "cudaMemcpyAsync", True),
-    ("cuda_runtime", "cudaMemcpyFromSymbol", True),
-    ("cuda_runtime", "cudaMemcpyToSymbol", True),
-    ("cpu_op", "cudaLaunchKernel", False),
-    ("cuda_runtime", "someOtherOperation", False),
-    ("some_other_category", "cudaLaunchKernel", False)
-])
+
+@pytest.mark.parametrize(
+    "category, name, expected",
+    [
+        ("cuda_driver", "cuLaunchKernel", True),
+        ("cuda_driver", "cuLaunchKernelEx", True),
+        ("cuda_driver", "cudaLaunchKernel", True),
+        ("cuda_driver", "cudaLaunchKernelExC", True),
+        ("cuda_driver", "cudaLaunchCooperativeKernel", True),
+        ("cuda_runtime", "cuLaunchKernel", True),
+        ("cuda_runtime", "cuLaunchKernelEx", True),
+        ("cuda_runtime", "cudaLaunchKernel", True),
+        ("cuda_runtime", "cudaLaunchKernelExC", True),
+        ("cuda_runtime", "cudaLaunchCooperativeKernel", True),
+        ("cuda_runtime", "cudaMemcpy", True),
+        ("cuda_runtime", "cudaMemcpyAsync", True),
+        ("cuda_runtime", "cudaMemcpyFromSymbol", True),
+        ("cuda_runtime", "cudaMemcpyToSymbol", True),
+        ("cpu_op", "cudaLaunchKernel", False),
+        ("cuda_runtime", "someOtherOperation", False),
+        ("some_other_category", "cudaLaunchKernel", False),
+    ],
+)
 def test_is_cuda_launch_op(category, name, expected):
     """Test the is_cuda_launch_op method with various inputs."""
     operator_data = {
