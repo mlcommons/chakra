@@ -41,7 +41,7 @@ class PyTorchNode:
         ts (Optional[float]): Timestamp of the node.
         inter_thread_dep (Any): Inter-thread dependency of the node.
         cat (Any): Category of the node.
-        stream (Any): Stream associated with the node.
+        stream (int): Stream associated with the node.
     """
 
     SUPPORTED_VERSIONS = ["1.0.2-chakra.0.0.4", "1.0.3-chakra.0.0.4", "1.1.0-chakra.0.0.4"]
@@ -102,7 +102,7 @@ class PyTorchNode:
         self.ts = node_data.get("ts")
         self.inter_thread_dep = node_data.get("inter_thread_dep")
         self.cat = node_data.get("cat")
-        self.stream = node_data.get("stream")
+        self.stream = node_data.get("stream", 0)
 
         for attr in node_data.get("attrs", []):
             setattr(self, attr["name"], attr["value"])

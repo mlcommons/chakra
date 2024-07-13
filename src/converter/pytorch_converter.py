@@ -33,16 +33,18 @@ class PyTorchConverter:
         output_filename (str): Output file name for the converted Chakra trace.
     """
 
-    def __init__(self, input_filename: str, output_filename: str) -> None:
+    def __init__(self, input_filename: str, output_filename: str, simulate: bool = False) -> None:
         """
         Initialize the PyTorch to Chakra converter. It sets up necessary attributes and prepares the environment.
 
         Args:
             input_filename (str): Name of the input file containing PyTorch execution trace.
             output_filename (str): Name of the output file for the converted Chakra trace.
+            simulate (bool): Whether to run simulate_execution after conversion.
         """
         self.input_filename = input_filename
         self.output_filename = output_filename
+        self.simulate = simulate
 
     def convert(self) -> None:
         """Convert PyTorch execution traces into the Chakra format."""
@@ -74,7 +76,8 @@ class PyTorchConverter:
             chakra_nodes,
         )
         self.close_chakra_execution_trace(chakra_et)
-        self.simulate_execution(chakra_nodes, pytorch_nodes, parent_to_children_map)
+        if self.simulate:
+            self.simulate_execution(chakra_nodes, pytorch_nodes, parent_to_children_map)
 
     def load_pytorch_execution_traces(self) -> Dict:
         """
@@ -337,6 +340,8 @@ class PyTorchConverter:
                 ChakraAttr(name="is_cpu_op", bool_val=not pytorch_node.is_gpu_op()),
             ]
         )
+        if pytorch_node.stream is not None:
+            chakra_node.attr.append(ChakraAttr(name="stream", int64_val=pytorch_node.stream))
         return chakra_node
 
     def get_chakra_node_type_from_pytorch_node(
@@ -677,6 +682,7 @@ class PyTorchConverter:
         if chakra_et and not chakra_et.closed:
             chakra_et.close()
 
+    # ruff: noqa: C901
     def simulate_execution(
         self,
         chakra_nodes: Dict[int, ChakraNode],
@@ -711,28 +717,34 @@ class PyTorchConverter:
 
         issued_nodes: Set[int] = set()
         current_cpu_node: Optional[Tuple[int, int]] = None
-        current_gpu_node: Optional[Tuple[int, int]] = None
+        current_gpu_nodes: Dict[int, Tuple[int, int]] = {}
 
         current_time: int = 0  # Simulated global clock in microseconds
 
-        while any([ready_cpu_nodes, ready_gpu_nodes, current_cpu_node, current_gpu_node]):
+        while any([ready_cpu_nodes, ready_gpu_nodes, current_cpu_node, current_gpu_nodes]):
             if ready_cpu_nodes and not current_cpu_node:
                 cpu_node_id, cpu_node = ready_cpu_nodes.pop(0)
                 current_cpu_node = (cpu_node_id, current_time)
                 issued_nodes.add(cpu_node_id)
+                tid = pytorch_nodes[cpu_node_id].tid
                 logging.info(
                     f"Issuing CPU Node ID {cpu_node_id} ({cpu_node.name}) at {current_time}us with duration "
-                    f"{cpu_node.duration_micros}us"
+                    f"{cpu_node.duration_micros}us, tid: {tid}"
                 )
 
-            if ready_gpu_nodes and not current_gpu_node:
-                gpu_node_id, gpu_node = ready_gpu_nodes.pop(0)
-                current_gpu_node = (gpu_node_id, current_time)
-                issued_nodes.add(gpu_node_id)
-                logging.info(
-                    f"Issuing GPU Node ID {gpu_node_id} ({gpu_node.name}) at {current_time}us with duration "
-                    f"{gpu_node.duration_micros}us"
-                )
+            if ready_gpu_nodes:
+                for gpu_node_id, gpu_node in ready_gpu_nodes[:]:
+                    pytorch_node = pytorch_nodes[gpu_node_id]
+                    stream_id = pytorch_node.stream
+                    if stream_id not in current_gpu_nodes:
+                        ready_gpu_nodes.remove((gpu_node_id, gpu_node))
+                        current_gpu_nodes[stream_id] = (gpu_node_id, current_time)
+                        issued_nodes.add(gpu_node_id)
+                        tid = f"stream {stream_id}"
+                        logging.info(
+                            f"Issuing GPU Node ID {gpu_node_id} ({gpu_node.name}) at {current_time}us on stream "
+                            f"{stream_id} with duration {gpu_node.duration_micros}us, tid: {tid}"
+                        )
 
             current_time += 1
 
@@ -740,15 +752,22 @@ class PyTorchConverter:
                 current_cpu_node
                 and current_time - current_cpu_node[1] >= chakra_nodes[current_cpu_node[0]].duration_micros
             ):
-                logging.info(f"CPU Node ID {current_cpu_node[0]} completed at {current_time}us")
+                cpu_node_id, _ = current_cpu_node
+                tid = pytorch_nodes[cpu_node_id].tid
+                logging.info(f"CPU Node ID {cpu_node_id} completed at {current_time}us, tid: {tid}")
                 current_cpu_node = None
 
-            if (
-                current_gpu_node
-                and current_time - current_gpu_node[1] >= chakra_nodes[current_gpu_node[0]].duration_micros
-            ):
-                logging.info(f"GPU Node ID {current_gpu_node[0]} completed at {current_time}us")
-                current_gpu_node = None
+            completed_streams = []
+            for stream_id, (gpu_node_id, start_time) in current_gpu_nodes.items():
+                if current_time - start_time >= chakra_nodes[gpu_node_id].duration_micros:
+                    logging.info(
+                        f"GPU Node ID {gpu_node_id} on stream {stream_id} completed at {current_time}us, "
+                        f"tid: stream {stream_id}"
+                    )
+                    completed_streams.append(stream_id)
+
+            for stream_id in completed_streams:
+                del current_gpu_nodes[stream_id]
 
             for node_id in list(issued_nodes):
                 children_ids = parent_to_children_map.get(node_id, [])
