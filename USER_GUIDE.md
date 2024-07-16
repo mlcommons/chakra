@@ -54,13 +54,16 @@ $ chakra_trace_link \
 ```
 
 ### Execution Trace Converter (chakra_converter)
-Converts the merged execution traces into the Chakra schema.
+Converts the execution traces from `chakra_trace_link` into traces in the protobuf format. It is responsible for identifying and encoding dependencies for simulation as well. The converter is designed for any downstream simulators that take Chakra execution traces in the protobuf format. It takes an input file in another format and generates a Chakra execution trace output in the protobuf format.
 ```bash
-$ chakra_converter \
-    --input_filename /path/to/chakra_host_device_trace.json \
-    --output_filename /path/to/chakra_trace \
-    --input_type <input_type>
+$ chakra_converter PyTorch \
+    --input /path/to/chakra_host_device_trace.json \
+    --output /path/to/chakra_trace \
+    [--simulate] \
 ```
+* --input: Path to the input file containing the merged Chakra host and device traces in JSON format.
+* --output: Path to the output file where the converted Chakra trace will be saved in protobuf format.
+* --simulate: (Optional) Enable simulation of operators after the conversion for validation and debugging purposes. This option allows simulation of traces without running them through a simulator. Users can validate the converter or simulator against actual measured values using tools like chrome://tracing or https://perfetto.dev/. Read the duration of the timeline and compare the total execution time against the final simulation time of a trace. Disabled by default because it takes a long time.
 
 ### Execution Trace Feeder (et_feeder)
 The Execution Trace Feeder (et_feeder) is a C++ library designed to feed Chakra traces into any compatible C++ simulator. This library specifically provides dependency-free nodes to a simulator, which must import the feeder as a library. Currently, ASTRA-sim is the only simulator that supports this trace feeder. Below are the commands to run execution traces on ASTRA-sim:

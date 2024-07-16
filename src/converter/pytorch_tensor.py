@@ -5,9 +5,14 @@ class PyTorchTensor:
     """
     Represents a tensor with its associated properties.
 
-    Attributes
+    Attributes:
         tensor_data (List[int]): Data of the tensor including tensor_id, storage_id, offset, number of elements, and
             size of each element in bytes.
+
+    Note:
+        For more details on the tensor data structure, refer to:
+        https://github.com/pytorch/pytorch/blob/7cd48df2dae7e2194438b162968c47d1f05bf20e/torch/csrc/profiler/
+        standalone/execution_trace_observer.cpp#L400
     """
 
     def __init__(self, tensor_data: List[int]) -> None:
