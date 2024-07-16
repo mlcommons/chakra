@@ -45,22 +45,20 @@ $ pip uninstall chakra
 
 ## Tools Overview
 ### Execution Trace Link (chakra_trace_link)
-Merge PyTorch Chakra host trace and Kineto trace to encode GPU operators into the output execution trace.
-
+Merge Chakra host execution trace and Chakra device execution trace to encode GPU operators into the output execution trace.
 ```bash
 $ chakra_trace_link \
-    --pytorch-et-file /path/to/pytorch_et \
-    --kineto-file /path/to/kineto \
-    --output-file /path/to/merged_et
+    --chakra-host-trace /path/to/chakra_host_trace \
+    --chakra-device-trace /path/to/chakra_device_trace \
+    --output-file /path/to/chakra_host_device_trace.json
 ```
 
 ### Execution Trace Converter (chakra_converter)
 Converts the merged execution traces into the Chakra schema.
-
 ```bash
 $ chakra_converter \
-    --input_filename /path/to/merged_et \
-    --output_filename /path/to/chakra_et \
+    --input_filename /path/to/chakra_host_device_trace.json \
+    --output_filename /path/to/chakra_trace \
     --input_type <input_type>
 ```
 
