@@ -107,6 +107,7 @@ def main() -> None:
     if "func" in args:
         setup_logging(args.log_filename)
         args.func(args)
+        logging.info(f"Conversion successful. Output file is available at {args.output}.")
     else:
         parser.print_help()
 
