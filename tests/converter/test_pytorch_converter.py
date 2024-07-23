@@ -73,39 +73,27 @@ def mock_chakra_node() -> ChakraNode:
     return node
 
 
-def test_initialization() -> None:
-    converter = PyTorchConverter("input.json", "output.json")
-    assert converter.input_filename == "input.json"
-    assert converter.output_filename == "output.json"
-
-
 @patch("builtins.open", new_callable=mock_open)
-def test_load_pytorch_execution_traces(mock_file: MagicMock, sample_pytorch_data: Dict) -> None:
+def test_load_json_execution_traces(mock_file: MagicMock, sample_pytorch_data: Dict) -> None:
     mock_file.return_value.read.return_value = json.dumps(sample_pytorch_data)
-    converter = PyTorchConverter("input.json", "output.json")
-    data = converter.load_pytorch_execution_traces()
+    converter = PyTorchConverter()
+    data = converter.load_json_execution_traces("input.json")
     assert data == sample_pytorch_data
     mock_file.assert_called_once_with("input.json", "r")
 
 
-def test_parse_and_instantiate_nodes(sample_pytorch_data: Dict) -> None:
-    converter = PyTorchConverter("input.json", "output.json")
-    (
-        pytorch_schema,
-        pytorch_pid,
-        pytorch_time,
-        pytorch_start_ts,
-        pytorch_finish_ts,
-        pytorch_nodes,
-    ) = converter._parse_and_instantiate_nodes(sample_pytorch_data)
-    assert pytorch_schema == "1.0.2-chakra.0.0.4"
-    assert pytorch_pid == 1234
-    assert pytorch_time == "2023-01-01 12:00:00"
-    assert pytorch_start_ts == 1000
-    assert pytorch_finish_ts == 2000
-    assert len(pytorch_nodes) == 2
-    assert pytorch_nodes[1].id == 1
-    assert pytorch_nodes[2].id == 2
+def test_parse_json_trace(sample_pytorch_data: Dict) -> None:
+    converter = PyTorchConverter()
+    json_metadata, json_node_map = converter.parse_json_trace(sample_pytorch_data)
+
+    assert json_metadata["schema"] == "1.0.2-chakra.0.0.4"
+    assert json_metadata["pid"] == 1234
+    assert json_metadata["time"] == "2023-01-01 12:00:00"
+    assert json_metadata["start_ts"] == 1000
+    assert json_metadata["finish_ts"] == 2000
+    assert len(json_node_map) == 2
+    assert json_node_map[1].id == 1
+    assert json_node_map[2].id == 2
 
 
 def create_sample_graph(parent_id: int = 0, expected_child_id: int = 0) -> Dict[int, PyTorchNode]:
@@ -132,88 +120,48 @@ def create_sample_graph(parent_id: int = 0, expected_child_id: int = 0) -> Dict[
 
 @pytest.mark.parametrize("parent_id, expected_child_id", [(1, 2), (None, None)])
 def test_establish_parent_child_relationships(parent_id: int, expected_child_id: int) -> None:
-    converter = PyTorchConverter("input.json", "output.json")
-    pytorch_nodes = create_sample_graph(parent_id, expected_child_id)
+    converter = PyTorchConverter()
+    json_node_map = create_sample_graph(parent_id, expected_child_id)
 
-    pytorch_nodes = converter._establish_parent_child_relationships(pytorch_nodes, [])
+    json_node_map = converter.establish_parent_child_relationships(json_node_map, [])
 
     if expected_child_id:
-        assert pytorch_nodes[parent_id].children[0].id == expected_child_id
+        assert json_node_map[parent_id].children[0].id == expected_child_id
     else:
-        assert len(pytorch_nodes[1].children) == 0
+        assert len(json_node_map[1].children) == 0
 
 
-def test_convert_nodes(sample_pytorch_data: Dict) -> None:
-    converter = PyTorchConverter("input.json", "output.json")
-    (
-        pytorch_schema,
-        pytorch_pid,
-        pytorch_time,
-        pytorch_start_ts,
-        pytorch_finish_ts,
-        pytorch_nodes,
-    ) = converter._parse_and_instantiate_nodes(sample_pytorch_data)
-    pytorch_nodes = converter._establish_parent_child_relationships(pytorch_nodes, [])
+def test_convert_json_to_protobuf_nodes(sample_pytorch_data: Dict) -> None:
+    converter = PyTorchConverter()
+    json_metadata, json_node_map = converter.parse_json_trace(sample_pytorch_data)
+    json_node_map = converter.establish_parent_child_relationships(json_node_map, [])
     chakra_nodes = {}
-    converter.convert_nodes(pytorch_nodes, chakra_nodes)
+    converter.convert_json_to_protobuf_nodes(json_node_map, chakra_nodes)
     assert len(chakra_nodes) == 2
     assert chakra_nodes[1].id == 1
     assert chakra_nodes[2].id == 2
 
 
 def test_convert_ctrl_dep_to_data_dep(sample_pytorch_data: Dict) -> None:
-    converter = PyTorchConverter("input.json", "output.json")
-    (
-        pytorch_schema,
-        pytorch_pid,
-        pytorch_time,
-        pytorch_start_ts,
-        pytorch_finish_ts,
-        pytorch_nodes,
-    ) = converter._parse_and_instantiate_nodes(sample_pytorch_data)
-    pytorch_nodes = converter._establish_parent_child_relationships(pytorch_nodes, [])
+    converter = PyTorchConverter()
+    json_metadata, json_node_map = converter.parse_json_trace(sample_pytorch_data)
+    json_node_map = converter.establish_parent_child_relationships(json_node_map, [])
     chakra_nodes = {}
-    converter.convert_nodes(pytorch_nodes, chakra_nodes)
+    converter.convert_json_to_protobuf_nodes(json_node_map, chakra_nodes)
     root_node = chakra_nodes[1]
-    converter.convert_ctrl_dep_to_data_dep(pytorch_nodes, chakra_nodes, root_node)
+    converter.convert_ctrl_dep_to_data_dep(json_node_map, chakra_nodes, root_node)
     assert root_node.data_deps == []
 
 
 @patch("builtins.open", new_callable=mock_open)
 def test_write_chakra_et(mock_file: MagicMock, sample_pytorch_data: Dict) -> None:
-    converter = PyTorchConverter("input.json", "output.json")
-    converter.chakra_et = mock_file()
-    (
-        pytorch_schema,
-        pytorch_pid,
-        pytorch_time,
-        pytorch_start_ts,
-        pytorch_finish_ts,
-        pytorch_nodes,
-    ) = converter._parse_and_instantiate_nodes(sample_pytorch_data)
-    pytorch_nodes = converter._establish_parent_child_relationships(pytorch_nodes, [])
+    converter = PyTorchConverter()
+    json_metadata, json_node_map = converter.parse_json_trace(sample_pytorch_data)
+    json_node_map = converter.establish_parent_child_relationships(json_node_map, [])
     chakra_nodes = {}
-    converter.convert_nodes(pytorch_nodes, chakra_nodes)
-    converter.write_chakra_et(
-        converter.chakra_et,
-        pytorch_schema,
-        pytorch_pid,
-        pytorch_time,
-        pytorch_start_ts,
-        pytorch_finish_ts,
-        chakra_nodes,
-    )
+    converter.convert_json_to_protobuf_nodes(json_node_map, chakra_nodes)
+    converter.write_protobuf_execution_trace("output.et", json_metadata, chakra_nodes)
     assert mock_file().write.called
-
-
-@patch("builtins.open", new_callable=mock_open)
-def test_close_chakra_execution_trace(mock_file: MagicMock) -> None:
-    converter = PyTorchConverter("input.json", "output.json")
-    file_handle = mock_file()
-    file_handle.closed = False  # Simulate an open file
-    converter.chakra_et = file_handle
-    converter.close_chakra_execution_trace(converter.chakra_et)
-    file_handle.close.assert_called_once()
 
 
 @pytest.mark.parametrize(
@@ -225,13 +173,13 @@ def test_close_chakra_execution_trace(mock_file: MagicMock) -> None:
         ({"name": "other_op", "is_gpu_op": False}, COMP_NODE),
     ],
 )
-def test_get_chakra_node_type_from_pytorch_node(pytorch_node_data: Dict, expected_type: int) -> None:
+def test_get_protobuf_node_type_from_json_node(pytorch_node_data: Dict, expected_type: int) -> None:
     # Create a mock PyTorchNode with the required attributes
     pytorch_node = MagicMock(spec=PyTorchNode)
     pytorch_node.name = pytorch_node_data["name"]
     pytorch_node.is_gpu_op = MagicMock(return_value=pytorch_node_data["is_gpu_op"])
 
-    # Create a mock pytorch_nodes dictionary with actual PyTorchNode instances
+    # Create a mock json_node_map dictionary with actual PyTorchNode instances
     mock_pytorch_node_data = {
         "id": 0,
         "name": "mock_node",
@@ -242,10 +190,10 @@ def test_get_chakra_node_type_from_pytorch_node(pytorch_node_data: Dict, expecte
         "attrs": [],
     }
     mock_pytorch_node = PyTorchNode("1.0.2-chakra.0.0.4", mock_pytorch_node_data)
-    pytorch_nodes = {0: mock_pytorch_node, 1: pytorch_node}
+    json_node_map = {0: mock_pytorch_node, 1: pytorch_node}
 
-    converter = PyTorchConverter("input.json", "output.json")
-    node_type = converter.get_chakra_node_type_from_pytorch_node(pytorch_nodes, pytorch_node)
+    converter = PyTorchConverter()
+    node_type = converter.get_protobuf_node_type_from_json_node(json_node_map, pytorch_node)
     assert node_type == expected_type
 
 
@@ -260,6 +208,6 @@ def test_get_chakra_node_type_from_pytorch_node(pytorch_node_data: Dict, expecte
     ],
 )
 def test_get_collective_comm_type(name: str, expected_comm_type: int) -> None:
-    converter = PyTorchConverter("input.json", "output.json")
+    converter = PyTorchConverter()
     comm_type = converter.get_collective_comm_type(name)
     assert comm_type == expected_comm_type

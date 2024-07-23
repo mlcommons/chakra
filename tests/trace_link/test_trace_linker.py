@@ -13,7 +13,7 @@ from et_replay.lib.execution_trace import Node as PyTorchOperator
 
 @pytest.fixture
 def trace_linker():
-    return TraceLinker(log_level="INFO")
+    return TraceLinker()
 
 
 def test_initialization(trace_linker):
@@ -22,13 +22,13 @@ def test_initialization(trace_linker):
 
 @patch("chakra.src.trace_link.trace_linker.TraceLinker.construct_et_plus_data")
 @patch("chakra.src.trace_link.trace_linker.TraceLinker.add_thread_and_process_annotations")
-@patch("chakra.src.trace_link.trace_linker.TraceLinker.map_pytorch_to_kineto_ops")
+@patch("chakra.src.trace_link.trace_linker.TraceLinker.map_host_to_device_ops")
 def test_link_traces(mock_map_ops, mock_add_annotations, mock_construct_et_plus, trace_linker):
     mock_add_annotations.return_value = ([], [], [])
     mock_map_ops.return_value = ({}, {}, {}, {}, {})
     mock_construct_et_plus.return_value = {}
 
-    pytorch_ops = [MagicMock(spec=PyTorchOperator)]
+    host_ops = [MagicMock(spec=PyTorchOperator)]
     kineto_cpu_ops = [MagicMock(spec=KinetoOperator)]
     sorted_kineto_cpu_ops = [MagicMock(spec=KinetoOperator)]
     sorted_kineto_cpu_op_ts = [100]
@@ -41,7 +41,7 @@ def test_link_traces(mock_map_ops, mock_add_annotations, mock_construct_et_plus,
 
     trace_linker.link_traces(
         "pytorch_et_file",
-        pytorch_ops,
+        host_ops,
         kineto_cpu_ops,
         sorted_kineto_cpu_ops,
         sorted_kineto_cpu_op_ts,
@@ -56,76 +56,6 @@ def test_link_traces(mock_map_ops, mock_add_annotations, mock_construct_et_plus,
     mock_add_annotations.assert_called_once()
     mock_map_ops.assert_called_once()
     mock_construct_et_plus.assert_called_once()
-
-
-@patch("chakra.src.trace_link.trace_linker.TraceLinker.load_pytorch_et")
-@patch("chakra.src.trace_link.trace_linker.TraceLinker.load_kineto_trace")
-def test_load_traces(mock_load_kineto_trace, mock_load_pytorch_et, trace_linker):
-    mock_load_kineto_trace.return_value = {"sample_data": "data"}
-    trace_linker.load_traces("path/to/pytorch_et.json", "path/to/kineto.json")
-    mock_load_pytorch_et.assert_called_once()
-    mock_load_kineto_trace.assert_called_once()
-
-
-def test_extract_pytorch_ops(trace_linker):
-    mock_root_node = MagicMock(spec=PyTorchOperator)
-    mock_child_node = MagicMock(spec=PyTorchOperator)
-
-    mock_root_node.children = [mock_child_node]
-    mock_child_node.children = []
-
-    mock_root_node.id = 1
-    mock_child_node.id = 2
-
-    result = trace_linker.extract_pytorch_ops(mock_root_node)
-    assert len(result) == 2
-    assert result[0].id == 1
-    assert result[1].id == 2
-
-
-@pytest.mark.parametrize(
-    "kineto_ops, expected_exclusive_durs",
-    [
-        (
-            [
-                {"ts": 100, "dur": 10, "inclusive_dur": 10},
-                {"ts": 105, "dur": 3, "inclusive_dur": 3},
-                {"ts": 108, "dur": 1, "inclusive_dur": 1},
-            ],
-            [6, 3, 1],  # Expected exclusive durations
-        ),
-        (
-            [
-                {"ts": 100, "dur": 20, "inclusive_dur": 20},
-                {"ts": 105, "dur": 5, "inclusive_dur": 5},
-                {"ts": 110, "dur": 5, "inclusive_dur": 5},
-            ],
-            [10, 5, 5],  # Expected exclusive durations
-        ),
-    ],
-)
-def test_calculate_exclusive_dur(trace_linker, kineto_ops, expected_exclusive_durs):
-    kineto_tid_cpu_ops_map = {1: [KinetoOperator(op) for op in kineto_ops]}
-
-    trace_linker.calculate_exclusive_dur(kineto_tid_cpu_ops_map)
-
-    for i, op in enumerate(kineto_tid_cpu_ops_map[1]):
-        assert op.exclusive_dur == expected_exclusive_durs[i]
-
-
-@pytest.mark.parametrize(
-    "intervals, expected_result",
-    [
-        ([(1, 3), (2, 6), (8, 10), (15, 18)], [(1, 6), (8, 10), (15, 18)]),
-        ([(1, 4), (4, 5)], [(1, 5)]),
-        ([], []),
-        ([(1, 2), (2, 3), (3, 4)], [(1, 4)]),
-        ([(1, 5), (2, 6), (6, 8), (7, 9)], [(1, 9)]),
-    ],
-)
-def test_merge_overlapping_intervals(intervals, expected_result):
-    result = TraceLinker.merge_overlapping_intervals(intervals)
-    assert result == expected_result
 
 
 @patch("chakra.src.trace_link.trace_linker.TraceLinker.find_last_cpu_node_before_timestamp")
@@ -322,13 +252,18 @@ def test_find_parent_cpu_op(mock_find_closest_op, trace_linker):
 
 
 @pytest.mark.parametrize(
-    "pytorch_op, kineto_op, expected_linked_gpu_ops, expected_inclusive_dur, expected_exclusive_dur, "
+    "host_op, kineto_op, expected_linked_gpu_ops, expected_inclusive_dur, expected_exclusive_dur, "
     "expected_timestamp, expected_inter_thread_dep",
     [
         (
             MagicMock(spec=PyTorchOperator, id=1),
             MagicMock(
-                spec=KinetoOperator, ev_idx="1", inclusive_dur=100, exclusive_dur=50, timestamp=123456, pytorch_op=None
+                spec=KinetoOperator,
+                ev_idx="1",
+                inclusive_dur=100,
+                exclusive_dur=50,
+                timestamp=123456,
+                host_op=None,
             ),
             [MagicMock(spec=KinetoOperator)],
             100,
@@ -339,7 +274,12 @@ def test_find_parent_cpu_op(mock_find_closest_op, trace_linker):
         (
             MagicMock(spec=PyTorchOperator, id=2),
             MagicMock(
-                spec=KinetoOperator, ev_idx="2", inclusive_dur=200, exclusive_dur=150, timestamp=223456, pytorch_op=None
+                spec=KinetoOperator,
+                ev_idx="2",
+                inclusive_dur=200,
+                exclusive_dur=150,
+                timestamp=223456,
+                host_op=None,
             ),
             [MagicMock(spec=KinetoOperator), MagicMock(spec=KinetoOperator)],
             200,
@@ -355,7 +295,7 @@ def test_link_ops(
     mock_link_gpu_ops,
     mock_get_inter_thread_dep,
     trace_linker,
-    pytorch_op,
+    host_op,
     kineto_op,
     expected_linked_gpu_ops,
     expected_inclusive_dur,
@@ -366,10 +306,10 @@ def test_link_ops(
     mock_get_inter_thread_dep.return_value = expected_inter_thread_dep
 
     cpu_ev_idx_to_gpu_ops_map = {kineto_op.ev_idx: expected_linked_gpu_ops}
-    kineto_rf_id_to_kineto_op_map = {1: MagicMock(spec=KinetoOperator, pytorch_op=MagicMock(id=42))}
+    kineto_rf_id_to_kineto_op_map = {1: MagicMock(spec=KinetoOperator, host_op=MagicMock(id=42))}
 
     result = trace_linker.link_ops(
-        pytorch_op,
+        host_op,
         kineto_op,
         cpu_ev_idx_to_gpu_ops_map,
         kineto_rf_id_to_kineto_op_map,
@@ -382,18 +322,18 @@ def test_link_ops(
         expected_timestamp,
         expected_inter_thread_dep,
     )
-    mock_link_gpu_ops.assert_called_once_with(pytorch_op, expected_linked_gpu_ops)
+    mock_link_gpu_ops.assert_called_once_with(host_op, expected_linked_gpu_ops)
 
 
 def test_link_ops_with_no_gpu_ops(trace_linker):
-    pytorch_op = MagicMock(spec=PyTorchOperator, id=1)
+    host_op = MagicMock(spec=PyTorchOperator, id=1)
     kineto_op = MagicMock(
         spec=KinetoOperator,
         ev_idx="1",
         inclusive_dur=100,
         exclusive_dur=50,
         timestamp=123456,
-        pytorch_op=None,
+        host_op=None,
         inter_thread_dep=None,
     )
 
@@ -401,7 +341,7 @@ def test_link_ops_with_no_gpu_ops(trace_linker):
     kineto_rf_id_to_kineto_op_map = {}
 
     result = trace_linker.link_ops(
-        pytorch_op,
+        host_op,
         kineto_op,
         cpu_ev_idx_to_gpu_ops_map,
         kineto_rf_id_to_kineto_op_map,
@@ -414,7 +354,7 @@ def test_get_inter_thread_dep(trace_linker):
     kineto_op = MagicMock(spec=KinetoOperator)
     kineto_op.inter_thread_dep = 1
     inter_thread_dep_kineto_op = MagicMock(spec=KinetoOperator)
-    inter_thread_dep_kineto_op.pytorch_op = MagicMock(id=42)
+    inter_thread_dep_kineto_op.host_op = MagicMock(id=42)
 
     kineto_rf_id_to_kineto_op_map = {1: inter_thread_dep_kineto_op}
 
@@ -434,8 +374,8 @@ def test_get_inter_thread_dep_none(trace_linker):
 
 def test_link_gpu_ops(trace_linker):
     # Create a mock PyTorch operator
-    pytorch_op = MagicMock(spec=PyTorchOperator)
-    pytorch_op.id = 123
+    host_op = MagicMock(spec=PyTorchOperator)
+    host_op.id = 123
 
     # Create mock Kineto GPU operators
     kineto_gpu_op1 = MagicMock(spec=KinetoOperator)
@@ -443,7 +383,7 @@ def test_link_gpu_ops(trace_linker):
     kineto_gpu_ops = [kineto_gpu_op1, kineto_gpu_op2]
 
     # Call the method
-    trace_linker.link_gpu_ops(pytorch_op, kineto_gpu_ops)
+    trace_linker.link_gpu_ops(host_op, kineto_gpu_ops)
 
 
 @patch("chakra.src.trace_link.trace_linker.TraceLinker.process_op_and_dependents")
@@ -453,19 +393,19 @@ def test_construct_et_plus_data(mock_json_load, mock_open, mock_process_op_and_d
     mock_json_load.return_value = {"nodes": [{"id": 1}, {"id": 2}]}
     mock_process_op_and_dependents.side_effect = lambda x, *args: [{"id": x["id"] + 2}]
 
-    pytorch_op_id_to_kineto_ops_map = {1: [], 2: []}
-    pytorch_op_id_to_inclusive_dur_map = {1: 100, 2: 200}
-    pytorch_op_id_to_exclusive_dur_map = {1: 50, 2: 150}
-    pytorch_op_id_to_timestamp_map = {1: 1000, 2: 2000}
-    pytorch_op_id_to_inter_thread_dep_map = {1: None, 2: None}
+    host_op_id_to_kineto_ops_map = {1: [], 2: []}
+    host_op_id_to_inclusive_dur_map = {1: 100, 2: 200}
+    host_op_id_to_exclusive_dur_map = {1: 50, 2: 150}
+    host_op_id_to_timestamp_map = {1: 1000, 2: 2000}
+    host_op_id_to_inter_thread_dep_map = {1: None, 2: None}
 
     pytorch_et_plus_data = trace_linker.construct_et_plus_data(
         "path/to/pytorch_et_file",
-        pytorch_op_id_to_kineto_ops_map,
-        pytorch_op_id_to_inclusive_dur_map,
-        pytorch_op_id_to_exclusive_dur_map,
-        pytorch_op_id_to_timestamp_map,
-        pytorch_op_id_to_inter_thread_dep_map,
+        host_op_id_to_kineto_ops_map,
+        host_op_id_to_inclusive_dur_map,
+        host_op_id_to_exclusive_dur_map,
+        host_op_id_to_timestamp_map,
+        host_op_id_to_inter_thread_dep_map,
     )
 
     assert pytorch_et_plus_data["nodes"] == [{"id": 1}, {"id": 2}, {"id": 3}, {"id": 4}]
@@ -531,14 +471,14 @@ def test_process_dependent_gpu_ops(trace_linker, orig_op_id, cpu_op, kineto_gpu_
         gpu_op.stream = gpu_op_data["stream"]
         kineto_gpu_op_objects.append(gpu_op)
 
-    pytorch_op_id_to_kineto_ops_map = {orig_op_id: kineto_gpu_op_objects}
+    host_op_id_to_kineto_ops_map = {orig_op_id: kineto_gpu_op_objects}
 
     # Override the generate_new_id method to return the expected IDs
     original_generate_new_id = trace_linker.id_assigner.generate_new_id
     trace_linker.id_assigner.generate_new_id = MagicMock(side_effect=expected_ids)
 
     # Call the method
-    updated_gpu_ops = trace_linker.process_dependent_gpu_ops(cpu_op, orig_op_id, pytorch_op_id_to_kineto_ops_map)
+    updated_gpu_ops = trace_linker.process_dependent_gpu_ops(cpu_op, orig_op_id, host_op_id_to_kineto_ops_map)
 
     # Restore the original generate_new_id method
     trace_linker.id_assigner.generate_new_id = original_generate_new_id
@@ -561,9 +501,9 @@ def test_process_dependent_gpu_ops(trace_linker, orig_op_id, cpu_op, kineto_gpu_
 
 @patch("builtins.open", new_callable=MagicMock)
 @patch("json.dump")
-def test_dump_pytorch_execution_trace_plus(mock_json_dump, mock_open, trace_linker):
+def test_dump_chakra_execution_trace_plus(mock_json_dump, mock_open, trace_linker):
     trace_linker.pytorch_et_plus_data = {"nodes": [{"id": 1}, {"id": 2}]}
-    trace_linker.dump_pytorch_execution_trace_plus(trace_linker.pytorch_et_plus_data, "output.json")
+    trace_linker.dump_chakra_execution_trace_plus(trace_linker.pytorch_et_plus_data, "output.json")
 
     mock_open.assert_called_once_with("output.json", "w")
     mock_open.return_value.__enter__.assert_called_once()

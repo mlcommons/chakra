@@ -2,7 +2,6 @@ import bisect
 import copy
 import json
 import logging
-import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Optional, Tuple
 
@@ -10,49 +9,40 @@ from et_replay.lib.execution_trace import (
     EXECUTION_TRACE_PROCESS_ANNOTATION,
     EXECUTION_TRACE_THREAD_ANNOTATION,
 )
-from et_replay.lib.execution_trace import (
-    Node as PyTorchOperator,
-)
-from et_replay.lib.utils import (
-    load_execution_trace_file,
-    read_dictionary_from_json_file,
-)
+from et_replay.lib.execution_trace import Node as PyTorchOperator
 
+from .chakra_device_trace_loader import ChakraDeviceTraceLoader
+from .chakra_host_trace_loader import ChakraHostTraceLoader
 from .kineto_operator import KinetoOperator
 from .unique_id_assigner import UniqueIdAssigner
-
-# Increase the recursion limit for deep PyTorch execution traces.
-sys.setrecursionlimit(10**6)
 
 
 class TraceLinker:
     """
-    Links PyTorch Execution Traces (ET) and Kineto Traces to generate PyTorch ET plus.
+    Links Chakra host execution traces (ET) and Chakra device ET to generate Chakra host + device ET.
 
     Attributes
+        chakra_host_trace_loader (ChakraHostTraceLoader): Loader for Chakra host execution traces.
+        chakra_device_trace_loader (ChakraDeviceTraceLoader): Loader for Chakra device execution traces.
         id_assigner (UniqueIdAssigner): Assigns unique IDs to operators.
     """
 
-    def __init__(self, log_level: str = "INFO") -> None:
-        """
-        Initialize the TraceLinker with a log level.
-
-        Args:
-            log_level (str): Logging level for the class.
-        """
+    def __init__(self) -> None:
+        """Initialize the TraceLinker with a log level."""
+        self.chakra_host_trace_loader = ChakraHostTraceLoader()
+        self.chakra_device_trace_loader = ChakraDeviceTraceLoader()
         self.id_assigner = UniqueIdAssigner()
-        logging.basicConfig(level=log_level.upper())
 
-    def link(self, pytorch_et_file: str, kineto_file: str, output_file: str) -> None:
+    def link(self, chakra_host_trace: str, chakra_device_trace: str, output_file: str) -> None:
         """
-        High-level method to link traces and produce the ET+ file.
+        Links Chakra host execution traces (ET) and Chakra device ET to generate Chakra host + device ET.
 
         Args:
-            pytorch_et_file (str): Path to the PyTorch execution trace file.
-            kineto_file (str): Path to the Kineto trace file.
-            output_file (str): Path for the output PyTorch execution trace plus file.
+            chakra_host_trace (str): Path to the Chakra host execution trace file.
+            chakra_device_trace (str): Path to the Kineto trace file.
+            output_file (str): Path for the output nyTorch execution trace plus file.
         """
-        pytorch_ops, kineto_data = self.load_traces(pytorch_et_file, kineto_file)
+        host_ops = self.chakra_host_trace_loader.load(chakra_host_trace)
 
         (
             kineto_cpu_ops,
@@ -63,331 +53,29 @@ class TraceLinker:
             kineto_id_cuda_launch_op_map,
             kineto_process_start_time,
             kineto_process_end_time,
-            kineto_thread_info,
-            kineto_rf_id_to_kineto_op_map,
+            kineto_thread_debug,
+            kineto_rf_id_to_device_op_map,
             sorted_kineto_cpu_ops,
             sorted_kineto_cpu_op_ts,
-        ) = self.update_kineto_data(kineto_data)
+        ) = self.chakra_device_trace_loader.load(chakra_device_trace)
 
         kineto_tid_cpu_ops_map = self.enforce_inter_thread_order(kineto_tid_cpu_ops_map)
-        pytorch_et_plus_data = self.link_traces(
-            pytorch_et_file,
-            pytorch_ops,
+
+        chakra_execution_trace_plus_data = self.link_traces(
+            chakra_host_trace,
+            host_ops,
             kineto_cpu_ops,
             sorted_kineto_cpu_ops,
             sorted_kineto_cpu_op_ts,
             kineto_correlation_cuda_runtime_map,
-            kineto_rf_id_to_kineto_op_map,
+            kineto_rf_id_to_device_op_map,
             kineto_gpu_ops,
-            kineto_thread_info,
+            kineto_thread_debug,
             kineto_process_start_time,
             kineto_process_end_time,
         )
-        self.dump_pytorch_execution_trace_plus(pytorch_et_plus_data, output_file)
 
-    def load_traces(self, pytorch_et_file: str, kineto_file: str) -> Tuple[List[PyTorchOperator], Dict]:
-        """
-        Load both PyTorch Execution Traces and Kineto Traces.
-
-        Args:
-            pytorch_et_file (str): Path to the PyTorch execution trace file.
-            kineto_file (str): Path to the Kineto trace file.
-
-        Returns:
-            Tuple: A tuple containing the list of PyTorch operators and the kineto data dictionary.
-        """
-        pytorch_ops = self.load_pytorch_et(pytorch_et_file)
-        kineto_data = self.load_kineto_trace(kineto_file)
-        return pytorch_ops, kineto_data
-
-    def load_pytorch_et(self, pytorch_et_file: str) -> List[PyTorchOperator]:
-        """
-        Load and process the PyTorch Execution Trace.
-
-        This method handles multiple iterations in the trace and extracts the nodes, considering the specified
-        annotation for segmenting the iterations.
-
-        Args:
-            pytorch_et_file (str): Path to the PyTorch execution trace file.
-
-        Returns:
-            List[PyTorchOperator]: List of PyTorch operators.
-        """
-        logging.info("Starting to load PyTorch Execution Trace.")
-        pytorch_et = load_execution_trace_file(pytorch_et_file)
-
-        root_node = pytorch_et.get_nodes()[1]  # Root node is usually 1-based
-        pytorch_ops = self.extract_pytorch_ops(root_node)
-        logging.info(f"Original ops in PyTorch ET: {len(pytorch_ops)}")
-        logging.info("PyTorch Execution Trace loaded successfully.")
-
-        return pytorch_ops
-
-    def extract_pytorch_ops(self, node: PyTorchOperator) -> List[PyTorchOperator]:
-        """
-        Extract and sort nodes from the PyTorch execution trace recursively.
-
-        This method traverses the execution trace starting from the provided node, extracting all the operator nodes
-        recursively, and then returns them sorted by their identifiers.
-
-        Args:
-            node (PyTorchOperator): Starting node for extraction.
-
-        Returns:
-            List[PyTorchOperator]: Sorted list of extracted PyTorchOperator nodes.
-        """
-        nodes = []
-
-        def traverse(node: PyTorchOperator):
-            nodes.append(node)
-            for child in node.children:
-                traverse(child)
-
-        traverse(node)
-        return sorted(nodes, key=lambda x: x.id)
-
-    def load_kineto_trace(self, kineto_file: str) -> Dict:
-        """
-        Load and process the Kineto Trace.
-
-        This method parses the Kineto trace file, creating KinetoOperator instances for each operator in the trace.
-        It then categorizes and segments these operators for further processing and linking with PyTorch operators.
-
-        Args:
-            kineto_file (str): Path to the Kineto trace file.
-
-        Returns:
-            Dict: Dictionary containing various data structures needed for linking traces.
-        """
-        logging.info("Starting to load Kineto Trace.")
-        kineto_trace_data = read_dictionary_from_json_file(kineto_file)
-        sorted_kineto_ops = sorted(
-            [KinetoOperator(op) for op in kineto_trace_data["traceEvents"]],
-            key=lambda op: op.timestamp,
-        )
-
-        kineto_data = self.construct_kineto_data_structures(sorted_kineto_ops)
-        self.calculate_exclusive_dur(kineto_data["kineto_tid_cpu_ops_map"])
-
-        kineto_data["sorted_kineto_cpu_ops"] = sorted(kineto_data["kineto_cpu_ops"], key=lambda op: op.timestamp)
-        kineto_data["sorted_kineto_cpu_op_ts"] = [op.timestamp for op in kineto_data["sorted_kineto_cpu_ops"]]
-
-        logging.info(
-            f"Processed Kineto trace with {len(kineto_data['kineto_cpu_ops'])} CPU ops, "
-            f"{len(kineto_data['kineto_id_cuda_launch_op_map'])} CPU launcher ops, "
-            f"and {len(kineto_data['kineto_gpu_ops'])} GPU ops."
-        )
-        logging.info("Kineto Trace loaded successfully.")
-        return kineto_data
-
-    def construct_kineto_data_structures(self, kineto_ops: List[KinetoOperator]) -> Dict:
-        """
-        Construct necessary data structures required for trace linking from the provided Kineto operators.
-
-        This method identifies process start time, end time, thread start time, and end time, and also categorizes
-        operators into CPU, GPU, and other relevant groups.
-
-        Args:
-            kineto_ops (List[KinetoOperator]): List of Kineto operators to categorize.
-
-        Returns:
-            Dict: Dictionary containing categorized operators and timing boundaries.
-        """
-        logging.info("Categorizing Kineto operators and calculating timing boundaries.")
-        process_start_time = sys.maxsize
-        process_end_time = 0
-        thread_info = {}
-
-        kineto_cpu_ops = []
-        kineto_tid_cpu_ops_map = {}
-        kineto_correlation_cuda_runtime_map = {}
-        kineto_gpu_ops = []
-        kineto_id_arrow_op_map = {}
-        kineto_id_cuda_launch_op_map = {}
-
-        for op in kineto_ops:
-            if op.is_cpu_op():
-                kineto_cpu_ops.append(op)
-                kineto_tid_cpu_ops_map.setdefault(op.tid, []).append(op)
-                logging.debug(f"Added CPU or user annotation op: {op.name}")
-
-            elif op.is_kernel_launch_op():
-                kineto_id_cuda_launch_op_map[op.external_id] = op
-                if op.correlation in kineto_correlation_cuda_runtime_map:
-                    raise ValueError(
-                        f"Duplicate correlation ID {op.correlation} found in self.kineto_id_cuda_launch_op_map."
-                    )
-                kineto_correlation_cuda_runtime_map[op.correlation] = op
-                logging.debug(f"Added CPU launcher op: {op.name}")
-
-            elif op.is_gpu_op():
-                kineto_gpu_ops.append(op)
-                logging.debug(f"Added GPU op: {op.name}")
-
-            elif op.is_ac2g_op():  # arrow from CPU to GPU
-                assert (op.phase == "s") or (op.phase == "f")
-                if op.id is None:
-                    error_msg = (
-                        f"'id' field is None in Kineto operator, {op}. This is unexpected as 'id' "
-                        "should generally be populated for 'ac2g' operators. Please verify the validity of "
-                        "the Kineto trace and the 'op' data."
-                    )
-                    logging.error(error_msg)
-                    raise KeyError(error_msg)
-
-                kineto_id_arrow_op_map[op.id] = op
-
-            # Update timing boundaries
-            if op.tid is not None:
-                process_start_time = min(process_start_time, op.timestamp)
-                process_end_time = max(process_end_time, op.timestamp + op.inclusive_dur)
-                thread_start_end = thread_info.setdefault(op.tid, [sys.maxsize, 0])
-                thread_start_end[0] = min(thread_start_end[0], op.timestamp)
-                thread_start_end[1] = max(thread_start_end[1], op.timestamp + op.inclusive_dur)
-
-        kineto_rf_id_to_kineto_op_map = {op.rf_id: op for op in kineto_cpu_ops if op.rf_id is not None}
-
-        return {
-            "kineto_cpu_ops": kineto_cpu_ops,
-            "kineto_tid_cpu_ops_map": kineto_tid_cpu_ops_map,
-            "kineto_correlation_cuda_runtime_map": kineto_correlation_cuda_runtime_map,
-            "kineto_gpu_ops": kineto_gpu_ops,
-            "kineto_id_arrow_op_map": kineto_id_arrow_op_map,
-            "kineto_id_cuda_launch_op_map": kineto_id_cuda_launch_op_map,
-            "kineto_process_start_time": process_start_time,
-            "kineto_process_end_time": process_end_time,
-            "kineto_thread_info": thread_info,
-            "kineto_rf_id_to_kineto_op_map": kineto_rf_id_to_kineto_op_map,
-            "sorted_kineto_cpu_ops": [],
-            "sorted_kineto_cpu_op_ts": [],
-        }
-
-    def calculate_exclusive_dur(self, kineto_tid_cpu_ops_map: Dict[int, List[KinetoOperator]]) -> None:
-        """
-        Calculate the exclusive duration of each operator in the Kineto traces in parallel.
-
-        The exclusive duration is defined as the total duration of the operator minus any time spent in child operators,
-        effectively representing the time spent exclusively in that operator.
-
-        Args:
-            kineto_tid_cpu_ops_map (Dict[int, List[KinetoOperator]]): Map of thread IDs to their corresponding Kineto
-                operators.
-        """
-        logging.info("Calculating exclusive durations for Kineto operators in parallel.")
-
-        def process_ops_for_thread(ops: List[KinetoOperator]) -> None:
-            logging.info(f"Processing {len(ops)} operators in thread.")
-            sorted_ops = sorted(ops, key=lambda op: (op.timestamp, op.inclusive_dur))
-            for i, op in enumerate(sorted_ops):
-                exclusive_dur = op.inclusive_dur
-                overlapping_regions = []
-
-                # Identify overlapping regions with child operators
-                for child_op in sorted_ops[i + 1 :]:
-                    if child_op.timestamp >= op.timestamp and (child_op.timestamp + child_op.inclusive_dur) <= (
-                        op.timestamp + op.inclusive_dur
-                    ):
-                        overlap_start = child_op.timestamp
-                        overlap_end = child_op.timestamp + child_op.inclusive_dur
-                        overlapping_regions.append((overlap_start, overlap_end))
-                    if (op.timestamp + op.inclusive_dur) < child_op.timestamp:
-                        break
-
-                # Merge overlapping regions and calculate exclusive duration
-                merged_regions = self.merge_overlapping_intervals(overlapping_regions)
-                for start, end in merged_regions:
-                    exclusive_dur -= end - start
-
-                # Check if exclusive_dur is not negative or zero
-                if exclusive_dur < 0:
-                    error_msg = (
-                        f"Exclusive duration calculation error for node '{op.name}' "
-                        f"(ts: {op.timestamp}, inclusive_dur: {op.inclusive_dur}, rf_id: {op.rf_id}): "
-                        f"Duration cannot be less than zero."
-                    )
-                    logging.error(error_msg)
-                    raise ValueError(error_msg)
-
-                op.exclusive_dur = exclusive_dur
-                logging.debug(
-                    f"Node '{op.name}' (ts: {op.timestamp}, inclusive_dur: {op.inclusive_dur}, "
-                    f"rf_id: {op.rf_id}) exclusive duration: {op.exclusive_dur} microseconds."
-                )
-
-        with ThreadPoolExecutor() as executor:
-            futures = [executor.submit(process_ops_for_thread, ops) for ops in kineto_tid_cpu_ops_map.values()]
-
-            for future in as_completed(futures):
-                future.result()  # Wait for all threads to complete and handle any exceptions
-
-        logging.info("Exclusive durations for Kineto operators calculated successfully.")
-
-    @staticmethod
-    def merge_overlapping_intervals(intervals: List[Tuple[int, int]]) -> List[Tuple[int, int]]:
-        """
-        Merge overlapping intervals into a single interval.
-
-        Args:
-            intervals (List[Tuple[int, int]]): List of intervals.
-
-        Returns:
-            List[Tuple[int, int]]: List of merged intervals.
-        """
-        if not intervals:
-            return []
-
-        # Sort intervals based on the start time
-        intervals.sort(key=lambda x: x[0])
-        merged = [intervals[0]]
-
-        for current in intervals:
-            prev = merged[-1]
-            if current[0] <= prev[1]:
-                # There is overlap, merge the current interval with the previous one
-                merged[-1] = (prev[0], max(prev[1], current[1]))
-            else:
-                # No overlap, add the current interval
-                merged.append(current)
-
-        return merged
-
-    def update_kineto_data(self, kineto_data: Dict) -> Tuple:
-        """
-        Update the variables of the TraceLinker class using the data structures from the kineto_data dictionary.
-
-        Args:
-            kineto_data (Dict): Dictionary containing categorized operators and timing boundaries.
-
-        Returns:
-            Tuple: Contains all updated variables from the kineto_data dictionary.
-        """
-        kineto_cpu_ops = kineto_data["kineto_cpu_ops"]
-        kineto_tid_cpu_ops_map = kineto_data["kineto_tid_cpu_ops_map"]
-        kineto_correlation_cuda_runtime_map = kineto_data["kineto_correlation_cuda_runtime_map"]
-        kineto_gpu_ops = kineto_data["kineto_gpu_ops"]
-        kineto_id_arrow_op_map = kineto_data["kineto_id_arrow_op_map"]
-        kineto_id_cuda_launch_op_map = kineto_data["kineto_id_cuda_launch_op_map"]
-        kineto_process_start_time = kineto_data["kineto_process_start_time"]
-        kineto_process_end_time = kineto_data["kineto_process_end_time"]
-        kineto_thread_info = kineto_data["kineto_thread_info"]
-        kineto_rf_id_to_kineto_op_map = {op.rf_id: op for op in kineto_cpu_ops if op.rf_id is not None}
-        sorted_kineto_cpu_ops = kineto_data["sorted_kineto_cpu_ops"]
-        sorted_kineto_cpu_op_ts = kineto_data["sorted_kineto_cpu_op_ts"]
-
-        return (
-            kineto_cpu_ops,
-            kineto_tid_cpu_ops_map,
-            kineto_correlation_cuda_runtime_map,
-            kineto_gpu_ops,
-            kineto_id_arrow_op_map,
-            kineto_id_cuda_launch_op_map,
-            kineto_process_start_time,
-            kineto_process_end_time,
-            kineto_thread_info,
-            kineto_rf_id_to_kineto_op_map,
-            sorted_kineto_cpu_ops,
-            sorted_kineto_cpu_op_ts,
-        )
+        self.dump_chakra_execution_trace_plus(chakra_execution_trace_plus_data, output_file)
 
     def enforce_inter_thread_order(
         self, kineto_tid_cpu_ops_map: Dict[int, List[KinetoOperator]], threshold: int = 1000
@@ -410,7 +98,7 @@ class TraceLinker:
         Returns:
             Dict[int, List[KinetoOperator]]: Updated map with enforced inter-thread order.
         """
-        logging.info("Enforcing inter-thread order in Kineto traces.")
+        logging.debug("Enforcing inter-thread order in Kineto traces.")
 
         with ThreadPoolExecutor() as executor:
             futures = {
@@ -439,7 +127,7 @@ class TraceLinker:
             ops_by_tid (Dict[int, List[KinetoOperator]]): Kineto operators grouped by thread ID.
             threshold (int): Threshold for significant gap detection in microseconds.
         """
-        logging.info(f"Thread {tid}: Identifying gaps for dependency linking with threshold {threshold}us.")
+        logging.debug(f"Thread {tid}: Identifying gaps for dependency linking with threshold {threshold}us.")
         sorted_ops = sorted(ops, key=lambda op: op.timestamp)
         last_cpu_node_rf_id = None
 
@@ -498,42 +186,40 @@ class TraceLinker:
 
     def link_traces(
         self,
-        pytorch_et_file: str,
-        pytorch_ops: List[PyTorchOperator],
+        chakra_host_trace: str,
+        host_ops: List[PyTorchOperator],
         kineto_cpu_ops: List[KinetoOperator],
         sorted_kineto_cpu_ops: List[KinetoOperator],
         sorted_kineto_cpu_op_ts: List[int],
         kineto_correlation_cuda_runtime_map: Dict[int, KinetoOperator],
-        kineto_rf_id_to_kineto_op_map: Dict[int, KinetoOperator],
+        kineto_rf_id_to_device_op_map: Dict[int, KinetoOperator],
         kineto_gpu_ops: List[KinetoOperator],
-        kineto_thread_info: Dict[int, Tuple[int, int]],
+        kineto_thread_debug: Dict[int, Tuple[int, int]],
         kineto_process_start_time: int,
         kineto_process_end_time: int,
     ) -> Dict:
         """
-        Link PyTorch Execution Traces (ET) and Kineto Traces to produce an enhanced PyTorch Execution Trace (ET+).
-
-        This process relies on the assumption of an 'exact match' between these traces.
+        Link Chakra Host ET and Chakra Device ET to produce an enhanced Chakra ET (ET +).
 
         Args:
-            pytorch_et_file (str): Path to the PyTorch execution trace file.
-            pytorch_ops (List[PyTorchOperator]): List of PyTorch operators.
+            chakra_host_trace (str): Path to the Chakra host execution trace file.
+            host_ops (List[PyTorchOperator]): List of Chakra host operators.
             kineto_cpu_ops (List[KinetoOperator]): List of Kineto CPU operators.
             sorted_kineto_cpu_ops (List[KinetoOperator]): Sorted list of Kineto CPU operators.
             sorted_kineto_cpu_op_ts (List[int]): Sorted list of timestamps for the Kineto CPU operators.
             kineto_correlation_cuda_runtime_map (Dict[int, KinetoOperator]): Mapping between correlation IDs and
                 kernel-launching CUDA runtime operators.
-            kineto_rf_id_to_kineto_op_map (Dict[int, KinetoOperator]): Mapping between rf_id and Kineto operators.
+            kineto_rf_id_to_device_op_map (Dict[int, KinetoOperator]): Mapping between rf_id and Kineto operators.
             kineto_gpu_ops (List[KinetoOperator]): List of Kineto GPU operators.
-            kineto_thread_info (Dict[int, Tuple[int, int]]): Information about threads, mapping thread IDs to a tuple
+            kineto_thread_debug (Dict[int, Tuple[int, int]]): debugrmation about threads, mapping thread IDs to a tuple
                 of start and end times.
             kineto_process_start_time (int): Start time of the process, based on the earliest operator timestamp.
             kineto_process_end_time (int): End time of the process, based on the latest operator timestamp.
 
         Returns:
-            Dict: The enhanced PyTorch Execution Trace (ET+).
+            Dict: The enhanced Chakra Host Execution Trace (ET+).
         """
-        logging.info("Starting the process of linking PyTorch and Kineto traces.")
+        logging.debug("Starting the process of linking Chakra host and device traces.")
         (
             kineto_cpu_ops,
             sorted_kineto_cpu_ops,
@@ -542,54 +228,54 @@ class TraceLinker:
             kineto_cpu_ops,
             sorted_kineto_cpu_ops,
             sorted_kineto_cpu_op_ts,
-            kineto_thread_info,
+            kineto_thread_debug,
             kineto_process_start_time,
             kineto_process_end_time,
         )
         (
-            pytorch_op_id_to_kineto_ops_map,
-            pytorch_op_id_to_inclusive_dur_map,
-            pytorch_op_id_to_exclusive_dur_map,
-            pytorch_op_id_to_timestamp_map,
-            pytorch_op_id_to_inter_thread_dep_map,
-        ) = self.map_pytorch_to_kineto_ops(
-            pytorch_ops,
+            host_op_id_to_kineto_ops_map,
+            host_op_id_to_inclusive_dur_map,
+            host_op_id_to_exclusive_dur_map,
+            host_op_id_to_timestamp_map,
+            host_op_id_to_inter_thread_dep_map,
+        ) = self.map_host_to_device_ops(
+            host_ops,
             kineto_cpu_ops,
             sorted_kineto_cpu_ops,
             sorted_kineto_cpu_op_ts,
             kineto_correlation_cuda_runtime_map,
-            kineto_rf_id_to_kineto_op_map,
+            kineto_rf_id_to_device_op_map,
             kineto_gpu_ops,
         )
-        pytorch_et_plus_data = self.construct_et_plus_data(
-            pytorch_et_file,
-            pytorch_op_id_to_kineto_ops_map,
-            pytorch_op_id_to_inclusive_dur_map,
-            pytorch_op_id_to_exclusive_dur_map,
-            pytorch_op_id_to_timestamp_map,
-            pytorch_op_id_to_inter_thread_dep_map,
+        chakra_execution_trace_plus_data = self.construct_et_plus_data(
+            chakra_host_trace,
+            host_op_id_to_kineto_ops_map,
+            host_op_id_to_inclusive_dur_map,
+            host_op_id_to_exclusive_dur_map,
+            host_op_id_to_timestamp_map,
+            host_op_id_to_inter_thread_dep_map,
         )
-        logging.info("Traces have been successfully linked.")
-        return pytorch_et_plus_data
+        logging.debug("Traces have been successfully linked.")
+        return chakra_execution_trace_plus_data
 
     def add_thread_and_process_annotations(
         self,
         kineto_cpu_ops: List[KinetoOperator],
         sorted_kineto_cpu_ops: List[KinetoOperator],
         sorted_kineto_cpu_op_ts: List[int],
-        kineto_thread_info: Dict[int, Tuple[int, int]],
+        kineto_thread_debug: Dict[int, Tuple[int, int]],
         kineto_process_start_time: int,
         kineto_process_end_time: int,
     ) -> Tuple[List[KinetoOperator], List[KinetoOperator], List[int]]:
         """
-        Add thread and process annotations to Kineto operators based on previously tracked timing information.
+        Add thread and process annotations to Kineto operators based on previously tracked timing debugrmation.
 
-        These annotations are crucial for aligning Kineto operators with PyTorch ET nodes, ensuring completeness and
+        These annotations are crucial for aligning Kineto operators with Chakra host nodes, ensuring completeness and
         compatibility of trace data for analysis. This method uses the process start and end times, as well as thread
         start and end times, collected during the categorization process to insert appropriate annotations directly
         into the Kineto operators list.
         """
-        logging.info("Adding process and thread annotations to Kineto operators.")
+        logging.debug("Adding process and thread annotations to Kineto operators.")
 
         # Insert process annotation operator. This operator represents the
         # overall time span of the trace process.
@@ -611,7 +297,7 @@ class TraceLinker:
 
         # Insert thread annotation operators for each thread. These annotations
         # are crucial for understanding thread-level execution within the trace.
-        for tid, (start_ts, end_ts) in kineto_thread_info.items():
+        for tid, (start_ts, end_ts) in kineto_thread_debug.items():
             inclusive_dur = end_ts - start_ts
             thread_annotation_op = KinetoOperator(
                 {
@@ -642,14 +328,14 @@ class TraceLinker:
 
         return kineto_cpu_ops, sorted_kineto_cpu_ops, sorted_kineto_cpu_op_ts
 
-    def map_pytorch_to_kineto_ops(
+    def map_host_to_device_ops(
         self,
-        pytorch_ops: List[PyTorchOperator],
+        host_ops: List[PyTorchOperator],
         kineto_cpu_ops: List[KinetoOperator],
         sorted_kineto_cpu_ops: List[KinetoOperator],
         sorted_kineto_cpu_op_ts: List[int],
         kineto_correlation_cuda_runtime_map: Dict[int, KinetoOperator],
-        kineto_rf_id_to_kineto_op_map: Dict[int, KinetoOperator],
+        kineto_rf_id_to_device_op_map: Dict[int, KinetoOperator],
         kineto_gpu_ops: List[KinetoOperator],
     ) -> Tuple[
         Dict[int, List[KinetoOperator]],
@@ -658,57 +344,57 @@ class TraceLinker:
         Dict[int, int],
         Dict[int, int],
     ]:
-        """Map PyTorch ET nodes to corresponding Kineto operators."""
-        logging.info("Mapping PyTorch ET nodes to Kineto operators.")
+        """Map Chakra host operators to corresponding device operators."""
+        logging.debug("Mapping Charka host operators to corresponding device operators.")
         cpu_ev_idx_to_gpu_ops_map = self.group_gpu_ops_by_cpu_launchers(
             kineto_gpu_ops, kineto_correlation_cuda_runtime_map, sorted_kineto_cpu_ops, sorted_kineto_cpu_op_ts
         )
 
-        pytorch_op_id_to_kineto_ops_map = {}
-        pytorch_op_id_to_inclusive_dur_map = {}
-        pytorch_op_id_to_exclusive_dur_map = {}
-        pytorch_op_id_to_timestamp_map = {}
-        pytorch_op_id_to_inter_thread_dep_map = {}
+        host_op_id_to_kineto_ops_map = {}
+        host_op_id_to_inclusive_dur_map = {}
+        host_op_id_to_exclusive_dur_map = {}
+        host_op_id_to_timestamp_map = {}
+        host_op_id_to_inter_thread_dep_map = {}
 
-        pytorch_ops_count = len(pytorch_ops)
+        host_ops_count = len(host_ops)
         kineto_ops_count = len(kineto_cpu_ops)
-        if pytorch_ops_count > kineto_ops_count:
+        if host_ops_count > kineto_ops_count:
             # The specific comment is placed within the if block as requested.
             logging.warning(
-                f"Number of PyTorch operators ({pytorch_ops_count}) is larger than the number of Kineto operators "
-                f"({kineto_ops_count}). Expected PyTorch ops (CPU only) to be fewer than Kineto ops (CPU and GPU). "
-                f"Logging this rare but possible scenario."
+                f"Number of Chakra host operators ({host_ops_count}) is larger than the number of Kineto "
+                f"operators ({kineto_ops_count}). Expected Chakra host ops (CPU only) to be fewer than Kineto ops "
+                "(CPU and GPU). Logging this rare but possible scenario."
             )
 
-        for _, pytorch_op in enumerate(pytorch_ops):
-            if (pytorch_op.rf_id is not None) and (pytorch_op.rf_id in kineto_rf_id_to_kineto_op_map):
-                kineto_op = kineto_rf_id_to_kineto_op_map[pytorch_op.rf_id]
+        for _, host_op in enumerate(host_ops):
+            if (host_op.rf_id is not None) and (host_op.rf_id in kineto_rf_id_to_device_op_map):
+                kineto_op = kineto_rf_id_to_device_op_map[host_op.rf_id]
                 if kineto_op is None:
                     logging.warning(
-                        f"No corresponding Kineto op found for PyTorch op ID: "
-                        f"{pytorch_op.id}, Name: '{pytorch_op.name}'."
+                        f"No corresponding Kineto op found for Chakra host op ID: {host_op.id}, Name: "
+                        f"'{host_op.name}'."
                     )
                     continue
                 (
-                    pytorch_op_id_to_kineto_ops_map[pytorch_op.id],
-                    pytorch_op_id_to_inclusive_dur_map[pytorch_op.id],
-                    pytorch_op_id_to_exclusive_dur_map[pytorch_op.id],
-                    pytorch_op_id_to_timestamp_map[pytorch_op.id],
-                    pytorch_op_id_to_inter_thread_dep_map[pytorch_op.id],
+                    host_op_id_to_kineto_ops_map[host_op.id],
+                    host_op_id_to_inclusive_dur_map[host_op.id],
+                    host_op_id_to_exclusive_dur_map[host_op.id],
+                    host_op_id_to_timestamp_map[host_op.id],
+                    host_op_id_to_inter_thread_dep_map[host_op.id],
                 ) = self.link_ops(
-                    pytorch_op,
+                    host_op,
                     kineto_op,
                     cpu_ev_idx_to_gpu_ops_map,
-                    kineto_rf_id_to_kineto_op_map,
+                    kineto_rf_id_to_device_op_map,
                 )
 
-        logging.info("Completed mapping of PyTorch operators to Kineto operators.")
+        logging.debug("Completed mapping of Chakra host operators to Kineto operators.")
         return (
-            pytorch_op_id_to_kineto_ops_map,
-            pytorch_op_id_to_inclusive_dur_map,
-            pytorch_op_id_to_exclusive_dur_map,
-            pytorch_op_id_to_timestamp_map,
-            pytorch_op_id_to_inter_thread_dep_map,
+            host_op_id_to_kineto_ops_map,
+            host_op_id_to_inclusive_dur_map,
+            host_op_id_to_exclusive_dur_map,
+            host_op_id_to_timestamp_map,
+            host_op_id_to_inter_thread_dep_map,
         )
 
     def group_gpu_ops_by_cpu_launchers(
@@ -880,19 +566,19 @@ class TraceLinker:
 
     def link_ops(
         self,
-        pytorch_op: PyTorchOperator,
+        host_op: PyTorchOperator,
         kineto_op: KinetoOperator,
         cpu_ev_idx_to_gpu_ops_map: Dict[int, List[KinetoOperator]],
-        kineto_rf_id_to_kineto_op_map: Dict[int, KinetoOperator],
+        kineto_rf_id_to_device_op_map: Dict[int, KinetoOperator],
     ) -> Tuple[List[KinetoOperator], int, int, int, Optional[int]]:
         """
-        Link a PyTorch operator to its corresponding Kineto operator and any associated GPU operators.
+        Link a Chakra host operator to its corresponding Kineto operator and any associated GPU operators.
 
         Args:
-            pytorch_op (PyTorchOperator): PyTorch operator to link.
+            host_op (PyTorchOperator): Chakra host operator to link.
             kineto_op (KinetoOperator): Corresponding Kineto operator.
             cpu_ev_idx_to_gpu_ops_map (Dict[int, List[KinetoOperator]]): GPU ops mapping.
-            kineto_rf_id_to_kineto_op_map (Dict[int, KinetoOperator]): Kineto operator mapping.
+            kineto_rf_id_to_device_op_map (Dict[int, KinetoOperator]): Kineto operator mapping.
 
         Returns:
             Tuple containing:
@@ -902,80 +588,78 @@ class TraceLinker:
                 - int: The timestamp of the linked Kineto operator.
                 - Optional[int]: The inter-thread dependency ID if present.
         """
-        kineto_op.pytorch_op = pytorch_op
+        kineto_op.host_op = host_op
         linked_gpu_ops = cpu_ev_idx_to_gpu_ops_map.get(kineto_op.ev_idx, [])
         inclusive_dur = kineto_op.inclusive_dur
         exclusive_dur = kineto_op.exclusive_dur
         timestamp = kineto_op.timestamp
 
-        inter_thread_dep = self.get_inter_thread_dep(kineto_op, kineto_rf_id_to_kineto_op_map)
+        inter_thread_dep = self.get_inter_thread_dep(kineto_op, kineto_rf_id_to_device_op_map)
 
-        self.link_gpu_ops(pytorch_op, linked_gpu_ops)
+        self.link_gpu_ops(host_op, linked_gpu_ops)
 
         return linked_gpu_ops, inclusive_dur, exclusive_dur, timestamp, inter_thread_dep
 
-    def get_inter_thread_dep(self, kineto_op, kineto_rf_id_to_kineto_op_map):
+    def get_inter_thread_dep(self, kineto_op, kineto_rf_id_to_device_op_map):
         """
         Retrieve the inter-thread dependency ID for a given Kineto operator.
 
-        This method finds the corresponding PyTorch operator ID for the inter-thread dependency
-        if it exists.
+        This method finds the corresponding Chakra host operator ID for the inter-thread dependency if it exists.
 
         Args:
             kineto_op (KinetoOperator): The Kineto operator being processed.
-            kineto_rf_id_to_kineto_op_map (Dict[int, KinetoOperator]): Mapping from rf_id to Kineto operators.
+            kineto_rf_id_to_device_op_map (Dict[int, KinetoOperator]): Mapping from rf_id to Kineto operators.
 
         Returns:
-            Optional[int]: The PyTorch operator ID for the inter-thread dependency if it exists,
-                           otherwise None.
+            Optional[int]: The Chakra host operator ID for the inter-thread dependency if it exists, otherwise None.
         """
         if kineto_op.inter_thread_dep:
-            inter_thread_dep_kineto_op = kineto_rf_id_to_kineto_op_map[kineto_op.inter_thread_dep]
-            if inter_thread_dep_kineto_op.pytorch_op:
-                return inter_thread_dep_kineto_op.pytorch_op.id
+            inter_thread_dep_kineto_op = kineto_rf_id_to_device_op_map[kineto_op.inter_thread_dep]
+            if inter_thread_dep_kineto_op.host_op:
+                return inter_thread_dep_kineto_op.host_op.id
         return None
 
-    def link_gpu_ops(self, pytorch_op: PyTorchOperator, kineto_gpu_ops: List[KinetoOperator]) -> None:
+    def link_gpu_ops(self, host_op: PyTorchOperator, kineto_gpu_ops: List[KinetoOperator]) -> None:
         """
-        Link GPU operators to a PyTorch operator.
+        Link GPU operators to a Chakra host operator.
 
         Args:
-            pytorch_op (PyTorchOperator): The PyTorch operator to link to.
+            host_op (PyTorchOperator): The Chakra host operator to link to.
             kineto_gpu_ops (List[KinetoOperator]): GPU operators to link.
         """
         for gpu_op in kineto_gpu_ops:
-            gpu_op.parent_pytorch_op_id = pytorch_op.id
+            gpu_op.parent_host_op_id = host_op.id
 
     def construct_et_plus_data(
         self,
-        pytorch_et_file: str,
-        pytorch_op_id_to_kineto_ops_map: Dict[int, List[KinetoOperator]],
-        pytorch_op_id_to_inclusive_dur_map: Dict[int, int],
-        pytorch_op_id_to_exclusive_dur_map: Dict[int, int],
-        pytorch_op_id_to_timestamp_map: Dict[int, int],
-        pytorch_op_id_to_inter_thread_dep_map: Dict[int, int],
+        chakra_host_trace: str,
+        host_op_id_to_kineto_ops_map: Dict[int, List[KinetoOperator]],
+        host_op_id_to_inclusive_dur_map: Dict[int, int],
+        host_op_id_to_exclusive_dur_map: Dict[int, int],
+        host_op_id_to_timestamp_map: Dict[int, int],
+        host_op_id_to_inter_thread_dep_map: Dict[int, int],
     ) -> Dict:
         """
-        Construct the enhanced PyTorch Execution Trace (ET+) data structure.
+        Construct the enhanced Chakra Host Execution Trace (ET+) data structure.
 
-        This method enriches the PyTorch execution trace with detailed performance data from the Kineto trace, offering
-        a comprehensive view of the execution.
+        This method enriches the Chakra host execution trace with detailed performance data from the Kineto trace,
+        offering a comprehensive view of the execution.
 
         Args:
-            pytorch_et_file (str): Path to the PyTorch execution trace file.
-            pytorch_op_id_to_kineto_ops_map (Dict[int, List[KinetoOperator]]): Map from PyTorch op IDs to Kineto GPU
-                ops.
-            pytorch_op_id_to_inclusive_dur_map (Dict[int, int]): Inclusive duration map for PyTorch ops.
-            pytorch_op_id_to_exclusive_dur_map (Dict[int, int]): Exclusive duration map for PyTorch ops.
-            pytorch_op_id_to_timestamp_map (Dict[int, int]): Timestamp map for PyTorch ops.
-            pytorch_op_id_to_inter_thread_dep_map (Dict[int, int]): Mapping of PyTorch operator IDs to IDs of latest CPU
-                node from other threads before the gap.
+            chakra_host_trace (str): Path to the Chakra host execution trace file.
+            host_op_id_to_kineto_ops_map (Dict[int, List[KinetoOperator]]): Map from Chakra host op IDs to Kineto
+                GPU ops.
+            host_op_id_to_inclusive_dur_map (Dict[int, int]): Inclusive duration map for Chakra host ops.
+            host_op_id_to_exclusive_dur_map (Dict[int, int]): Exclusive duration map for Chakra host ops.
+            host_op_id_to_timestamp_map (Dict[int, int]): Timestamp map for Chakra host ops.
+            host_op_id_to_inter_thread_dep_map (Dict[int, int]): Mapping of Chakra host operator IDs to IDs of
+                latest CPU node from other threads before the gap.
 
         Returns:
             Dict: The constructed ET+ data.
         """
-        logging.info("Constructing ET+ data.")
-        with open(pytorch_et_file, "r") as file:
+        logging.debug("Constructing ET+ data.")
+        with open(chakra_host_trace, "r") as file:
             pytorch_et_data = json.load(file)
 
         sorted_nodes = sorted(pytorch_et_data["nodes"], key=lambda x: x["id"])
@@ -983,11 +667,11 @@ class TraceLinker:
         for op in sorted_nodes:
             gpu_ops += self.process_op_and_dependents(
                 op,
-                pytorch_op_id_to_kineto_ops_map,
-                pytorch_op_id_to_inclusive_dur_map,
-                pytorch_op_id_to_exclusive_dur_map,
-                pytorch_op_id_to_timestamp_map,
-                pytorch_op_id_to_inter_thread_dep_map,
+                host_op_id_to_kineto_ops_map,
+                host_op_id_to_inclusive_dur_map,
+                host_op_id_to_exclusive_dur_map,
+                host_op_id_to_timestamp_map,
+                host_op_id_to_inter_thread_dep_map,
             )
         pytorch_et_data["nodes"] += gpu_ops
 
@@ -1002,24 +686,24 @@ class TraceLinker:
     def process_op_and_dependents(
         self,
         op: Dict,
-        pytorch_op_id_to_kineto_ops_map: Dict[int, List[KinetoOperator]],
-        pytorch_op_id_to_inclusive_dur_map: Dict[int, int],
-        pytorch_op_id_to_exclusive_dur_map: Dict[int, int],
-        pytorch_op_id_to_timestamp_map: Dict[int, int],
-        pytorch_op_id_to_inter_thread_dep_map: Dict[int, int],
+        host_op_id_to_kineto_ops_map: Dict[int, List[KinetoOperator]],
+        host_op_id_to_inclusive_dur_map: Dict[int, int],
+        host_op_id_to_exclusive_dur_map: Dict[int, int],
+        host_op_id_to_timestamp_map: Dict[int, int],
+        host_op_id_to_inter_thread_dep_map: Dict[int, int],
     ) -> List[Dict]:
         """
-        Process a single operator in the PyTorch ET data, assign a new unique ID, and process any dependent operators.
+        Process a single operator in the Chakra host trace, assign a unique ID, and process any dependent operators.
 
         Args:
             op (Dict): The operator to be processed.
-            pytorch_op_id_to_kineto_ops_map (Dict[int, List[KinetoOperator]]): Map from PyTorch op IDs to Kineto GPU
+            host_op_id_to_kineto_ops_map (Dict[int, List[KinetoOperator]]): Map from Chakra host op IDs to Kineto GPU
                 ops.
-            pytorch_op_id_to_inclusive_dur_map (Dict[int, int]): Inclusive duration map for PyTorch ops.
-            pytorch_op_id_to_exclusive_dur_map (Dict[int, int]): Exclusive duration map for PyTorch ops.
-            pytorch_op_id_to_timestamp_map (Dict[int, int]): Timestamp map for PyTorch ops.
-            pytorch_op_id_to_inter_thread_dep_map (Dict[int, int]): Mapping of PyTorch operator IDs to IDs of latest CPU
-                node from other threads before the gap.
+            host_op_id_to_inclusive_dur_map (Dict[int, int]): Inclusive duration map for Chakra host ops.
+            host_op_id_to_exclusive_dur_map (Dict[int, int]): Exclusive duration map for Chakra host ops.
+            host_op_id_to_timestamp_map (Dict[int, int]): Timestamp map for Chakra host ops.
+            host_op_id_to_inter_thread_dep_map (Dict[int, int]): Mapping of Chakra host operator IDs to IDs of latest
+                CPU node from other threads before the gap.
 
         Returns:
             List[Dict]: A list of GPU operators processed and linked to the given operator.
@@ -1029,26 +713,24 @@ class TraceLinker:
         op["id"] = new_op_id
 
         # Update operator with Kineto data if available
-        if orig_op_id in pytorch_op_id_to_inclusive_dur_map:
-            op["inclusive_dur"] = pytorch_op_id_to_inclusive_dur_map[orig_op_id]
-            op["exclusive_dur"] = pytorch_op_id_to_exclusive_dur_map[orig_op_id]
-            op["ts"] = pytorch_op_id_to_timestamp_map[orig_op_id]
-            if orig_op_id in pytorch_op_id_to_inter_thread_dep_map:
-                op["inter_thread_dep"] = self.id_assigner.lookup_new_id(
-                    pytorch_op_id_to_inter_thread_dep_map[orig_op_id]
-                )
+        if orig_op_id in host_op_id_to_inclusive_dur_map:
+            op["inclusive_dur"] = host_op_id_to_inclusive_dur_map[orig_op_id]
+            op["exclusive_dur"] = host_op_id_to_exclusive_dur_map[orig_op_id]
+            op["ts"] = host_op_id_to_timestamp_map[orig_op_id]
+            if orig_op_id in host_op_id_to_inter_thread_dep_map:
+                op["inter_thread_dep"] = self.id_assigner.lookup_new_id(host_op_id_to_inter_thread_dep_map[orig_op_id])
             else:
                 op["inter_thread_dep"] = None
 
         # Process and append dependent GPU operators
-        if orig_op_id in pytorch_op_id_to_kineto_ops_map:
-            gpu_ops = self.process_dependent_gpu_ops(op, orig_op_id, pytorch_op_id_to_kineto_ops_map)
-            pytorch_op_id_to_kineto_ops_map.pop(orig_op_id)
+        if orig_op_id in host_op_id_to_kineto_ops_map:
+            gpu_ops = self.process_dependent_gpu_ops(op, orig_op_id, host_op_id_to_kineto_ops_map)
+            host_op_id_to_kineto_ops_map.pop(orig_op_id)
             return gpu_ops
         return []
 
     def process_dependent_gpu_ops(
-        self, cpu_op: Dict, orig_op_id: int, pytorch_op_id_to_kineto_ops_map: Dict[int, List[KinetoOperator]]
+        self, cpu_op: Dict, orig_op_id: int, host_op_id_to_kineto_ops_map: Dict[int, List[KinetoOperator]]
     ) -> List[Dict]:
         """
         Create and return a list of GPU operators that are dependent on a specific CPU operator.
@@ -1057,16 +739,16 @@ class TraceLinker:
         fields from the CPU operator.
 
         Args:
-            cpu_op (Dict): The PyTorch CPU operator.
+            cpu_op (Dict): The Chakra host CPU operator.
             orig_op_id (int): The original ID of the CPU operator.
-            pytorch_op_id_to_kineto_ops_map (Dict[int, List[KinetoOperator]]): Map from PyTorch op IDs to Kineto GPU
-                ops.
+            host_op_id_to_kineto_ops_map (Dict[int, List[KinetoOperator]]): Map from host operator IDs to device
+                operators
 
         Returns:
             List[Dict]: A list of processed GPU operators.
         """
         updated_gpu_ops = []
-        dependent_gpu_ops = pytorch_op_id_to_kineto_ops_map.get(orig_op_id, [])
+        dependent_gpu_ops = host_op_id_to_kineto_ops_map.get(orig_op_id, [])
         for gpu_op in sorted(dependent_gpu_ops, key=lambda x: x.timestamp):
             new_gpu_op = copy.deepcopy(cpu_op)
             new_gpu_op_id = self.id_assigner.generate_new_id()
@@ -1089,28 +771,25 @@ class TraceLinker:
 
         return updated_gpu_ops
 
-    def dump_pytorch_execution_trace_plus(self, pytorch_et_plus_data: Dict, output_file: str) -> None:
+    def dump_chakra_execution_trace_plus(self, chakra_execution_trace_plus_data: Dict, output_file: str) -> None:
         """
-        Dump the enhanced PyTorch Execution Trace (ET+) data to a file.
+        Dump the enhanced Chakra execution trace plus data to a file.
 
         Args:
-            pytorch_et_plus_data (Dict): The constructed ET+ data.
+            chakra_execution_trace_plus_data (Dict): The constructed ET+ data.
             output_file (str): The file path where the ET+ data will be saved.
         """
-        logging.info(f"Starting to dump ET+ data to {output_file}.")
+        logging.debug(f"Starting to dump ET+ data to {output_file}.")
 
-        if pytorch_et_plus_data is None:
+        if chakra_execution_trace_plus_data is None:
             logging.error("ET+ data not constructed. Please run construct_et_plus_data first.")
             return
 
-        if "nodes" in pytorch_et_plus_data:
-            pytorch_et_plus_data["nodes"] = sorted(pytorch_et_plus_data["nodes"], key=lambda x: x["id"])
+        if "nodes" in chakra_execution_trace_plus_data:
+            chakra_execution_trace_plus_data["nodes"] = sorted(
+                chakra_execution_trace_plus_data["nodes"], key=lambda x: x["id"]
+            )
 
-        try:
-            with open(output_file, "w") as file:
-                json.dump(pytorch_et_plus_data, file, indent=4)
-            logging.info(f"ET+ data dumped to {output_file}.")
-        except IOError as e:
-            logging.error(f"Failed to dump ET+ data to {output_file}. Error: {e}")
-        except Exception as e:
-            logging.error(f"An unexpected error occurred while dumping ET+ data. Error: {e}")
+        with open(output_file, "w") as file:
+            json.dump(chakra_execution_trace_plus_data, file, indent=4)
+        logging.debug(f"ET+ data dumped to {output_file}.")
