@@ -13,11 +13,13 @@ class PyTorchNodeType(Enum):
         CPU_OP (int): Represents a CPU operation.
         GPU_OP (int): Represents a GPU operation.
         LABEL (int): Represents a non-operator node (e.g., labels).
+        METADATA (int): Represents a metadata node (e.g., process group initialization).
     """
 
     CPU_OP = 1
     GPU_OP = 2
     LABEL = 3  # Non-operator nodes
+    METADATA = 4 # Metadata nodes
 
 
 class PyTorchNode:
@@ -120,7 +122,9 @@ class PyTorchNode:
         Returns
             PyTorchNodeType: The type of the PyTorch operation.
         """
-        if self.is_gpu_op():
+        if "process_group:init" in self.name:
+            return PyTorchNodeType.METADATA
+        elif self.is_gpu_op():
             return PyTorchNodeType.GPU_OP
         elif hasattr(self, "op_schema") or hasattr(self, "outputs"):
             return PyTorchNodeType.CPU_OP
