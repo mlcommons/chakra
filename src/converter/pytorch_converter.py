@@ -445,6 +445,15 @@ class PyTorchConverter:
                 last_visited_non_gpu = current_node
                 last_visited_any = current_node
 
+            if json_node.sync_dep:
+                for sync_dep in json_node.sync_dep:
+                    if sync_dep not in current_node.data_deps:
+                        current_node.data_deps.append(sync_dep)
+                        logging.info(
+                            f"Node ID {current_node.id} now has an synchonization dependency on Node ID {sync_dep}"
+                        )
+
+            # Add children to the stack
             children_chakra_ids = [child.id for child in json_node.children]
             for child_chakra_id in sorted(children_chakra_ids, reverse=True):
                 child_chakra_node = protobuf_node_map.get(child_chakra_id)

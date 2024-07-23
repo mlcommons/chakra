@@ -35,7 +35,19 @@ $ git checkout ea12ab702712e9986db85cd5773eb5902f28af2a
 $ pip install .
 ```
 
-### Step 4: Uninstalling Chakra
+### Step 4: Install Holistic Trace Analysis
+Installing Holistic Trace Analysis is necessary for Trace link.
+
+```bash
+$ git clone https://github.com/facebookresearch/HolisticTraceAnalysis.git
+$ cd HolisticTraceAnalysis
+$ git checkout d731cc2e2249976c97129d409a83bd53d93051f6
+$ git submodule update --init
+$ pip install -r requirements.txt
+$ pip install -e .
+```
+
+### Step 5: Uninstalling Chakra
 To uninstall Chakra, use the following command within the virtual environment.
 
 ```bash
@@ -49,6 +61,7 @@ Merge Chakra host execution trace and Chakra device execution trace to encode GP
 $ chakra_trace_link \
     --chakra-host-trace /path/to/chakra_host_trace \
     --chakra-device-trace /path/to/chakra_device_trace \
+    --rank [RANK] \
     --output-file /path/to/chakra_host_device_trace.json
 ```
 

@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from et_replay.lib.execution_trace import Node as PyTorchOperator
 
@@ -22,6 +22,7 @@ class KinetoOperator:
         host_op (Optional[PyTorchOperator]): Corresponding PyTorch operator object.
         parent_host_op_id (Optional[int]): ID of the parent PyTorch operator.
         inter_thread_dep (Optional[int]): Identifier for inter-thread dependencies.
+        sync_dep (List[KinetoOperator]): List of KinetoOperator objects that have dependencies on this operator.
         stream (Optional[int]): CUDA stream identifier associated with the operator.
         rf_id (Optional[int]): Record function identifier.
         correlation (int): Identifier used to correlate CUDA runtime and GPU operations.
@@ -48,6 +49,7 @@ class KinetoOperator:
         self.host_op: Optional[PyTorchOperator] = None
         self.parent_host_op_id: Optional[int] = None
         self.inter_thread_dep: Optional[int] = None
+        self.sync_dep: List[KinetoOperator] = []
         self.stream: Optional[int] = kineto_op.get("args", {}).get("stream", None)
         self.rf_id: Optional[int] = kineto_op.get("args", {}).get("Record function id", None)
         self.correlation: int = kineto_op.get("args", {}).get("correlation", -1)
@@ -59,13 +61,14 @@ class KinetoOperator:
         Returns
             str: A string representation of the KinetoOperator.
         """
+        sync_dep_ids = [op.id for op in self.sync_dep]
         return (
             f"KinetoOperator(id={self.id}, category={self.category}, name={self.name}, "
             f"phase={self.phase}, inclusive_dur={self.inclusive_dur}, "
             f"exclusive_dur={self.exclusive_dur}, timestamp={self.timestamp}, "
             f"external_id={self.external_id}, ev_idx={self.ev_idx}, tid={self.tid}, "
             f"parent_host_op_id={self.parent_host_op_id}, inter_thread_dep={self.inter_thread_dep}, "
-            f"stream={self.stream}, rf_id={self.rf_id}, correlation={self.correlation})"
+            f"sync_dep={sync_dep_ids}, stream={self.stream}, rf_id={self.rf_id}, correlation={self.correlation})"
         )
 
     def is_cpu_op(self) -> bool:

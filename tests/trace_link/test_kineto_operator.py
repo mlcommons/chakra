@@ -43,7 +43,7 @@ def test_repr_method(sample_operator_data):
     expected_repr = (
         "KinetoOperator(id=None, category=Kernel, name=cudaLaunchKernel, phase=X, "
         "inclusive_dur=100, exclusive_dur=100, timestamp=1590000000, external_id=123, ev_idx=456, "
-        "tid=1234, parent_host_op_id=None, inter_thread_dep=None, stream=7, rf_id=12, "
+        "tid=1234, parent_host_op_id=None, inter_thread_dep=None, sync_dep=[], stream=7, rf_id=12, "
         "correlation=99)"
     )
     assert repr(operator) == expected_repr

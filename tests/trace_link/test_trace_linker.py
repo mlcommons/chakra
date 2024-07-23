@@ -9,6 +9,7 @@ from et_replay.lib.execution_trace import (
     EXECUTION_TRACE_THREAD_ANNOTATION,
 )
 from et_replay.lib.execution_trace import Node as PyTorchOperator
+from hta.analyzers.critical_path_analysis import CPEdgeType, CPGraph
 
 
 @pytest.fixture
@@ -38,6 +39,7 @@ def test_link_traces(mock_map_ops, mock_add_annotations, mock_construct_et_plus,
     kineto_thread_info = {1: (100, 200)}
     kineto_process_start_time = 50
     kineto_process_end_time = 300
+    kineto_external_id_to_kineto_op_map = {1: MagicMock(spec=KinetoOperator)}
 
     trace_linker.link_traces(
         "pytorch_et_file",
@@ -51,6 +53,7 @@ def test_link_traces(mock_map_ops, mock_add_annotations, mock_construct_et_plus,
         kineto_thread_info,
         kineto_process_start_time,
         kineto_process_end_time,
+        kineto_external_id_to_kineto_op_map,
     )
 
     mock_add_annotations.assert_called_once()
@@ -88,6 +91,189 @@ def test_enforce_inter_thread_order_exception(mock_process_thread, mock_future_r
 
     with pytest.raises(Exception, match="Test Exception"):
         trace_linker.enforce_inter_thread_order(kineto_tid_cpu_ops_map)
+
+
+@pytest.mark.parametrize(
+    "trace_events, critical_path_edges, expected_result",
+    [
+        (
+            {0: {"args": {"External id": 1}, "name": "event_0"}, 1: {"args": {"External id": 2}, "name": "event_1"}},
+            [(0, 1)],
+            {2: [1]},
+        ),
+        (
+            {
+                0: {"args": {"External id": 1}, "name": "event_0"},
+                1: {"args": {"External id": 2}, "name": "event_1"},
+                2: {"args": {"External id": 3}, "name": "event_2"},
+            },
+            [(0, 2), (1, 2)],
+            {3: [1, 2]},
+        ),
+        (
+            {
+                0: {"args": {"External id": 1}, "name": "event_0"},
+                1: {"args": {"External id": 2}, "name": "event_1"},
+                2: {"args": {}, "name": "event_2"},
+            },
+            [(0, 1), (1, 2)],
+            {2: [1]},
+        ),
+    ],
+)
+@patch("hta.trace_analysis.TraceAnalysis.critical_path_analysis")
+@patch("hta.trace_analysis.Trace")
+def test_load_sync_dependencies_success(
+    mock_trace, mock_critical_path_analysis, trace_linker, trace_events, critical_path_edges, expected_result
+):
+    # Mock the Trace instance and its methods
+    mock_trace_instance = mock_trace.return_value
+    mock_trace_instance.is_parsed = True
+    mock_trace_instance.get_raw_trace_for_one_rank.return_value = {"traceEvents": trace_events}
+    mock_cp_graph = MagicMock(spec=CPGraph)
+    mock_cp_graph.critical_path_edges_set = [MagicMock(type=CPEdgeType.SYNC_DEPENDENCY) for _ in critical_path_edges]
+    mock_cp_graph.get_events_for_edge.side_effect = critical_path_edges
+    mock_critical_path_analysis.return_value = (mock_cp_graph, True)
+
+    # Call the method
+    result = trace_linker.load_sync_dependencies(0, "kineto_file.json", "ProfilerStep", 0)
+
+    # Assert the expected result
+    assert result == expected_result
+
+
+@patch("hta.trace_analysis.TraceAnalysis.critical_path_analysis")
+@patch("hta.trace_analysis.Trace")
+def test_load_sync_dependencies_failure(mock_trace, mock_critical_path_analysis, trace_linker):
+    # Mock the Trace instance and its methods to return failure
+    mock_trace_instance = mock_trace.return_value
+    mock_trace_instance.is_parsed = True
+    mock_cp_graph = MagicMock(spec=CPGraph)
+    mock_cp_graph.critical_path_edges_set = []
+    mock_critical_path_analysis.return_value = (mock_cp_graph, False)
+
+    # Call the method
+    result = trace_linker.load_sync_dependencies(0, "kineto_file.json", "ProfilerStep", 0)
+
+    # Assert the expected result
+    assert result == {}
+
+
+@patch("hta.trace_analysis.TraceAnalysis.critical_path_analysis")
+@patch("hta.trace_analysis.Trace")
+def test_load_sync_dependencies_missing_external_id(mock_trace, mock_critical_path_analysis, trace_linker):
+    # Mock the Trace instance and its methods
+    mock_trace_instance = mock_trace.return_value
+    mock_trace_instance.is_parsed = True
+    mock_trace_instance.get_raw_trace_for_one_rank.return_value = {
+        "traceEvents": {0: {"args": {"External id": 1}}, 1: {"args": {}}}
+    }
+    mock_cp_graph = MagicMock(spec=CPGraph)
+    mock_cp_graph.critical_path_edges_set = [MagicMock(type=CPEdgeType.SYNC_DEPENDENCY)]
+    mock_cp_graph.get_events_for_edge.return_value = (0, 1)
+    mock_critical_path_analysis.return_value = (mock_cp_graph, True)
+
+    # Call the method
+    result = trace_linker.load_sync_dependencies(0, "kineto_file.json", "ProfilerStep", 0)
+
+    # Assert the expected result
+    assert result == {}
+
+
+@pytest.mark.parametrize(
+    "sync_deps, current_tid, ops_by_tid, expected_sync_deps",
+    [
+        (
+            {1: [10, 20], 2: [30, 40]},
+            1,
+            {
+                1: [KinetoOperator({"external_id": 1}), KinetoOperator({"external_id": 2})],
+                2: [KinetoOperator({"external_id": 3})],
+            },
+            {1: [10, 20], 2: [30, 40]},
+        ),
+        (
+            {1: [10], 2: [20, 30], 3: [40]},
+            2,
+            {
+                1: [KinetoOperator({"external_id": 1})],
+                2: [KinetoOperator({"external_id": 2}), KinetoOperator({"external_id": 3})],
+            },
+            {2: [20, 30], 3: [40]},
+        ),
+        (
+            {},
+            1,
+            {
+                1: [KinetoOperator({"external_id": 1}), KinetoOperator({"external_id": 2})],
+            },
+            {},
+        ),
+    ],
+)
+def test_process_thread_sync_dep(sync_deps, current_tid, ops_by_tid, expected_sync_deps, trace_linker):
+    trace_linker.process_thread_sync_dep({}, ops_by_tid, [], current_tid, ops_by_tid[current_tid], sync_deps)
+
+    for op in ops_by_tid.get(current_tid, []):
+        assert op.sync_dep == expected_sync_deps.get(op.external_id, [])
+
+
+@pytest.mark.parametrize(
+    "op, sorted_kineto_cpu_ops, sorted_kineto_cpu_op_ts, expected_result",
+    [
+        # Case 1: One operator after the given timestamp
+        (
+            MagicMock(spec=KinetoOperator, timestamp=100),
+            [MagicMock(spec=KinetoOperator, timestamp=50), MagicMock(spec=KinetoOperator, timestamp=150)],
+            [50, 150],
+            1,  # index of the expected result in sorted_kineto_cpu_ops
+        ),
+        # Case 2: Multiple operators after the given timestamp
+        (
+            MagicMock(spec=KinetoOperator, timestamp=100),
+            [
+                MagicMock(spec=KinetoOperator, timestamp=50),
+                MagicMock(spec=KinetoOperator, timestamp=150),
+                MagicMock(spec=KinetoOperator, timestamp=200),
+            ],
+            [50, 150, 200],
+            1,  # index of the expected result in sorted_kineto_cpu_ops
+        ),
+        # Case 3: No operators after the given timestamp
+        (
+            MagicMock(spec=KinetoOperator, timestamp=100),
+            [MagicMock(spec=KinetoOperator, timestamp=50), MagicMock(spec=KinetoOperator, timestamp=75)],
+            [50, 75],
+            None,  # No result expected
+        ),
+        # Case 4: Operator with exact timestamp
+        (
+            MagicMock(spec=KinetoOperator, timestamp=100),
+            [
+                MagicMock(spec=KinetoOperator, timestamp=50),
+                MagicMock(spec=KinetoOperator, timestamp=100),
+                MagicMock(spec=KinetoOperator, timestamp=150),
+            ],
+            [50, 100, 150],
+            2,  # index of the expected result in sorted_kineto_cpu_ops
+        ),
+        # Case 5: Empty list of operators
+        (
+            MagicMock(spec=KinetoOperator, timestamp=100),
+            [],
+            [],
+            None,  # No result expected
+        ),
+    ],
+)
+def test_find_closest_start_kineto_op(
+    op, sorted_kineto_cpu_ops, sorted_kineto_cpu_op_ts, expected_result, trace_linker
+):
+    result = trace_linker.find_closest_start_kineto_op(op, sorted_kineto_cpu_ops, sorted_kineto_cpu_op_ts)
+    if expected_result is not None:
+        assert result == sorted_kineto_cpu_ops[expected_result]
+    else:
+        assert result is None
 
 
 @pytest.mark.parametrize(
@@ -307,12 +493,17 @@ def test_link_ops(
 
     cpu_ev_idx_to_gpu_ops_map = {kineto_op.ev_idx: expected_linked_gpu_ops}
     kineto_rf_id_to_kineto_op_map = {1: MagicMock(spec=KinetoOperator, host_op=MagicMock(id=42))}
+    kineto_external_id_to_kineto_op_map = {
+        2: MagicMock(spec=KinetoOperator, host_op=MagicMock(id=3)),
+        3: MagicMock(spec=KinetoOperator, host_op=MagicMock(id=4)),
+    }
 
     result = trace_linker.link_ops(
         host_op,
         kineto_op,
         cpu_ev_idx_to_gpu_ops_map,
         kineto_rf_id_to_kineto_op_map,
+        kineto_external_id_to_kineto_op_map,
     )
 
     assert result == (
@@ -335,16 +526,19 @@ def test_link_ops_with_no_gpu_ops(trace_linker):
         timestamp=123456,
         host_op=None,
         inter_thread_dep=None,
+        sync_dep=[],
     )
 
     cpu_ev_idx_to_gpu_ops_map = {}
     kineto_rf_id_to_kineto_op_map = {}
+    kineto_external_id_to_kineto_op_map = {}
 
     result = trace_linker.link_ops(
         host_op,
         kineto_op,
         cpu_ev_idx_to_gpu_ops_map,
         kineto_rf_id_to_kineto_op_map,
+        kineto_external_id_to_kineto_op_map,
     )
 
     assert result == ([], 100, 50, 123456, None)
@@ -469,6 +663,7 @@ def test_process_dependent_gpu_ops(trace_linker, orig_op_id, cpu_op, kineto_gpu_
         gpu_op.inclusive_dur = gpu_op_data["inclusive_dur"]
         gpu_op.exclusive_dur = gpu_op_data["exclusive_dur"]
         gpu_op.stream = gpu_op_data["stream"]
+        gpu_op.sync_dep = []
         kineto_gpu_op_objects.append(gpu_op)
 
     host_op_id_to_kineto_ops_map = {orig_op_id: kineto_gpu_op_objects}
