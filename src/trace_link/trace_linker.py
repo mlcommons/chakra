@@ -5,11 +5,11 @@ import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Optional, Tuple
 
-from et_replay.lib.execution_trace import (
+from et_replay.execution_trace import (
     EXECUTION_TRACE_PROCESS_ANNOTATION,
     EXECUTION_TRACE_THREAD_ANNOTATION,
 )
-from et_replay.lib.execution_trace import Node as PyTorchOperator
+from et_replay.execution_trace import Node as PyTorchOperator
 
 from .chakra_device_trace_loader import ChakraDeviceTraceLoader
 from .chakra_host_trace_loader import ChakraHostTraceLoader

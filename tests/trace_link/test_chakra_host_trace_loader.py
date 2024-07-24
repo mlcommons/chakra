@@ -2,7 +2,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from chakra.src.trace_link.chakra_host_trace_loader import ChakraHostTraceLoader
-from et_replay.lib.execution_trace import Node as PyTorchOperator
+from et_replay.execution_trace import Node as PyTorchOperator
 
 
 @pytest.fixture
