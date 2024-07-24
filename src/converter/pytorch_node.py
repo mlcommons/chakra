@@ -44,6 +44,7 @@ class PyTorchNode:
         inter_thread_dep (Any): Inter-thread dependency of the node.
         cat (Any): Category of the node.
         stream (int): Stream associated with the node.
+        pg_name (str): Process Group name for the inter-GPU communication.
     """
 
     SUPPORTED_VERSIONS = ["1.0.2-chakra.0.0.4", "1.0.3-chakra.0.0.4", "1.1.0-chakra.0.0.4"]
@@ -111,6 +112,10 @@ class PyTorchNode:
         self.inter_thread_dep = node_data.get("inter_thread_dep")
         self.cat = node_data.get("cat")
         self.stream = node_data.get("stream", 0)
+        # In Colletive comms nodes, pg_name is in node_data if exists.
+        # In SendRecv nodes, pg_name is in the attrs if exists.
+        # Otherwise, pg_name is not present.
+        self.pg_name = node_data.get("pg_name", "")
 
         for attr in node_data.get("attrs", []):
             setattr(self, attr["name"], attr["value"])
