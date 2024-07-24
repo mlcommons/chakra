@@ -32,6 +32,8 @@ ETFeederNode::ETFeederNode(std::shared_ptr<ChakraProtoMsg::Node> node) {
       this->comm_dst_ = static_cast<uint32_t>(attr.int32_val());
     } else if (attr_name == "comm_tag") {
       this->comm_tag_ = static_cast<uint32_t>(attr.int32_val());
+    } else if (attr_name == "pg_name") {
+      this->pg_name_ = static_cast<string>(attr.string_val());
     } else {
       this->other_attrs_.emplace(attr_name, attr);
     }
@@ -137,4 +139,8 @@ uint32_t ETFeederNode::comm_dst() {
 
 uint32_t ETFeederNode::comm_tag() {
   return comm_tag_;
+}
+
+string ETFeederNode::pg_name() {
+  return pg_name_;
 }
