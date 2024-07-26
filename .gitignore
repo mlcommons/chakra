@@ -7,3 +7,5 @@ __pycache__/
 *.et
 *.dot
 .pyre
+*et_def.pb.cc
+*et_def.pb.h
