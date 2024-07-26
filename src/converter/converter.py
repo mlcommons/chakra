@@ -17,6 +17,10 @@ def setup_logging(log_filename: str) -> None:
     stream_handler.setLevel(logging.WARNING)
     stream_handler.setFormatter(formatter)
 
+    stream_handler = logging.StreamHandler()
+    stream_handler.setLevel(logging.INFO)
+    stream_handler.setFormatter(formatter)
+
     logging.basicConfig(level=logging.DEBUG, handlers=[file_handler, stream_handler])
 
 
@@ -107,6 +111,7 @@ def main() -> None:
     if "func" in args:
         setup_logging(args.log_filename)
         args.func(args)
+        logging.info(f"Conversion successful. Output file is available at {args.output}.")
     else:
         parser.print_help()
 

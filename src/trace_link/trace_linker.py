@@ -356,16 +356,6 @@ class TraceLinker:
         host_op_id_to_timestamp_map = {}
         host_op_id_to_inter_thread_dep_map = {}
 
-        host_ops_count = len(host_ops)
-        kineto_ops_count = len(kineto_cpu_ops)
-        if host_ops_count > kineto_ops_count:
-            # The specific comment is placed within the if block as requested.
-            logging.warning(
-                f"Number of Chakra host operators ({host_ops_count}) is larger than the number of Kineto "
-                f"operators ({kineto_ops_count}). Expected Chakra host ops (CPU only) to be fewer than Kineto ops "
-                "(CPU and GPU). Logging this rare but possible scenario."
-            )
-
         for _, host_op in enumerate(host_ops):
             if (host_op.rf_id is not None) and (host_op.rf_id in kineto_rf_id_to_device_op_map):
                 kineto_op = kineto_rf_id_to_device_op_map[host_op.rf_id]
