@@ -1,6 +1,6 @@
 from typing import Any, Dict, Optional
 
-from et_replay.lib.execution_trace import Node as PyTorchOperator
+from et_replay.execution_trace import Node as PyTorchOperator
 
 
 class KinetoOperator:
