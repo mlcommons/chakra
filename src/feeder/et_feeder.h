@@ -6,8 +6,8 @@
 #include <unordered_set>
 #include <vector>
 
-#include "et_feeder_node.h"
-#include "protoio.hh"
+#include "et_feeder/et_feeder_node.h"
+#include "third_party/utils/protoio.hh"
 
 namespace Chakra {
 struct CompareNodes : public std::binary_function<
@@ -33,13 +33,12 @@ class ETFeeder {
   void pushBackIssuableNode(uint64_t node_id);
   std::shared_ptr<ETFeederNode> lookupNode(uint64_t node_id);
   void freeChildrenNodes(uint64_t node_id);
-
- private:
   void readGlobalMetadata();
   std::shared_ptr<ETFeederNode> readNode();
   void readNextWindow();
   void resolveDep();
 
+ private:
   ProtoInputStream trace_;
   const uint32_t window_size_;
   bool et_complete_;
