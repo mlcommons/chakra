@@ -22,8 +22,6 @@ JSONNode::JSONNode(const JSONNode &t) {
 		comm_src = t.comm_src;
 		comm_dst = t.comm_dst;
 		comm_tag = t.comm_tag;
-		involved_dim_size = t.involved_dim_size;
-		involved_dim = t.involved_dim;
 	}
 }
 
@@ -56,9 +54,7 @@ JSONNode::JSONNode(json data, int32_t id) {
 			try {
 				runtime = data["workload_graph"][id]["runtime"];
 			}
-			catch (...) {
-				// std::cerr << "runtime not specified in ET" << std::endl;
-			}
+			catch (...) {}
 			try {
 				data_deps = data["workload_graph"][id]["data_deps"].get<std::vector<int64_t>>();
 			}
@@ -69,57 +65,31 @@ JSONNode::JSONNode(json data, int32_t id) {
 				try {
 					tensor_size = data["workload_graph"][id]["tensor_size"];
 				}
-				catch (...) {
-					// std::cout << "tensor_size not specified in ET" <<std::endl;
-				}
+				catch (...) {}
 				try {
 					comm_type = data["workload_graph"][id]["comm_type"];
 				}
-				catch (...) {
-					// std::cout << "comm_type not specified in ET" <<std::endl;
-				}
+				catch (...) {}
 				try {
 					comm_priority = data["workload_graph"][id]["comm_priority"];
 				}
-				catch (...) {
-					// std::cout << "comm_priority not specified in ET" <<std::endl;
-				}
+				catch (...) {}
 				try {
 					comm_size = data["workload_graph"][id]["comm_size"];
 				}
-				catch (...) {
-					// std::cout << "comm_size not specified in ET" <<std::endl;
-				}
+				catch (...) {}
 				try {
 					comm_src = data["workload_graph"][id]["comm_src"];
 				}
-				catch (...) {
-					// std::cout << "comm_src not specified in ET" <<std::endl;
-				}
+				catch (...) {}
 				try {
 					comm_dst = data["workload_graph"][id]["comm_dst"];
 				}
-				catch (...) {
-					// std::cout << "comm_dst not specified in ET" <<std::endl;
-				}
+				catch (...) {}
 				try {
 					comm_tag = data["workload_graph"][id]["comm_tag"];
 				}
-				catch (...) {
-					// std::cout << "comm_tag not specified in ET" <<std::endl;
-				}
-				try {
-					involved_dim_size = data["workload_graph"][id]["involved_dim_size"];
-				}
-				catch (...) {
-					// std::cout << "involved_dim_size not specified in ET" <<std::endl;
-				}
-				try {
-					involved_dim = data["workload_graph"][id]["involved_dims"].get<std::vector<bool>>();
-				}
-				catch (...) {
-					// std::cout << "involved_dim not specified in ET" <<std::endl;
-				}
+				catch (...) {}
 			}
 		}
 

@@ -12,8 +12,6 @@ WrapperNode::WrapperNode(const WrapperNode& t) {
 	json_node_ = t.json_node_;
 	data_ = t.data_;
 	node_idx_ = t.node_idx_;
-	involved_dim_size_ = t.involved_dim_size_;
-	involved_dim_ = t.involved_dim_;
 	push_back_queue_proto = t.push_back_queue_proto;
 	push_back_queue_json = t.push_back_queue_json;
 	dep_graph_json = t.dep_graph_json;
@@ -479,32 +477,6 @@ int32_t WrapperNode::getCommTag() {
 			return json_node_.comm_tag;
 		default:
 			std::cerr << "Error in getCommTag()" << std::endl;
-			exit(-1);
-	}
-}
-
-// Get involved dim size
-int32_t WrapperNode::getInvolvedDimSize() {
-	switch (format_type_) {
-		case Protobuf:
-			return node_->involved_dim_size();
-		case JSON:
-			return json_node_.involved_dim_size;
-		default:
-			std::cerr << "Error in getInvolvedDimSize()" << std::endl;
-			exit(-1);
-	}
-}
-
-// Get involved dim
-bool WrapperNode::getInvolvedDim(int i) {
-	switch (format_type_) {
-		case Protobuf:
-			return node_->involved_dim(i);
-		case JSON:
-			return json_node_.involved_dim[i];
-		default:
-			std::cerr << "Error in getInvolvedDim()" << std::endl;
 			exit(-1);
 	}
 }
