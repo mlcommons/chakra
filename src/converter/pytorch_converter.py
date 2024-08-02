@@ -225,8 +225,10 @@ class PyTorchConverter:
             protobuf_node_map (Dict[int, ChakraNode]): Dictionary where the converted Protobuf nodes will be stored.
         """
         for _, json_node in json_node_map.items():
-            if (json_node.get_op_type() == PyTorchNodeType.CPU_OP) or (
-                json_node.get_op_type() == PyTorchNodeType.LABEL
+            if (
+                (json_node.get_op_type() == PyTorchNodeType.CPU_OP)
+                or (json_node.get_op_type() == PyTorchNodeType.LABEL)
+                or (json_node.get_op_type() == PyTorchNodeType.METADATA)
             ):
                 chakra_node = self.convert_json_to_protobuf_node(json_node_map, protobuf_node_map, json_node)
                 protobuf_node_map[chakra_node.id] = chakra_node
@@ -242,6 +244,7 @@ class PyTorchConverter:
                             [
                                 ChakraAttr(name="comm_type", int64_val=collective_comm_type),
                                 ChakraAttr(name="comm_size", int64_val=pytorch_gpu_node.comm_size),
+                                *( [ChakraAttr(name="pg_name", string_val=pytorch_gpu_node.pg_name)] if pytorch_gpu_node.pg_name != "" else [] ),
                             ]
                         )
 
@@ -249,6 +252,7 @@ class PyTorchConverter:
                         chakra_gpu_node.attr.extend(
                             [
                                 ChakraAttr(name="comm_size", int64_val=pytorch_gpu_node.comm_size),
+                                *( [ChakraAttr(name="pg_name", string_val=pytorch_gpu_node.pg_name)] if pytorch_gpu_node.pg_name != "" else [] ),
                             ]
                         )
 

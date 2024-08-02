@@ -38,6 +38,7 @@ class ETFeederNode {
   uint32_t comm_src();
   uint32_t comm_dst();
   uint32_t comm_tag();
+  std::string pg_name();
 
  private:
   void assign_attr_val(
@@ -65,6 +66,7 @@ class ETFeederNode {
   uint32_t comm_src_;
   uint32_t comm_dst_;
   uint32_t comm_tag_;
+  std::string pg_name_;
 };
 
 } // namespace Chakra

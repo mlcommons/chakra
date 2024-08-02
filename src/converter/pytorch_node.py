@@ -13,11 +13,13 @@ class PyTorchNodeType(Enum):
         CPU_OP (int): Represents a CPU operation.
         GPU_OP (int): Represents a GPU operation.
         LABEL (int): Represents a non-operator node (e.g., labels).
+        METADATA (int): Represents a metadata node (e.g., process group initialization).
     """
 
     CPU_OP = 1
     GPU_OP = 2
     LABEL = 3  # Non-operator nodes
+    METADATA = 4 # Metadata nodes
 
 
 class PyTorchNode:
@@ -42,6 +44,7 @@ class PyTorchNode:
         inter_thread_dep (Any): Inter-thread dependency of the node.
         cat (Any): Category of the node.
         stream (int): Stream associated with the node.
+        pg_name (str): Process Group name for the inter-GPU communication.
     """
 
     SUPPORTED_VERSIONS = ["1.0.2-chakra.0.0.4", "1.0.3-chakra.0.0.4", "1.1.0-chakra.0.0.4"]
@@ -109,6 +112,10 @@ class PyTorchNode:
         self.inter_thread_dep = node_data.get("inter_thread_dep")
         self.cat = node_data.get("cat")
         self.stream = node_data.get("stream", 0)
+        # In Colletive comms nodes, pg_name is in node_data if exists.
+        # In SendRecv nodes, pg_name is in the attrs if exists.
+        # Otherwise, pg_name is not present.
+        self.pg_name = node_data.get("pg_name", "")
 
         for attr in node_data.get("attrs", []):
             setattr(self, attr["name"], attr["value"])
@@ -120,7 +127,9 @@ class PyTorchNode:
         Returns
             PyTorchNodeType: The type of the PyTorch operation.
         """
-        if self.is_gpu_op():
+        if "process_group:init" in self.name:
+            return PyTorchNodeType.METADATA
+        elif self.is_gpu_op():
             return PyTorchNodeType.GPU_OP
         elif hasattr(self, "op_schema") or hasattr(self, "outputs"):
             return PyTorchNodeType.CPU_OP
