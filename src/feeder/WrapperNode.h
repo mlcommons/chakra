@@ -1,8 +1,8 @@
 #pragma once
 
-#include "et_feeder/et_feeder.h"
-#include "et_feeder/et_feeder_node.h"
-#include "et_feeder/JSONNode.h"
+#include "et_feeder.h"
+#include "et_feeder_node.h"
+#include "JSONNode.h"
 
 using json = nlohmann::json;
 
@@ -13,7 +13,7 @@ enum format {
 
 // WrapperNode class wraps protobuf and JSON
 class WrapperNode {
-	public:
+	private:
 		enum format format_type_;
 		Chakra::ETFeeder* et_feeder_;
 		std::shared_ptr<Chakra::ETFeederNode> node_ {nullptr};
@@ -21,6 +21,8 @@ class WrapperNode {
 		json data_;
 		JSONNode json_node_;
 		int64_t node_idx_ = -1;
+		int32_t involved_dim_size_ = 1;
+		std::vector<bool> involved_dim_;
 		std::queue<std::shared_ptr<Chakra::ETFeederNode>> push_back_queue_proto;
 		std::queue<JSONNode> push_back_queue_json;
 		std::unordered_map<int64_t, JSONNode> dep_graph_json{};
@@ -32,12 +34,16 @@ class WrapperNode {
 			dep_free_node_queue_json{};
   		std::unordered_set<JSONNode, std::hash<JSONNode>> dep_unresolved_node_set_json{};
 		int window_size_json;
-
+	
+	public:
 		WrapperNode();
 		WrapperNode(const WrapperNode& t);
+		WrapperNode(std::string filename);
 		~WrapperNode();
 		void releaseMemory();
 		void createWrapper(std::string filename);
+		std::shared_ptr<Chakra::ETFeederNode> getProtobufNode();
+		JSONNode getJSONNode();
 		void addNode(JSONNode node);
 		void addNode(std::shared_ptr<Chakra::ETFeederNode> node);
 		void removeNode(int64_t node_id);
@@ -68,6 +74,8 @@ class WrapperNode {
 		int32_t getCommSrc();
 		int32_t getCommDst();
 		int32_t getCommTag();
+		int32_t getInvolvedDimSize();
+		bool getInvolvedDim(int i);
 		bool hasNodesToIssue();
 		void lookupNode(int64_t node_id);
 		void getChildren(std::vector<std::shared_ptr<Chakra::ETFeederNode>>& childrenNodes);

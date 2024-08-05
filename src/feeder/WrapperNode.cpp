@@ -9,9 +9,10 @@ WrapperNode::WrapperNode(const WrapperNode& t) {
 	format_type_ = t.format_type_;
 	et_feeder_ = t.et_feeder_;
 	node_ = t.node_;
-	json_node_ = t.json_node_;
 	data_ = t.data_;
 	node_idx_ = t.node_idx_;
+	involved_dim_size_ = t.involved_dim_size_;
+	involved_dim_ = t.involved_dim_;
 	push_back_queue_proto = t.push_back_queue_proto;
 	push_back_queue_json = t.push_back_queue_json;
 	dep_graph_json = t.dep_graph_json;
@@ -45,6 +46,11 @@ void WrapperNode::createWrapper(std::string filename) {
 	}
 }
 
+// WrapperNode constructor
+WrapperNode::WrapperNode(std::string filename) {
+	createWrapper(filename);
+}
+
 // Release memory
 void WrapperNode::releaseMemory() {
 	switch(format_type_) {
@@ -59,8 +65,13 @@ void WrapperNode::releaseMemory() {
 	}
 }
 
-WrapperNode::~WrapperNode() {
-	// releaseMemory();
+WrapperNode::~WrapperNode() {}
+
+std::shared_ptr<Chakra::ETFeederNode> WrapperNode::getProtobufNode() {
+	return node_;
+}
+JSONNode WrapperNode::getJSONNode() {
+	return json_node_;
 }
 
 // Find the index in JSON dictionary
@@ -77,7 +88,7 @@ int64_t WrapperNode::findNodeIndexJSON(int64_t node_id) {
 // Overloaded function - addNode
 // Add JSON node to dependency graph
 void WrapperNode::addNode(JSONNode node) {
-	dep_graph_json[node.node_id] = node;
+	dep_graph_json[node.id()] = node;
 }
 
 // Add Protobuf node to dependency graph
@@ -210,7 +221,7 @@ void WrapperNode::freeChildrenNodes(int64_t node_id) {
 					}
 				}
 				if (child.data_deps.size() == 0) {
-					dep_free_node_id_set_json.emplace(child.node_id);
+					dep_free_node_id_set_json.emplace(child.id());
 					dep_free_node_queue_json.emplace(child);
 				}
 			}
@@ -300,8 +311,8 @@ void WrapperNode::getNextIssuableNode() {
 		case JSON:
 			if (dep_free_node_queue_json.size() != 0) {
 				json_node_ = dep_free_node_queue_json.top();
-				node_idx_ = findNodeIndexJSON(json_node_.node_id);
-				dep_free_node_id_set_json.erase(json_node_.node_id);
+				node_idx_ = findNodeIndexJSON(json_node_.id());
+				dep_free_node_id_set_json.erase(json_node_.id());
 				dep_free_node_queue_json.pop();
 			}
 			else
@@ -318,7 +329,7 @@ int64_t WrapperNode::getNodeID() {
 		case Protobuf:
 			return node_->id();
 		case JSON:
-			return json_node_.node_id;
+			return json_node_.id();
 		default:
 			std::cerr << "Error in getNodeID()" << std::endl;
 			exit(-1);
@@ -331,7 +342,7 @@ std::string WrapperNode::getNodeName() {
 		case Protobuf:
 			return node_->name();
 		case JSON:
-			return json_node_.node_name;
+			return json_node_.name();
 		default:
 			std::cerr << "Error in getNodeName()" << std::endl;
 			exit(-1);
@@ -344,7 +355,7 @@ int WrapperNode::getNodeType() {
 		case Protobuf:
 			return node_->type();
 		case JSON:
-			return json_node_.node_type;
+			return json_node_.type();
 		default:
 			std::cerr << "Error in getNodeType()" << std::endl;
 			exit(-1);
@@ -357,7 +368,7 @@ bool WrapperNode::isCPUOp() {
 		case Protobuf:
 			return node_->is_cpu_op();
 		case JSON:
-			return json_node_.is_cpu_op;
+			return json_node_.isCPUOp();
 		default:
 			std::cerr << "Error in isCPUOp()" << std::endl;
 			exit(-1);
@@ -370,7 +381,7 @@ int64_t WrapperNode::getRuntime() {
 		case Protobuf:
 			return node_->runtime();
 		case JSON:
-			return json_node_.runtime;
+			return json_node_.getRuntime();
 		default:
 			std::cerr << "Error in getRuntime()" << std::endl;
 			exit(-1);
@@ -383,7 +394,7 @@ int64_t WrapperNode::getNumOps() {
 		case Protobuf:
 			return node_->num_ops();
 		case JSON:
-			return json_node_.num_ops;
+			return json_node_.getNumOps();
 		default:
 			std::cerr << "Error in getNumOps()" << std::endl;
 			exit(-1);
@@ -396,7 +407,7 @@ int64_t WrapperNode::getTensorSize() {
 		case Protobuf:
 			return node_->tensor_size();
 		case JSON:
-			return json_node_.tensor_size;
+			return json_node_.getTensorSize();
 		default:
 			std::cerr << "Error in getTensorSize()" << std::endl;
 			exit(-1);
@@ -409,7 +420,7 @@ int64_t WrapperNode::getCommType() {
 		case Protobuf:
 			return node_->comm_type();
 		case JSON:
-			return json_node_.comm_type;
+			return json_node_.getCommType();
 		default:
 			std::cerr << "Error in getCommType()" << std::endl;
 			exit(-1);
@@ -422,7 +433,7 @@ int32_t WrapperNode::getCommPriority() {
 		case Protobuf:
 			return node_->comm_priority();
 		case JSON:
-			return json_node_.comm_priority;
+			return json_node_.getCommPriority();
 		default:
 			std::cerr << "Error in getCommPriority()" << std::endl;
 			exit(-1);
@@ -435,7 +446,7 @@ int64_t WrapperNode::getCommSize() {
 		case Protobuf:
 			return node_->comm_size();
 		case JSON:
-			return json_node_.comm_size;
+			return json_node_.getCommSize();
 		default:
 			std::cerr << "Error in getCommSize()" << std::endl;
 			exit(-1);
@@ -448,7 +459,7 @@ int32_t WrapperNode::getCommSrc() {
 		case Protobuf:
 			return node_->comm_src();
 		case JSON:
-			return json_node_.comm_src;
+			return json_node_.getCommSrc();
 		default:
 			std::cerr << "Error in getCommSrc()" << std::endl;
 			exit(-1);
@@ -461,7 +472,7 @@ int32_t WrapperNode::getCommDst() {
 		case Protobuf:
 			return node_->comm_dst();
 		case JSON:
-			return json_node_.comm_dst;
+			return json_node_.getCommDst();
 		default:
 			std::cerr << "Error in getCommDst()" << std::endl;
 			exit(-1);
@@ -474,9 +485,35 @@ int32_t WrapperNode::getCommTag() {
 		case Protobuf:
 			return node_->comm_tag();
 		case JSON:
-			return json_node_.comm_tag;
+			return json_node_.getCommTag();
 		default:
 			std::cerr << "Error in getCommTag()" << std::endl;
+			exit(-1);
+	}
+}
+
+// Get involved dim size
+int32_t WrapperNode::getInvolvedDimSize() {
+	switch (format_type_) {
+		case Protobuf:
+			return node_->involved_dim_size();
+		case JSON:
+			return json_node_.getInvolvedDimSize();
+		default:
+			std::cerr << "Error in getInvolvedDimSize()" << std::endl;
+			exit(-1);
+	}
+}
+
+// Get involved dim
+bool WrapperNode::getInvolvedDim(int i) {
+	switch (format_type_) {
+		case Protobuf:
+			return node_->involved_dim(i);
+		case JSON:
+			return json_node_.getInvolvedDim(i);
+		default:
+			std::cerr << "Error in getInvolvedDim()" << std::endl;
 			exit(-1);
 	}
 }
