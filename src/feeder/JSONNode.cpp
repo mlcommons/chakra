@@ -1,4 +1,4 @@
-#include "et_feeder/JSONNode.h"
+#include "JSONNode.h"
 
 // JSONNode default constructor
 JSONNode::JSONNode() {}
@@ -22,6 +22,8 @@ JSONNode::JSONNode(const JSONNode &t) {
 		comm_src = t.comm_src;
 		comm_dst = t.comm_dst;
 		comm_tag = t.comm_tag;
+		involved_dim_size = t.involved_dim_size;
+		involved_dim = t.involved_dim;
 	}
 }
 
@@ -90,8 +92,91 @@ JSONNode::JSONNode(json data, int32_t id) {
 					comm_tag = data["workload_graph"][id]["comm_tag"];
 				}
 				catch (...) {}
+				try {
+					involved_dim_size = data["workload_graph"][id]["involved_dim_size"];
+				}
+				catch (...) {}
+				try {
+					involved_dim = data["workload_graph"][id]["involved_dims"].get<std::vector<bool>>();
+				}
+				catch (...) {}
 			}
 		}
+
+// Node id
+int64_t JSONNode::id() const{
+	return node_id;
+}
+
+// Node name
+std::string JSONNode::name() const{
+	return node_name;
+}
+
+// Node type
+int JSONNode::type() const{
+	return node_type;
+}
+
+// Check if CPU OP
+bool JSONNode::isCPUOp() const{
+	return is_cpu_op;
+}
+
+// Runtime
+int64_t JSONNode::getRuntime() const{
+	return runtime;
+}
+
+// Num ops
+int64_t JSONNode::getNumOps() const{
+	return num_ops;
+}
+
+// Tensor size
+int64_t JSONNode::getTensorSize() const{
+	return tensor_size;
+}
+
+// Comm type
+int64_t JSONNode::getCommType() const{
+	return comm_type;
+}
+
+// Comm priority
+int32_t JSONNode::getCommPriority() const{
+	return comm_priority;
+}
+
+// Comm size
+int64_t JSONNode::getCommSize() const{
+	return comm_size;
+}
+
+// Comm src
+int32_t JSONNode::getCommSrc() const{
+	return comm_src;
+}
+
+// Comm dst
+int32_t JSONNode::getCommDst() const{
+	return comm_dst;
+}
+
+// Comm tag
+int32_t JSONNode::getCommTag() const{
+	return comm_tag;
+}
+
+// Involved dim size
+int32_t JSONNode::getInvolvedDimSize() const{
+	return involved_dim_size;
+}
+
+// Involved dim
+bool JSONNode::getInvolvedDim(int i) const{
+	return involved_dim[i];
+}
 
 // Dependency unresolved parent IDs
 void JSONNode::addDepUnresolvedParentID(int64_t node_id) {

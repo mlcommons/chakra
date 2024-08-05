@@ -33,12 +33,12 @@ TEST_F(WrapperNodeTest, ConstructorNodeValuesTest) {
   node.getNextIssuableNode();
   int64_t firstNodeType = node.getNodeType();
   ASSERT_EQ(firstNodeType, ChakraProtoMsg::COMP_NODE);
-  ASSERT_TRUE(node.is_cpu_op());
+  ASSERT_TRUE(node.isCPUOp());
 
   node.getNextIssuableNode();
   int64_t secondNodeType = node.getNodeType();
   ASSERT_EQ(secondNodeType, ChakraProtoMsg::COMM_COLL_NODE);
-  ASSERT_TRUE(node.is_cpu_op());
+  ASSERT_TRUE(node.isCPUOp());
 }
 
 TEST_F(WrapperNodeTest, ConstructorWrapperNodeTest) {
@@ -56,9 +56,9 @@ TEST_F(WrapperNodeTest, ConstructorWrapperNodeTest) {
   else if (ext == "json") {
     std::vector<JSONNode> children;
     node.getChildren(children);
-    ASSERT_EQ(children[0].node_id, 217);
-    ASSERT_EQ(children[1].node_id, 430);
-    ASSERT_EQ(children[2].node_id, 435);
+    ASSERT_EQ(children[0].id(), 217);
+    ASSERT_EQ(children[1].id(), 430);
+    ASSERT_EQ(children[2].id(), 435);
   }
 }
 
@@ -122,24 +122,24 @@ TEST_F(WrapperNodeTest, AddNodeTest) {
   if (ext == "et") {
     std::shared_ptr<Chakra::ETFeederNode> pnode1;
     node.lookupNode(216);
-    pnode1 = node.node_;
+    pnode1 = node.getProtobufNode();
     node.removeNode(216);
     node.addNode(pnode1);
     std::shared_ptr<Chakra::ETFeederNode> pnode2;
     node.lookupNode(216);
-    pnode2 = node.node_;
-    ASSERT_EQ(pnode2.getNodeID(), 216);
+    pnode2 = node.getProtobufNode();
+    ASSERT_EQ(pnode2->id(), 216);
   }
   else if (ext == "json") {
     JSON jnode1;
     node.lookupNode(216);
-    jnode1 = node.json_node_;
+    jnode1 = node.getJSONNode();
     node.removeNode(216);
     node.addNode(jnode1);
     JSONNode jnode2;
     node.lookupNode(216);
-    jnode2 = node.json_node_;
-    ASSERT_EQ(pnode2.node_id, 216);
+    jnode2 = node.getJSONNode();
+    ASSERT_EQ(jnode2.id(), 216);
   }
 }
 
@@ -157,8 +157,8 @@ TEST_F(WrapperNodeTest, NodeGetChildrenTest) {
   else if (ext == "json") {
     std::vector<JSONNode> children;
     node.getChildren(children);
-    ASSERT_EQ(children[0].node_id, 217);
-    ASSERT_EQ(children[2].node_id, 435);
+    ASSERT_EQ(children[0].id(), 217);
+    ASSERT_EQ(children[2].id(), 435);
   }
 }
 

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <json/json.hpp>
+#include "json.hpp"
 #include <iostream>
 #include <fstream>
 #include <string>
@@ -11,7 +11,7 @@
 using json = nlohmann::json;
 
 class JSONNode {
-	public:
+	private:
 		int64_t node_id;
 		std::string node_name;
 		int node_type;
@@ -25,6 +25,10 @@ class JSONNode {
 		int32_t comm_src;
 		int32_t comm_dst;
 		int32_t comm_tag;
+		int32_t involved_dim_size;
+		std::vector<bool> involved_dim;
+
+	public:
 		std::vector<int64_t> data_deps{};
 		std::vector<int64_t> dep_unresolved_parent_ids_json{};
 		std::vector<JSONNode> children_vec_json{};
@@ -40,6 +44,21 @@ class JSONNode {
 		JSONNode();
 		JSONNode(const JSONNode &t);
 		JSONNode(json data, int32_t id);
+		int64_t id() const;
+		std::string name() const;
+		int type() const;
+		bool isCPUOp() const;
+		int64_t getRuntime() const;
+		int64_t getNumOps() const;
+		int64_t getTensorSize() const;
+		int64_t getCommType() const;
+		int32_t getCommPriority() const;
+		int64_t getCommSize() const;
+		int32_t getCommSrc() const;
+		int32_t getCommDst() const;
+		int32_t getCommTag() const;
+		int32_t getInvolvedDimSize() const;
+		bool getInvolvedDim(int i) const;
 		void addDepUnresolvedParentID(int64_t node_id);
 		std::vector<int64_t> getDepUnresolvedParentIDs();
 		void setDepUnresolvedParentIDs(std::vector<int64_t> const& dep_unresolved_parent_ids);
@@ -61,6 +80,8 @@ class JSONNode {
 				comm_src == other.comm_src &&
 				comm_dst == other.comm_dst &&
 				comm_tag == other.comm_tag &&
+				involved_dim_size == other.involved_dim_size &&
+				involved_dim == other.involved_dim &&
 				data_deps == other.data_deps &&
 				dep_unresolved_parent_ids_json == other.dep_unresolved_parent_ids_json &&
 				children_vec_json == other.children_vec_json &&
@@ -84,6 +105,8 @@ class JSONNode {
 				comm_src = other.comm_src;
 				comm_dst = other.comm_dst;
 				comm_tag = other.comm_tag;
+				involved_dim_size = other.involved_dim_size;
+				involved_dim = other.involved_dim;
 				data_deps = other.data_deps;
 				dep_unresolved_parent_ids_json = other.dep_unresolved_parent_ids_json;
 				children_vec_json = other.children_vec_json;
@@ -98,11 +121,11 @@ namespace std {
 	template<>
 	struct hash<JSONNode> {
 		std::size_t operator()(const JSONNode& node) const {
-			std::size_t h1 = std::hash<int64_t>()(node.node_id);
-			std::size_t h2 = std::hash<std::string>()(node.node_name);
-			std::size_t h3 = std::hash<int>()(node.node_type);
-			std::size_t h4 = std::hash<bool>()(node.is_cpu_op);
-			std::size_t h5 = std::hash<int64_t>()(node.runtime);
+			std::size_t h1 = std::hash<int64_t>()(node.id());
+			std::size_t h2 = std::hash<std::string>()(node.name());
+			std::size_t h3 = std::hash<int>()(node.type());
+			std::size_t h4 = std::hash<bool>()(node.isCPUOp());
+			std::size_t h5 = std::hash<int64_t>()(node.getRuntime());
 
 			// A prime number for bit manipulation
 			const std::size_t prime = 31;
@@ -127,6 +150,6 @@ struct CompareJSONNodesGT : public std::binary_function<
   bool operator()(
       const JSONNode lhs,
       const JSONNode rhs) const {
-    return lhs.node_id > rhs.node_id;
+    return lhs.id() > rhs.id();
   }
 };
