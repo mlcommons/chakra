@@ -25,15 +25,13 @@ ETFeederNode::ETFeederNode(std::shared_ptr<ChakraProtoMsg::Node> node) {
     } else if (attr_name == "comm_priority") {
       this->comm_priority_ = static_cast<uint32_t>(attr.int32_val());
     } else if (attr_name == "comm_size") {
-      this->comm_size_ = attr.int64_val();
+      this->comm_size_ = attr.uint64_val();
     } else if (attr_name == "comm_src") {
       this->comm_src_ = static_cast<uint32_t>(attr.int32_val());
     } else if (attr_name == "comm_dst") {
       this->comm_dst_ = static_cast<uint32_t>(attr.int32_val());
     } else if (attr_name == "comm_tag") {
       this->comm_tag_ = static_cast<uint32_t>(attr.int32_val());
-    } else {
-      this->other_attrs_.emplace(attr_name, attr);
     }
   }
 }
