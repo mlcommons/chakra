@@ -21,11 +21,11 @@ TEST_F(WrapperNodeTest, ConstructorNodeIDTest) {
   // SetUp("tests/data/chakra.0.et");
   SetUp("tests/data/small_chakra.0.json");
   node.getNextIssuableNode();
-  int64_t firstNodeID = node.getNodeID();
+  uint64_t firstNodeID = node.getNodeID();
   ASSERT_EQ(firstNodeID, 216);
 
   node.getNextIssuableNode();
-  int64_t secondNodeID = node.getNodeID();
+  uint64_t secondNodeID = node.getNodeID();
   ASSERT_EQ(secondNodeID, 432);
 }
 
@@ -33,12 +33,12 @@ TEST_F(WrapperNodeTest, ConstructorNodeValuesTest) {
   // SetUp("tests/data/chakra.0.et");
   SetUp("tests/data/small_chakra.0.json");
   node.getNextIssuableNode();
-  int64_t firstNodeType = node.getNodeType();
+  uint64_t firstNodeType = node.getNodeType();
   ASSERT_EQ(firstNodeType, ChakraProtoMsg::COMP_NODE);
   ASSERT_TRUE(node.isCPUOp());
 
   node.getNextIssuableNode();
-  int64_t secondNodeType = node.getNodeType();
+  uint64_t secondNodeType = node.getNodeType();
   ASSERT_EQ(secondNodeType, ChakraProtoMsg::COMM_COLL_NODE);
   ASSERT_TRUE(node.isCPUOp());
 }
