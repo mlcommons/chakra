@@ -14,6 +14,7 @@ JSONNode::JSONNode(const JSONNode &t) {
 	dep_unresolved_parent_ids_json = t.dep_unresolved_parent_ids_json;
 	children_vec_json = t.children_vec_json;
 	children_set_json = t.children_set_json;
+	// Comm nodes
 	if (node_type == 5 || node_type == 6 || node_type == 7) {
 		tensor_size = t.tensor_size;
 		comm_type = t.comm_type;
@@ -63,6 +64,7 @@ JSONNode::JSONNode(json data, int32_t id) {
 			catch (...) {
 				std::cerr << "data deps not specified in ET" << std::endl;
 			}
+			// Comm nodes
 			if (node_type == 5 || node_type == 6 || node_type == 7) {
 				try {
 					tensor_size = data["workload_graph"][id]["tensor_size"];
@@ -104,7 +106,7 @@ JSONNode::JSONNode(json data, int32_t id) {
 		}
 
 // Node id
-int64_t JSONNode::id() const{
+uint64_t JSONNode::id() const{
 	return node_id;
 }
 
@@ -124,52 +126,52 @@ bool JSONNode::isCPUOp() const{
 }
 
 // Runtime
-int64_t JSONNode::getRuntime() const{
+uint64_t JSONNode::getRuntime() const{
 	return runtime;
 }
 
 // Num ops
-int64_t JSONNode::getNumOps() const{
+uint64_t JSONNode::getNumOps() const{
 	return num_ops;
 }
 
 // Tensor size
-int64_t JSONNode::getTensorSize() const{
+uint64_t JSONNode::getTensorSize() const{
 	return tensor_size;
 }
 
 // Comm type
-int64_t JSONNode::getCommType() const{
+uint64_t JSONNode::getCommType() const{
 	return comm_type;
 }
 
 // Comm priority
-int32_t JSONNode::getCommPriority() const{
+uint32_t JSONNode::getCommPriority() const{
 	return comm_priority;
 }
 
 // Comm size
-int64_t JSONNode::getCommSize() const{
+uint64_t JSONNode::getCommSize() const{
 	return comm_size;
 }
 
 // Comm src
-int32_t JSONNode::getCommSrc() const{
+uint32_t JSONNode::getCommSrc() const{
 	return comm_src;
 }
 
 // Comm dst
-int32_t JSONNode::getCommDst() const{
+uint32_t JSONNode::getCommDst() const{
 	return comm_dst;
 }
 
 // Comm tag
-int32_t JSONNode::getCommTag() const{
+uint32_t JSONNode::getCommTag() const{
 	return comm_tag;
 }
 
 // Involved dim size
-int32_t JSONNode::getInvolvedDimSize() const{
+uint32_t JSONNode::getInvolvedDimSize() const{
 	return involved_dim_size;
 }
 
