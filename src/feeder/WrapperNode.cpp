@@ -67,9 +67,12 @@ void WrapperNode::releaseMemory() {
 
 WrapperNode::~WrapperNode() {}
 
+// Return protobuf node
 std::shared_ptr<Chakra::ETFeederNode> WrapperNode::getProtobufNode() {
 	return node_;
 }
+
+// Return JSON node
 JSONNode WrapperNode::getJSONNode() {
 	return json_node_;
 }
@@ -135,7 +138,7 @@ JSONNode WrapperNode::readNode(uint64_t node_idx) {
 // Read nodes in a window
 // For JSON, the entire graph is read in a single window
 void WrapperNode::readNextWindow() {
-  int32_t num_read = 0;
+  uint64_t num_read = 0;
   do {
     JSONNode new_node = readNode(num_read);
     addNode(new_node);
@@ -144,7 +147,7 @@ void WrapperNode::readNextWindow() {
   } while ((num_read < window_size_json) || (dep_unresolved_node_set_json.size() != 0));
 
   for (auto node_id_node : dep_graph_json) {
-    int64_t node_id = node_id_node.first;
+    uint64_t node_id = node_id_node.first;
     JSONNode node(node_id_node.second);
 	// Unordered set does not allow duplicates. So, count returns 1 if key exists, 0 otherwise
     if ((dep_free_node_id_set_json.count(node_id) == 0) &&
@@ -166,7 +169,7 @@ void WrapperNode::resolveDep() {
 			for (auto it = dep_unresolved_node_set_json.begin();
 				it != dep_unresolved_node_set_json.end();) {
 				JSONNode node = *it;
-				std::vector<int64_t> dep_unresolved_parent_ids_json =
+				std::vector<uint64_t> dep_unresolved_parent_ids_json =
 					node.getDepUnresolvedParentIDs();
 				// Loop over unresolved parent IDs
 				for (auto inner_it = dep_unresolved_parent_ids_json.begin();

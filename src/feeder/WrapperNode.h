@@ -11,7 +11,7 @@ enum format {
 	JSON
 };
 
-// WrapperNode class wraps protobuf and JSON
+/// WrapperNode class wraps protobuf and JSON
 class WrapperNode {
 	private:
 		enum format format_type_;
@@ -25,8 +25,8 @@ class WrapperNode {
 		std::vector<bool> involved_dim_;
 		std::queue<std::shared_ptr<Chakra::ETFeederNode>> push_back_queue_proto;
 		std::queue<JSONNode> push_back_queue_json;
-		std::unordered_map<int64_t, JSONNode> dep_graph_json{};
-  		std::unordered_set<int64_t> dep_free_node_id_set_json{};
+		std::unordered_map<uint64_t, JSONNode> dep_graph_json{};
+  		std::unordered_set<uint64_t> dep_free_node_id_set_json{};
 		std::priority_queue<
 			JSONNode, //type of stored elements
 			std::vector<JSONNode>, // underlying container to store elements
@@ -46,15 +46,12 @@ class WrapperNode {
 		JSONNode getJSONNode();
 		void addNode(JSONNode node);
 		void addNode(std::shared_ptr<Chakra::ETFeederNode> node);
-		void removeNode(int64_t node_id);
+		void removeNode(uint64_t node_id);
 		void readNextWindow();
-		JSONNode readNode(int64_t node_id);
+		JSONNode readNode(uint64_t node_id);
 		void resolveDep();
-		void pushBackIssuableNode(int64_t node_id);
-		void freeChildrenNodes(int64_t node_id);
-		void addDepUnresolvedParentID(int64_t node_id);
-		std::vector<int64_t> getDepUnresolvedParentIDs();
-		void setDepUnresolvedParentIDs(std::vector<int64_t> const& dep_unresolved_parent_ids);
+		void pushBackIssuableNode(uint64_t node_id);
+		void freeChildrenNodes(uint64_t node_id);
 		bool isValidNode();
 		void push_to_queue();
 		bool is_queue_empty();
@@ -77,8 +74,8 @@ class WrapperNode {
 		uint32_t getInvolvedDimSize();
 		bool getInvolvedDim(int i);
 		bool hasNodesToIssue();
-		void lookupNode(int64_t node_id);
+		void lookupNode(uint64_t node_id);
 		void getChildren(std::vector<std::shared_ptr<Chakra::ETFeederNode>>& childrenNodes);
 		void getChildren(std::vector<JSONNode>& childrenNodes);
-		int64_t findNodeIndexJSON(int64_t node_id);
+		int64_t findNodeIndexJSON(uint64_t node_id);
 };
