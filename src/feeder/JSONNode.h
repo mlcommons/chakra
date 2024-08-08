@@ -12,20 +12,20 @@ using json = nlohmann::json;
 
 class JSONNode {
 	private:
-		int64_t node_id;
+		uint64_t node_id;
 		std::string node_name;
 		int node_type;
 		bool is_cpu_op;
-		int64_t runtime;
-		int64_t num_ops;
-		int64_t tensor_size;
-		int64_t comm_type;
-		int32_t comm_priority;
-		int64_t comm_size;
-		int32_t comm_src;
-		int32_t comm_dst;
-		int32_t comm_tag;
-		int32_t involved_dim_size;
+		uint64_t runtime;
+		uint64_t num_ops;
+		uint64_t tensor_size;
+		uint64_t comm_type;
+		uint32_t comm_priority;
+		uint64_t comm_size;
+		uint32_t comm_src;
+		uint32_t comm_dst;
+		uint32_t comm_tag;
+		uint32_t involved_dim_size;
 		std::vector<bool> involved_dim;
 
 	public:

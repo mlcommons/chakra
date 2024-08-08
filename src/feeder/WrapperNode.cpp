@@ -75,7 +75,7 @@ JSONNode WrapperNode::getJSONNode() {
 }
 
 // Find the index in JSON dictionary
-int64_t WrapperNode::findNodeIndexJSON(int64_t node_id) {
+int64_t WrapperNode::findNodeIndexJSON(uint64_t node_id) {
 	int64_t i;
 	for (i=0; i < window_size_json; i++) {
 		if (data_["workload_graph"][i]["Id"] == node_id) {
@@ -97,7 +97,7 @@ void WrapperNode::addNode(std::shared_ptr<Chakra::ETFeederNode> node) {
 }
 
 // Remove node from dependency graph
-void WrapperNode::removeNode(int64_t node_id) {
+void WrapperNode::removeNode(uint64_t node_id) {
 	switch(format_type_) {
 		case Protobuf:
 			et_feeder_->removeNode(node_id);
@@ -112,7 +112,7 @@ void WrapperNode::removeNode(int64_t node_id) {
 
 // Read nodes in graph
 // node_idx is the continuous index of the JSON nodes and is different from node_id
-JSONNode WrapperNode::readNode(int64_t node_idx) {
+JSONNode WrapperNode::readNode(uint64_t node_idx) {
 	JSONNode node(data_, node_idx);
 	bool dep_unresolved = false;
 	for (int i = 0; i < node.data_deps.size(); ++i) {
@@ -191,7 +191,7 @@ void WrapperNode::resolveDep() {
 }
 
 // Push dependency free nodes
-void WrapperNode::pushBackIssuableNode(int64_t node_id) {
+void WrapperNode::pushBackIssuableNode(uint64_t node_id) {
 	switch(format_type_) {
 		case Protobuf:
 			et_feeder_->pushBackIssuableNode(node_id);
@@ -204,7 +204,7 @@ void WrapperNode::pushBackIssuableNode(int64_t node_id) {
 }
 
 // Free children
-void WrapperNode::freeChildrenNodes(int64_t node_id) {
+void WrapperNode::freeChildrenNodes(uint64_t node_id) {
 	switch(format_type_) {
 		case Protobuf:
 			et_feeder_->freeChildrenNodes(node_id);
@@ -255,7 +255,6 @@ void WrapperNode::push_to_queue() {
 			push_back_queue_proto.push(node_);
 			break;
 		case JSON:
-			// JSONNode json_node(data_, node_idx_);
 			push_back_queue_json.push(json_node_);
 			break;
 	}
@@ -324,7 +323,7 @@ void WrapperNode::getNextIssuableNode() {
 }
 
 // Get node ID
-int64_t WrapperNode::getNodeID() {
+uint64_t WrapperNode::getNodeID() {
 	switch (format_type_) {
 		case Protobuf:
 			return node_->id();
@@ -376,7 +375,7 @@ bool WrapperNode::isCPUOp() {
 }
 
 // Get runtime
-int64_t WrapperNode::getRuntime() {
+uint64_t WrapperNode::getRuntime() {
 	switch (format_type_) {
 		case Protobuf:
 			return node_->runtime();
@@ -389,7 +388,7 @@ int64_t WrapperNode::getRuntime() {
 }
 
 // Get num ops
-int64_t WrapperNode::getNumOps() {
+uint64_t WrapperNode::getNumOps() {
 	switch (format_type_) {
 		case Protobuf:
 			return node_->num_ops();
@@ -402,7 +401,7 @@ int64_t WrapperNode::getNumOps() {
 }
 
 // Get tensor size
-int64_t WrapperNode::getTensorSize() {
+uint64_t WrapperNode::getTensorSize() {
 	switch (format_type_) {
 		case Protobuf:
 			return node_->tensor_size();
@@ -415,7 +414,7 @@ int64_t WrapperNode::getTensorSize() {
 }
 
 // Get comm type
-int64_t WrapperNode::getCommType() {
+uint64_t WrapperNode::getCommType() {
 	switch (format_type_) {
 		case Protobuf:
 			return node_->comm_type();
@@ -428,7 +427,7 @@ int64_t WrapperNode::getCommType() {
 }
 
 // Get comm priority
-int32_t WrapperNode::getCommPriority() {
+uint32_t WrapperNode::getCommPriority() {
 	switch (format_type_) {
 		case Protobuf:
 			return node_->comm_priority();
@@ -441,7 +440,7 @@ int32_t WrapperNode::getCommPriority() {
 }
 
 // Get comm size
-int64_t WrapperNode::getCommSize() {
+uint64_t WrapperNode::getCommSize() {
 	switch (format_type_) {
 		case Protobuf:
 			return node_->comm_size();
@@ -454,7 +453,7 @@ int64_t WrapperNode::getCommSize() {
 }
 
 // Get comm src
-int32_t WrapperNode::getCommSrc() {
+uint32_t WrapperNode::getCommSrc() {
 	switch (format_type_) {
 		case Protobuf:
 			return node_->comm_src();
@@ -467,7 +466,7 @@ int32_t WrapperNode::getCommSrc() {
 }
 
 // Get comm dst
-int32_t WrapperNode::getCommDst() {
+uint32_t WrapperNode::getCommDst() {
 	switch (format_type_) {
 		case Protobuf:
 			return node_->comm_dst();
@@ -480,7 +479,7 @@ int32_t WrapperNode::getCommDst() {
 }
 
 // Get comm tag
-int32_t WrapperNode::getCommTag() {
+uint32_t WrapperNode::getCommTag() {
 	switch (format_type_) {
 		case Protobuf:
 			return node_->comm_tag();
@@ -493,7 +492,7 @@ int32_t WrapperNode::getCommTag() {
 }
 
 // Get involved dim size
-int32_t WrapperNode::getInvolvedDimSize() {
+uint32_t WrapperNode::getInvolvedDimSize() {
 	switch (format_type_) {
 		case Protobuf:
 			return node_->involved_dim_size();
@@ -532,7 +531,7 @@ bool WrapperNode::hasNodesToIssue() {
 }
 
 // Lookup Node
-void WrapperNode::lookupNode(int64_t node_id) {
+void WrapperNode::lookupNode(uint64_t node_id) {
 	switch (format_type_) {
 		case Protobuf:
 			node_ = et_feeder_->lookupNode(node_id);
