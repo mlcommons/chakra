@@ -14,7 +14,9 @@ JSONNode::JSONNode(const JSONNode &t) {
 	dep_unresolved_parent_ids_json = t.dep_unresolved_parent_ids_json;
 	children_vec_json = t.children_vec_json;
 	children_set_json = t.children_set_json;
-	// Comm nodes
+	/* 	COMM_SEND_NODE = 5,
+  		COMM_RECV_NODE = 6,
+  		COMM_COLL_NODE = 7 	*/
 	if (node_type == 5 || node_type == 6 || node_type == 7) {
 		tensor_size = t.tensor_size;
 		comm_type = t.comm_type;
@@ -29,7 +31,7 @@ JSONNode::JSONNode(const JSONNode &t) {
 }
 
 // JSONNode constructor
-JSONNode::JSONNode(json data, int32_t id) {
+JSONNode::JSONNode(json data, uint64_t id) {
 			try {
 				node_id = data["workload_graph"][id]["Id"];
 			}
@@ -59,12 +61,14 @@ JSONNode::JSONNode(json data, int32_t id) {
 			}
 			catch (...) {}
 			try {
-				data_deps = data["workload_graph"][id]["data_deps"].get<std::vector<int64_t>>();
+				data_deps = data["workload_graph"][id]["data_deps"].get<std::vector<uint64_t>>();
 			}
 			catch (...) {
 				std::cerr << "data deps not specified in ET" << std::endl;
 			}
-			// Comm nodes
+			/* 	COMM_SEND_NODE = 5,
+				COMM_RECV_NODE = 6,
+				COMM_COLL_NODE = 7 	*/
 			if (node_type == 5 || node_type == 6 || node_type == 7) {
 				try {
 					tensor_size = data["workload_graph"][id]["tensor_size"];
@@ -181,17 +185,17 @@ bool JSONNode::getInvolvedDim(int i) const{
 }
 
 // Dependency unresolved parent IDs
-void JSONNode::addDepUnresolvedParentID(int64_t node_id) {
+void JSONNode::addDepUnresolvedParentID(uint64_t node_id) {
 	dep_unresolved_parent_ids_json.emplace_back(node_id);
 }
 
 // Get dependency unresolved parent IDs
-std::vector<int64_t> JSONNode::getDepUnresolvedParentIDs() {
+std::vector<uint64_t> JSONNode::getDepUnresolvedParentIDs() {
 	return dep_unresolved_parent_ids_json;
 }
 
 // Set dependency unresolved parent IDs
-void JSONNode::setDepUnresolvedParentIDs(std::vector<int64_t> const& dep_unresolved_parent_ids) {
+void JSONNode::setDepUnresolvedParentIDs(std::vector<uint64_t> const& dep_unresolved_parent_ids) {
 	dep_unresolved_parent_ids_json = dep_unresolved_parent_ids;
 }
 

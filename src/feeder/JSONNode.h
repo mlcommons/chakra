@@ -29,8 +29,8 @@ class JSONNode {
 		std::vector<bool> involved_dim;
 
 	public:
-		std::vector<int64_t> data_deps{};
-		std::vector<int64_t> dep_unresolved_parent_ids_json{};
+		std::vector<uint64_t> data_deps{};
+		std::vector<uint64_t> dep_unresolved_parent_ids_json{};
 		std::vector<JSONNode> children_vec_json{};
 
 		// Compare function for set
@@ -43,25 +43,25 @@ class JSONNode {
 		
 		JSONNode();
 		JSONNode(const JSONNode &t);
-		JSONNode(json data, int32_t id);
-		int64_t id() const;
+		JSONNode(json data, uint64_t id);
+		uint64_t id() const;
 		std::string name() const;
 		int type() const;
 		bool isCPUOp() const;
-		int64_t getRuntime() const;
-		int64_t getNumOps() const;
-		int64_t getTensorSize() const;
-		int64_t getCommType() const;
-		int32_t getCommPriority() const;
-		int64_t getCommSize() const;
-		int32_t getCommSrc() const;
-		int32_t getCommDst() const;
-		int32_t getCommTag() const;
-		int32_t getInvolvedDimSize() const;
+		uint64_t getRuntime() const;
+		uint64_t getNumOps() const;
+		uint64_t getTensorSize() const;
+		uint64_t getCommType() const;
+		uint32_t getCommPriority() const;
+		uint64_t getCommSize() const;
+		uint32_t getCommSrc() const;
+		uint32_t getCommDst() const;
+		uint32_t getCommTag() const;
+		uint32_t getInvolvedDimSize() const;
 		bool getInvolvedDim(int i) const;
-		void addDepUnresolvedParentID(int64_t node_id);
-		std::vector<int64_t> getDepUnresolvedParentIDs();
-		void setDepUnresolvedParentIDs(std::vector<int64_t> const& dep_unresolved_parent_ids);
+		void addDepUnresolvedParentID(uint64_t node_id);
+		std::vector<uint64_t> getDepUnresolvedParentIDs();
+		void setDepUnresolvedParentIDs(std::vector<uint64_t> const& dep_unresolved_parent_ids);
 		void addChild(JSONNode node);
 		std::vector<JSONNode> getChildren();
 
