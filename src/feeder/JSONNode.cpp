@@ -25,8 +25,6 @@ JSONNode::JSONNode(const JSONNode &t) {
 		comm_src = t.comm_src;
 		comm_dst = t.comm_dst;
 		comm_tag = t.comm_tag;
-		involved_dim_size = t.involved_dim_size;
-		involved_dim = t.involved_dim;
 	}
 }
 
@@ -98,14 +96,6 @@ JSONNode::JSONNode(json data, uint64_t id) {
 					comm_tag = data["workload_graph"][id]["comm_tag"];
 				}
 				catch (...) {}
-				try {
-					involved_dim_size = data["workload_graph"][id]["involved_dim_size"];
-				}
-				catch (...) {}
-				try {
-					involved_dim = data["workload_graph"][id]["involved_dims"].get<std::vector<bool>>();
-				}
-				catch (...) {}
 			}
 		}
 
@@ -172,16 +162,6 @@ uint32_t JSONNode::getCommDst() const{
 // Comm tag
 uint32_t JSONNode::getCommTag() const{
 	return comm_tag;
-}
-
-// Involved dim size
-uint32_t JSONNode::getInvolvedDimSize() const{
-	return involved_dim_size;
-}
-
-// Involved dim
-bool JSONNode::getInvolvedDim(int i) const{
-	return involved_dim[i];
 }
 
 // Dependency unresolved parent IDs

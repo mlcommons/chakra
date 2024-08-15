@@ -57,8 +57,6 @@ class JSONNode {
 		uint32_t getCommSrc() const;
 		uint32_t getCommDst() const;
 		uint32_t getCommTag() const;
-		uint32_t getInvolvedDimSize() const;
-		bool getInvolvedDim(int i) const;
 		void addDepUnresolvedParentID(uint64_t node_id);
 		std::vector<uint64_t> getDepUnresolvedParentIDs();
 		void setDepUnresolvedParentIDs(std::vector<uint64_t> const& dep_unresolved_parent_ids);
@@ -80,8 +78,6 @@ class JSONNode {
 				comm_src == other.comm_src &&
 				comm_dst == other.comm_dst &&
 				comm_tag == other.comm_tag &&
-				involved_dim_size == other.involved_dim_size &&
-				involved_dim == other.involved_dim &&
 				data_deps == other.data_deps &&
 				dep_unresolved_parent_ids_json == other.dep_unresolved_parent_ids_json &&
 				children_vec_json == other.children_vec_json &&
@@ -105,8 +101,6 @@ class JSONNode {
 				comm_src = other.comm_src;
 				comm_dst = other.comm_dst;
 				comm_tag = other.comm_tag;
-				involved_dim_size = other.involved_dim_size;
-				involved_dim = other.involved_dim;
 				data_deps = other.data_deps;
 				dep_unresolved_parent_ids_json = other.dep_unresolved_parent_ids_json;
 				children_vec_json = other.children_vec_json;

@@ -11,8 +11,6 @@ WrapperNode::WrapperNode(const WrapperNode& t) {
 	node_ = t.node_;
 	data_ = t.data_;
 	node_idx_ = t.node_idx_;
-	involved_dim_size_ = t.involved_dim_size_;
-	involved_dim_ = t.involved_dim_;
 	push_back_queue_proto = t.push_back_queue_proto;
 	push_back_queue_json = t.push_back_queue_json;
 	dep_graph_json = t.dep_graph_json;
@@ -55,13 +53,20 @@ WrapperNode::WrapperNode(std::string filename) {
 void WrapperNode::releaseMemory() {
 	switch(format_type_) {
 		case Protobuf:
+		{
 			delete et_feeder_;
 			break;
+		}
 		case JSON:
+		{
 			jsonfile_.close();
 			break;
+		}
 		default:
-			break;
+		{
+			std::cerr << "Error in releaseMemory()" << std::endl;
+			exit(-1);
+		}
 	}
 }
 
@@ -103,13 +108,20 @@ void WrapperNode::addNode(std::shared_ptr<Chakra::ETFeederNode> node) {
 void WrapperNode::removeNode(uint64_t node_id) {
 	switch(format_type_) {
 		case Protobuf:
+		{
 			et_feeder_->removeNode(node_id);
 			break;
+		}
 		case JSON:
+		{
 			dep_graph_json.erase(node_id);
 			break;
+		}
 		default:
-			break;
+		{
+			std::cerr << "Error in removeNode()" << std::endl;
+			exit(-1);
+		}
 	}
 }
 
@@ -162,9 +174,12 @@ void WrapperNode::readNextWindow() {
 void WrapperNode::resolveDep() {
 	switch(format_type_) {
 		case Protobuf:
+		{
 			et_feeder_->resolveDep();
 			break;
+		}
 		case JSON:
+		{
 			// Loop over unresolved nodes
 			for (auto it = dep_unresolved_node_set_json.begin();
 				it != dep_unresolved_node_set_json.end();) {
@@ -190,6 +205,12 @@ void WrapperNode::resolveDep() {
 					++it;
 				}
 			}
+		}
+		default:
+		{
+			std::cerr << "Error in resolveDep()" << std::endl;
+			exit(-1);
+		}
 	}
 }
 
@@ -197,12 +218,22 @@ void WrapperNode::resolveDep() {
 void WrapperNode::pushBackIssuableNode(uint64_t node_id) {
 	switch(format_type_) {
 		case Protobuf:
+		{
 			et_feeder_->pushBackIssuableNode(node_id);
 			break;
+		}
 		case JSON:
+		{
 			JSONNode node = dep_graph_json[node_id];
 			dep_free_node_id_set_json.emplace(node_id);
 			dep_free_node_queue_json.emplace(node);
+			break;
+		}
+		default:
+		{
+			std::cerr << "Error in pushBackIssuableNode()" << std::endl;
+			exit(-1);
+		}
 	}
 }
 
@@ -210,9 +241,12 @@ void WrapperNode::pushBackIssuableNode(uint64_t node_id) {
 void WrapperNode::freeChildrenNodes(uint64_t node_id) {
 	switch(format_type_) {
 		case Protobuf:
+		{
 			et_feeder_->freeChildrenNodes(node_id);
 			break;
+		}
 		case JSON:
+		{
 			JSONNode node = dep_graph_json[node_id];
 			for (auto child : node.getChildren()) {
 				for (auto it = child.data_deps.begin();
@@ -229,6 +263,12 @@ void WrapperNode::freeChildrenNodes(uint64_t node_id) {
 				}
 			}
 			break;
+		}
+		default:
+		{
+			std::cerr << "Error in freeChildrenNodes()" << std::endl;
+			exit(-1);
+		}
 	}
 }
 
@@ -236,18 +276,24 @@ void WrapperNode::freeChildrenNodes(uint64_t node_id) {
 bool WrapperNode::isValidNode() {
 	switch (format_type_) {
 		case Protobuf:
+		{
 			if (node_ == nullptr)
 				return false;
 			else 
 				return true;
+		}
 		case JSON:
+		{
 			if (node_idx_ < 0)
 				return false;
 			else
 				return true;
+		}
 		default:
+		{
 			std::cerr << "Error in isValid()" << std::endl;
 			exit(-1);
+		}
 	}
 }
 
@@ -255,11 +301,20 @@ bool WrapperNode::isValidNode() {
 void WrapperNode::push_to_queue() {
 	switch (format_type_) {
 		case Protobuf:
+		{
 			push_back_queue_proto.push(node_);
 			break;
+		}
 		case JSON:
+		{
 			push_back_queue_json.push(json_node_);
 			break;
+		}
+		default:
+		{
+			std::cerr << "Error in push_to_queue()" << std::endl;
+			exit(-1);
+		}
 	}
 }
 
@@ -267,14 +322,18 @@ void WrapperNode::push_to_queue() {
 bool WrapperNode::is_queue_empty() {
 	switch (format_type_) {
 		case Protobuf:
+		{
 			return push_back_queue_proto.empty();
-			break;
+		}
 		case JSON:
+		{
 			return push_back_queue_json.empty();
-			break;
+		}
 		default:
+		{
 			std::cerr << "Error in is_queue_empty()" << std::endl;
 			exit(-1);
+		}
 	}
 }
 
@@ -282,12 +341,20 @@ bool WrapperNode::is_queue_empty() {
 void WrapperNode::queue_front() {
 	switch (format_type_) {
 		case Protobuf:
+		{
 			node_ = push_back_queue_proto.front();
-		case JSON: 
+			break;
+		}
+		case JSON:
+		{
 			json_node_ = push_back_queue_json.front();
+			break;
+		}
 		default:
+		{
 			std::cerr << "Error in queue_front()" << std::endl;
 			exit(-1);
+		}
 	}
 }
 
@@ -295,12 +362,20 @@ void WrapperNode::queue_front() {
 void WrapperNode::pop_from_queue() {
 	switch (format_type_) {
 		case Protobuf:
+		{
 			push_back_queue_proto.pop();
+			break;
+		}
 		case JSON:
+		{
 			push_back_queue_json.pop();
+			break;
+		}
 		default:
+		{
 			std::cerr << "Error in pop_from_queue()" << std::endl;
 			exit(-1);
+		}
 	}
 }
 
@@ -308,9 +383,12 @@ void WrapperNode::pop_from_queue() {
 void WrapperNode::getNextIssuableNode() {
 	switch (format_type_) {
 		case Protobuf:
+		{
 			node_ = et_feeder_->getNextIssuableNode();
 			break;
+		}
 		case JSON:
+		{
 			if (dep_free_node_queue_json.size() != 0) {
 				json_node_ = dep_free_node_queue_json.top();
 				node_idx_ = findNodeIndexJSON(json_node_.id());
@@ -320,8 +398,12 @@ void WrapperNode::getNextIssuableNode() {
 			else
 				node_idx_ = -1;
 			break;
+		}
 		default:
-			break;
+		{
+			std::cerr << "Error in getNextIssuableNode()" << std::endl;
+			exit(-1);
+		}
 	}
 }
 
@@ -329,12 +411,18 @@ void WrapperNode::getNextIssuableNode() {
 uint64_t WrapperNode::getNodeID() {
 	switch (format_type_) {
 		case Protobuf:
+		{
 			return node_->id();
+		}
 		case JSON:
+		{
 			return json_node_.id();
+		}
 		default:
+		{
 			std::cerr << "Error in getNodeID()" << std::endl;
 			exit(-1);
+		}
 	}
 }
 
@@ -342,12 +430,18 @@ uint64_t WrapperNode::getNodeID() {
 std::string WrapperNode::getNodeName() {
 	switch (format_type_) {
 		case Protobuf:
+		{
 			return node_->name();
+		}
 		case JSON:
+		{
 			return json_node_.name();
+		}
 		default:
+		{
 			std::cerr << "Error in getNodeName()" << std::endl;
 			exit(-1);
+		}
 	}
 }
 
@@ -355,12 +449,18 @@ std::string WrapperNode::getNodeName() {
 int WrapperNode::getNodeType() {
 	switch (format_type_) {
 		case Protobuf:
+		{
 			return node_->type();
+		}
 		case JSON:
+		{
 			return json_node_.type();
+		}
 		default:
+		{
 			std::cerr << "Error in getNodeType()" << std::endl;
 			exit(-1);
+		}
 	}
 }
 
@@ -368,12 +468,18 @@ int WrapperNode::getNodeType() {
 bool WrapperNode::isCPUOp() {
 	switch (format_type_) {
 		case Protobuf:
+		{
 			return node_->is_cpu_op();
+		}
 		case JSON:
+		{
 			return json_node_.isCPUOp();
+		}
 		default:
+		{
 			std::cerr << "Error in isCPUOp()" << std::endl;
 			exit(-1);
+		}
 	}
 }
 
@@ -381,12 +487,18 @@ bool WrapperNode::isCPUOp() {
 uint64_t WrapperNode::getRuntime() {
 	switch (format_type_) {
 		case Protobuf:
+		{
 			return node_->runtime();
+		}
 		case JSON:
+		{
 			return json_node_.getRuntime();
+		}
 		default:
+		{
 			std::cerr << "Error in getRuntime()" << std::endl;
 			exit(-1);
+		}
 	}
 }
 
@@ -394,12 +506,18 @@ uint64_t WrapperNode::getRuntime() {
 uint64_t WrapperNode::getNumOps() {
 	switch (format_type_) {
 		case Protobuf:
+		{
 			return node_->num_ops();
+		}
 		case JSON:
+		{
 			return json_node_.getNumOps();
+		}
 		default:
+		{
 			std::cerr << "Error in getNumOps()" << std::endl;
 			exit(-1);
+		}
 	}
 }
 
@@ -407,12 +525,18 @@ uint64_t WrapperNode::getNumOps() {
 uint64_t WrapperNode::getTensorSize() {
 	switch (format_type_) {
 		case Protobuf:
+		{
 			return node_->tensor_size();
+		}
 		case JSON:
+		{
 			return json_node_.getTensorSize();
+		}
 		default:
+		{
 			std::cerr << "Error in getTensorSize()" << std::endl;
 			exit(-1);
+		}
 	}
 }
 
@@ -420,12 +544,18 @@ uint64_t WrapperNode::getTensorSize() {
 uint64_t WrapperNode::getCommType() {
 	switch (format_type_) {
 		case Protobuf:
+		{
 			return node_->comm_type();
+		}
 		case JSON:
+		{
 			return json_node_.getCommType();
+		}
 		default:
+		{
 			std::cerr << "Error in getCommType()" << std::endl;
 			exit(-1);
+		}
 	}
 }
 
@@ -433,12 +563,18 @@ uint64_t WrapperNode::getCommType() {
 uint32_t WrapperNode::getCommPriority() {
 	switch (format_type_) {
 		case Protobuf:
+		{
 			return node_->comm_priority();
+		}
 		case JSON:
+		{
 			return json_node_.getCommPriority();
+		}
 		default:
+		{
 			std::cerr << "Error in getCommPriority()" << std::endl;
 			exit(-1);
+		}
 	}
 }
 
@@ -446,12 +582,18 @@ uint32_t WrapperNode::getCommPriority() {
 uint64_t WrapperNode::getCommSize() {
 	switch (format_type_) {
 		case Protobuf:
+		{
 			return node_->comm_size();
+		}
 		case JSON:
+		{
 			return json_node_.getCommSize();
+		}
 		default:
+		{
 			std::cerr << "Error in getCommSize()" << std::endl;
 			exit(-1);
+		}
 	}
 }
 
@@ -459,12 +601,18 @@ uint64_t WrapperNode::getCommSize() {
 uint32_t WrapperNode::getCommSrc() {
 	switch (format_type_) {
 		case Protobuf:
+		{
 			return node_->comm_src();
+		}
 		case JSON:
+		{
 			return json_node_.getCommSrc();
+		}
 		default:
+		{
 			std::cerr << "Error in getCommSrc()" << std::endl;
 			exit(-1);
+		}
 	}
 }
 
@@ -472,12 +620,18 @@ uint32_t WrapperNode::getCommSrc() {
 uint32_t WrapperNode::getCommDst() {
 	switch (format_type_) {
 		case Protobuf:
+		{
 			return node_->comm_dst();
+		}
 		case JSON:
+		{
 			return json_node_.getCommDst();
+		}
 		default:
+		{
 			std::cerr << "Error in getCommDst()" << std::endl;
 			exit(-1);
+		}
 	}
 }
 
@@ -485,38 +639,18 @@ uint32_t WrapperNode::getCommDst() {
 uint32_t WrapperNode::getCommTag() {
 	switch (format_type_) {
 		case Protobuf:
+		{
 			return node_->comm_tag();
+		}
 		case JSON:
+		{
 			return json_node_.getCommTag();
+		}
 		default:
+		{
 			std::cerr << "Error in getCommTag()" << std::endl;
 			exit(-1);
-	}
-}
-
-// Get involved dim size
-uint32_t WrapperNode::getInvolvedDimSize() {
-	switch (format_type_) {
-		case Protobuf:
-			return node_->involved_dim_size();
-		case JSON:
-			return json_node_.getInvolvedDimSize();
-		default:
-			std::cerr << "Error in getInvolvedDimSize()" << std::endl;
-			exit(-1);
-	}
-}
-
-// Get involved dim
-bool WrapperNode::getInvolvedDim(int i) {
-	switch (format_type_) {
-		case Protobuf:
-			return node_->involved_dim(i);
-		case JSON:
-			return json_node_.getInvolvedDim(i);
-		default:
-			std::cerr << "Error in getInvolvedDim()" << std::endl;
-			exit(-1);
+		}
 	}
 }
 
@@ -524,12 +658,18 @@ bool WrapperNode::getInvolvedDim(int i) {
 bool WrapperNode::hasNodesToIssue() {
 	switch (format_type_) {
 		case Protobuf:
+		{
 			return et_feeder_->hasNodesToIssue();
+		}
 		case JSON:
+		{
 			return !(dep_graph_json.empty() && dep_free_node_queue_json.empty());
+		}
 		default:
+		{
 			std::cerr << "Error in hasNodesToIssue()" << std::endl;
 			exit(-1);
+		}
 	}
 }
 
@@ -537,9 +677,12 @@ bool WrapperNode::hasNodesToIssue() {
 void WrapperNode::lookupNode(uint64_t node_id) {
 	switch (format_type_) {
 		case Protobuf:
+		{
 			node_ = et_feeder_->lookupNode(node_id);
 			break;
+		}
 		case JSON:
+		{
 			try {
 				json_node_ = dep_graph_json.at(node_id);
 			} catch (const std::out_of_range& e) {
@@ -548,9 +691,12 @@ void WrapperNode::lookupNode(uint64_t node_id) {
 				throw(e);
 			}
 			break;
+		}
 		default:
+		{
 			std::cerr << "Error in lookupNode()" << std::endl;
 			exit(-1);
+		}
 	}
 }
 

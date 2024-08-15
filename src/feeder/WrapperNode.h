@@ -21,8 +21,6 @@ class WrapperNode {
 		json data_;
 		JSONNode json_node_;
 		int64_t node_idx_ = -1;
-		uint32_t involved_dim_size_ = 1;
-		std::vector<bool> involved_dim_;
 		std::queue<std::shared_ptr<Chakra::ETFeederNode>> push_back_queue_proto;
 		std::queue<JSONNode> push_back_queue_json;
 		std::unordered_map<uint64_t, JSONNode> dep_graph_json{};
@@ -71,8 +69,6 @@ class WrapperNode {
 		uint32_t getCommSrc();
 		uint32_t getCommDst();
 		uint32_t getCommTag();
-		uint32_t getInvolvedDimSize();
-		bool getInvolvedDim(int i);
 		bool hasNodesToIssue();
 		void lookupNode(uint64_t node_id);
 		void getChildren(std::vector<std::shared_ptr<Chakra::ETFeederNode>>& childrenNodes);
