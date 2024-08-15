@@ -205,6 +205,7 @@ void WrapperNode::resolveDep() {
 					++it;
 				}
 			}
+			break;
 		}
 		default:
 		{
