@@ -40,11 +40,6 @@ class ETFeederNode {
   uint32_t comm_tag() const;
 
  private:
-  void assign_attr_val(
-      std::shared_ptr<ChakraProtoMsg::Node> node,
-      int i,
-      void* member);
-
   std::shared_ptr<ChakraProtoMsg::Node> node_{nullptr};
   std::unordered_set<std::shared_ptr<ETFeederNode>> children_set_{};
   std::vector<std::shared_ptr<ETFeederNode>> children_vec_{};
