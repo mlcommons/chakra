@@ -24,20 +24,20 @@ class ETFeederNode {
       const std::string& attr_name) const;
   bool has_other_attr(const std::string& attr_name) const;
 
-  uint64_t id();
-  std::string name();
-  bool is_cpu_op();
-  ChakraProtoMsg::NodeType type();
-  uint64_t runtime();
-  uint64_t num_ops();
-  uint32_t tensor_loc();
-  uint64_t tensor_size();
-  ChakraProtoMsg::CollectiveCommType comm_type();
-  uint32_t comm_priority();
-  uint64_t comm_size();
-  uint32_t comm_src();
-  uint32_t comm_dst();
-  uint32_t comm_tag();
+  uint64_t id() const;
+  std::string name() const;
+  bool is_cpu_op() const;
+  ChakraProtoMsg::NodeType type() const;
+  uint64_t runtime() const;
+  uint64_t num_ops() const;
+  uint32_t tensor_loc() const;
+  uint64_t tensor_size() const;
+  ChakraProtoMsg::CollectiveCommType comm_type() const;
+  uint32_t comm_priority() const;
+  uint64_t comm_size() const;
+  uint32_t comm_src() const;
+  uint32_t comm_dst() const;
+  uint32_t comm_tag() const;
 
  private:
   void assign_attr_val(
