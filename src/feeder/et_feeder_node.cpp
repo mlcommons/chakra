@@ -10,6 +10,9 @@ ETFeederNode::ETFeederNode(std::shared_ptr<ChakraProtoMsg::Node> node) {
   this->runtime_ = node->duration_micros();
   this->is_cpu_op_ = 1;
 
+  for (uint64_t unresolved_data_dep : node->data_deps())
+    this->unresolved_data_deps.insert(unresolved_data_dep);
+
   for (const auto& attr : node->attr()) {
     const string& attr_name = attr.name();
 
@@ -81,6 +84,14 @@ const ChakraProtoMsg::AttributeProto& ETFeederNode::get_other_attr(
 bool ETFeederNode::has_other_attr(const string& attr_name) const {
   const auto& item = this->other_attrs_.find(attr_name);
   return item != this->other_attrs_.end();
+}
+
+const std::unordered_set<uint64_t>& ETFeederNode::unresolved_data_deps() const {
+  return this->unresolved_data_deps_;
+}
+
+std::unordered_set<uint64_t>& ETFeederNode::mutable_unresolved_data_deps() {
+  return this->unresolved_data_deps_;
 }
 
 uint64_t ETFeederNode::id() const {

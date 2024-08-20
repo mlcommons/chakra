@@ -38,6 +38,8 @@ class ETFeederNode {
   uint32_t comm_src() const;
   uint32_t comm_dst() const;
   uint32_t comm_tag() const;
+  const std::unordered_set<uint64_t>& unresolved_data_deps() const;
+  std::unordered_set<uint64_t>& mutable_unresolved_data_deps();
 
  private:
   std::shared_ptr<ChakraProtoMsg::Node> node_{nullptr};
@@ -46,6 +48,7 @@ class ETFeederNode {
   std::vector<uint64_t> dep_unresolved_parent_ids_{};
   std::unordered_map<std::string, const ChakraProtoMsg::AttributeProto&>
       other_attrs_{};
+  std::unordered_set<uint64_t> unresolved_data_deps_{};
 
   uint64_t id_;
   std::string name_;
