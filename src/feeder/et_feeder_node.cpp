@@ -11,7 +11,7 @@ ETFeederNode::ETFeederNode(std::shared_ptr<ChakraProtoMsg::Node> node) {
   this->is_cpu_op_ = 1;
 
   for (uint64_t unresolved_data_dep : node->data_deps())
-    this->unresolved_data_deps.insert(unresolved_data_dep);
+    this->unresolved_data_deps_.insert(unresolved_data_dep);
 
   for (const auto& attr : node->attr()) {
     const string& attr_name = attr.name();
