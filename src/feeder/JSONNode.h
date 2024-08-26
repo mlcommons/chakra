@@ -1,6 +1,6 @@
 #pragma once
 
-#include "json.hpp"
+#include <json/json.hpp>
 #include <iostream>
 #include <fstream>
 #include <string>
@@ -19,14 +19,12 @@ class JSONNode {
 		uint64_t runtime;
 		uint64_t num_ops;
 		uint64_t tensor_size;
-		uint64_t comm_type;
+		int64_t comm_type;
 		uint32_t comm_priority;
 		uint64_t comm_size;
 		uint32_t comm_src;
 		uint32_t comm_dst;
 		uint32_t comm_tag;
-		uint32_t involved_dim_size;
-		std::vector<bool> involved_dim;
 
 	public:
 		std::vector<uint64_t> data_deps{};
@@ -51,7 +49,7 @@ class JSONNode {
 		uint64_t getRuntime() const;
 		uint64_t getNumOps() const;
 		uint64_t getTensorSize() const;
-		uint64_t getCommType() const;
+		int64_t getCommType() const;
 		uint32_t getCommPriority() const;
 		uint64_t getCommSize() const;
 		uint32_t getCommSrc() const;

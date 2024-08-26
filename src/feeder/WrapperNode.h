@@ -32,6 +32,7 @@ class WrapperNode {
 			dep_free_node_queue_json{};
   		std::unordered_set<JSONNode, std::hash<JSONNode>> dep_unresolved_node_set_json{};
 		int window_size_json;
+		bool json_et_complete_;
 	
 	public:
 		WrapperNode();
@@ -63,7 +64,7 @@ class WrapperNode {
 		uint64_t getRuntime();
 		uint64_t getNumOps();
 		uint64_t getTensorSize(); 
-		uint64_t getCommType();
+		int64_t getCommType();
 		uint32_t getCommPriority(); 
 		uint64_t getCommSize();
 		uint32_t getCommSrc();

@@ -79,7 +79,9 @@ JSONNode::JSONNode(json data, uint64_t id) {
 				try {
 					comm_priority = data["workload_graph"][id]["comm_priority"];
 				}
-				catch (...) {}
+				catch (...) {
+					comm_priority = 0; // Protobuf defaults to 0
+				}
 				try {
 					comm_size = data["workload_graph"][id]["comm_size"];
 				}
@@ -135,7 +137,7 @@ uint64_t JSONNode::getTensorSize() const{
 }
 
 // Comm type
-uint64_t JSONNode::getCommType() const{
+int64_t JSONNode::getCommType() const{
 	return comm_type;
 }
 

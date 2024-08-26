@@ -32,6 +32,7 @@ void WrapperNode::createWrapper(std::string filename) {
 	else if (ext == "json") {
 		std::cout << "Using JSON format" << std::endl;
 		format_type_ = JSON;
+		json_et_complete_ = false;
 		jsonfile_.open(filename);
 		data_ = json::parse(jsonfile_); // Parse JSON file
 		window_size_json = data_["workload_graph"].size(); // Number of nodes
@@ -115,6 +116,9 @@ void WrapperNode::removeNode(uint64_t node_id) {
 		case JSON:
 		{
 			dep_graph_json.erase(node_id);
+			if (!json_et_complete_ && (dep_free_node_queue_json.size() < window_size_json)) {
+				readNextWindow();
+			}
 			break;
 		}
 		default:
@@ -152,11 +156,15 @@ JSONNode WrapperNode::readNode(uint64_t node_idx) {
 void WrapperNode::readNextWindow() {
   uint64_t num_read = 0;
   do {
+	if (num_read >= window_size_json) {
+      json_et_complete_ = true;
+      break;
+    }
     JSONNode new_node = readNode(num_read);
     addNode(new_node);
     ++num_read;
     resolveDep();
-  } while ((num_read < window_size_json) || (dep_unresolved_node_set_json.size() != 0));
+  } while ((num_read < 256 * window_size_json) || (dep_unresolved_node_set_json.size() != 0)); //arbitrarily large 256 * window_size_json
 
   for (auto node_id_node : dep_graph_json) {
     uint64_t node_id = node_id_node.first;
@@ -542,7 +550,7 @@ uint64_t WrapperNode::getTensorSize() {
 }
 
 // Get comm type
-uint64_t WrapperNode::getCommType() {
+int64_t WrapperNode::getCommType() {
 	switch (format_type_) {
 		case Protobuf:
 		{
