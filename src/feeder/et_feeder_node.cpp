@@ -25,7 +25,7 @@ ETFeederNode::ETFeederNode(std::shared_ptr<ChakraProtoMsg::Node> node) {
     } else if (attr_name == "comm_priority") {
       this->comm_priority_ = static_cast<uint32_t>(attr.int32_val());
     } else if (attr_name == "comm_size") {
-      this->comm_size_ = attr.int64_val();
+      this->comm_size_ = static_cast<uint64_t>(attr.int64_val());
     } else if (attr_name == "comm_src") {
       this->comm_src_ = static_cast<uint32_t>(attr.int32_val());
     } else if (attr_name == "comm_dst") {
