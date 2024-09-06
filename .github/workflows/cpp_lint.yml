@@ -8,8 +8,8 @@ jobs:
 
     steps:
     - name: Checkout Code
-      uses: actions/checkout@v2
-      run: |
+    - uses: actions/checkout@v2
+    - run: |
         pip install setuptools
 
     - name: Format and Lint C++ Code
