@@ -55,8 +55,7 @@ TEST_F(WrapperNodeTest, ConstructorWrapperNodeTest) {
     ASSERT_EQ(children[0]->id(), 217);
     ASSERT_EQ(children[1]->id(), 430);
     ASSERT_EQ(children[2]->id(), 435);
-  }
-  else if (ext == "json") {
+  } else if (ext == "json") {
     std::vector<JSONNode> children;
     node.getChildren(children);
     ASSERT_EQ(children[0].id(), 217);
@@ -138,8 +137,7 @@ TEST_F(WrapperNodeTest, AddNodeTest) {
     node.lookupNode(216);
     pnode2 = node.getProtobufNode();
     ASSERT_EQ(pnode2->id(), 216);
-  }
-  else if (ext == "json") {
+  } else if (ext == "json") {
     JSON jnode1;
     node.lookupNode(216);
     jnode1 = node.getJSONNode();
@@ -163,8 +161,7 @@ TEST_F(WrapperNodeTest, NodeGetChildrenTest) {
     node.getChildren(children);
     ASSERT_EQ(children[0]->id(), 217);
     ASSERT_EQ(children[2]->id(), 435);
-  }
-  else if (ext == "json") {
+  } else if (ext == "json") {
     std::vector<JSONNode> children;
     node.getChildren(children);
     ASSERT_EQ(children[0].id(), 217);
