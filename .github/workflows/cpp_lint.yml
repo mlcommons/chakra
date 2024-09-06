@@ -10,9 +10,6 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v2
 
-    - name: Install setuptools
-      run: pip install setuptools
-
     - name: Format and Lint C++ Code
       uses: DoozyX/clang-format-lint-action@v0.11
       with:
