@@ -25,6 +25,7 @@ class KinetoOperator:
         stream (Optional[int]): CUDA stream identifier associated with the operator.
         rf_id (Optional[int]): Record function identifier.
         correlation (int): Identifier used to correlate CUDA runtime and GPU operations.
+        pg_name (Optional[str]): Process Group name for the collective communication.
     """
 
     def __init__(self, kineto_op: Dict[str, Any]) -> None:
@@ -51,6 +52,7 @@ class KinetoOperator:
         self.stream: Optional[int] = kineto_op.get("args", {}).get("stream", None)
         self.rf_id: Optional[int] = kineto_op.get("args", {}).get("Record function id", None)
         self.correlation: int = kineto_op.get("args", {}).get("correlation", -1)
+        self.pg_name: Optional[str] = kineto_op.get("args", {}).get("Process Group Name", None)
 
     def __repr__(self) -> str:
         """
@@ -153,3 +155,14 @@ class KinetoOperator:
         """
         gpu_categories = {"kernel", "gpu_memcpy"}
         return self.category in gpu_categories
+
+    def is_inter_gpu_comms_op(self) -> bool:
+        """
+        Check if the operator is a inter-GPU communication operator based on its name.
+
+        Both point-to-point send/receive primitives and collective communication primitives are considered.
+
+        Returns
+            bool: True if it's a inter-GPU communication, otherwise False.
+        """
+        return "ncclDevKernel" in self.name
