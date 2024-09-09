@@ -38,6 +38,7 @@ class ETFeederNode {
   uint32_t comm_src() const;
   uint32_t comm_dst() const;
   uint32_t comm_tag() const;
+  std::string pg_name() const;
   const std::unordered_set<uint64_t>& unresolved_data_deps() const;
   std::unordered_set<uint64_t>& mutable_unresolved_data_deps();
 

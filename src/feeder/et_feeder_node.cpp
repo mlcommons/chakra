@@ -152,6 +152,6 @@ uint32_t ETFeederNode::comm_tag() const {
   return comm_tag_;
 }
 
-string ETFeederNode::pg_name() {
+string ETFeederNode::pg_name() const {
   return pg_name_;
 }
