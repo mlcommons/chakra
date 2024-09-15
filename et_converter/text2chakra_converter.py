@@ -141,12 +141,10 @@ class Text2ChakraConverter:
                                     uint64_val=comm_size))
         return node
 
-    def add_parent(
-        self,
-        child_node: Any,
-        parent_node: Any
-    ) -> None:
-        child_node.data_deps.append(parent_node.id)
+    def add_parent(self, child_node: Any, parent_node: Any) -> None:
+        if not hasattr(child_node, 'ctrl_deps'):
+            child_node.ctrl_deps = []
+        child_node.ctrl_deps.append(parent_node.id)
 
     def convert(self) -> None:
         with open(self.input_filename, "r") as f:
