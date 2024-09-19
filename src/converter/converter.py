@@ -33,7 +33,7 @@ def convert_text(args: argparse.Namespace) -> None:
 def convert_pytorch(args: argparse.Namespace) -> None:
     """Convert PyTorch input trace to Chakra execution trace."""
     converter = PyTorchConverter()
-    converter.convert(args.input, args.output, args.simulate)
+    converter.convert(args.input, args.output, args.simulate, args.dump_collective_nodes)
 
 
 def main() -> None:
@@ -70,6 +70,13 @@ def main() -> None:
             "or simulator against actual measured values using tools like chrome://tracing or https://perfetto.dev/. "
             "Read the duration of the timeline and compare the total execution time against the final simulation time "
             "of a trace. Disabled by default because it takes a long time."
+        ),
+    )
+    pytorch_parser.add_argument(
+        "--dump_collective_nodes",
+        action="store_true",
+        help=(
+            "Dumping all collective operations in the trace to csv, to further processing them."
         ),
     )
     pytorch_parser.set_defaults(func=convert_pytorch)
