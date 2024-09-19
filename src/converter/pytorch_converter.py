@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 from typing import IO, Dict, List, Optional, Set, Tuple
 
 from ...schema.protobuf.et_def_pb2 import (
@@ -30,7 +31,7 @@ class PyTorchConverter:
     of dependencies, removal of dangling nodes, and writing the final protobuf trace to the output file.
     """
 
-    def convert(self, input_filename: str, output_filename: str, simulate: bool) -> None:
+    def convert(self, input_filename: str, output_filename: str, simulate: bool, dump_collective_nodes: bool) -> None:
         """
         Convert Chakra host + device execution traces in JSON format into the Chakra protobuf format.
 
@@ -39,6 +40,7 @@ class PyTorchConverter:
             output_filename (str): Output Chakra host + device execution trace in the protobuf format.
             simulate (bool): Flag to indicate whether to simulate the execution of the converted trace. If True,
                 the method will simulate the execution after writing the protobuf trace to the output file.
+                :param dump_collective_nodes:
         """
         json_trace = self.load_json_execution_traces(input_filename)
         json_metadata, json_node_map = self.parse_json_trace(json_trace)
@@ -56,6 +58,9 @@ class PyTorchConverter:
         self.identify_cyclic_dependencies(protobuf_node_map)
 
         self.write_protobuf_execution_trace(output_filename, json_metadata, protobuf_node_map)
+
+        if dump_collective_nodes:
+            self.dump_collective_operation(protobuf_node_map, input_filename)
 
         if simulate:
             self.simulate_execution(json_node_map, protobuf_node_map, parent_to_children_map)
@@ -739,3 +744,47 @@ class PyTorchConverter:
             issued_nodes.clear()
 
         logging.debug("Simulation of Chakra node execution completed.")
+
+    def dump_collective_operation(self, protobuf_node_map, filename):
+        def rank_from_file_name(filename_str):
+            basename = os.path.basename(filename_str)
+            parts = basename.split(sep='_')
+            return parts[1]
+        try:
+            rank = rank_from_file_name(filename)
+        except Exception as e:
+            raise ValueError(f"dump_collective_operation: assuming the filename to be: et_$rank$.json, but instead: {filename}")
+
+        output = f"chakra_collectives_dump.{rank}.csv"
+        with open(output, 'w') as f:
+            f.write("rank,node_id,coll_name,comm_size,og_comm_size,pg_name,og_pg_name,root_rank,og_root_rank\n")
+            node: ChakraNode
+            for node in protobuf_node_map.values():
+                if node.type is COMM_COLL_NODE:
+                    comm_size = None
+                    pg_name = None
+                    root_rank=None
+                    for p in node.attr:
+                        if p.name == 'pg_name':
+                            pg_name = p.string_val
+                        elif p.name == 'comm_size':
+                            comm_size = p.int64_val
+                        elif p.name == 'root_rank':
+                            root_rank=p.int32_val
+
+                    og_pg_name=True
+                    if pg_name is None:
+                        og_pg_name = False
+                        pg_name = 0
+
+                    og_comm_size=True
+                    if comm_size is None:
+                        comm_size=0
+                        og_comm_size=False
+
+                    og_root_rank=True
+                    if root_rank is None:
+                        og_root_rank=False
+                        root_rank=0
+
+                    f.write(f"{rank},{node.id},{node.name},{comm_size},{og_comm_size},{pg_name},{og_pg_name},{root_rank},{og_root_rank}\n")
