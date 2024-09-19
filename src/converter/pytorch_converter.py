@@ -40,7 +40,10 @@ class PyTorchConverter:
             output_filename (str): Output Chakra host + device execution trace in the protobuf format.
             simulate (bool): Flag to indicate whether to simulate the execution of the converted trace. If True,
                 the method will simulate the execution after writing the protobuf trace to the output file.
-                :param dump_collective_nodes:
+            dump_collective_nodes (bool): Flag to indicate whether to dump all collective opreations basic
+                metadata to a csv file. If True, the method will dump the information after writing the protobuf 
+                trace to the output file. The flag assumes the filename is {some-string}_{rank}.{some-string}
+                because the dump file uses the rank to create unique file for each rank.
         """
         json_trace = self.load_json_execution_traces(input_filename)
         json_metadata, json_node_map = self.parse_json_trace(json_trace)
