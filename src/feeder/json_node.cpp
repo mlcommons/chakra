@@ -1,4 +1,4 @@
-#include "JSONNode.h"
+#include "json_node.h"
 
 // JSONNode default constructor
 JSONNode::JSONNode() {}
@@ -14,10 +14,10 @@ JSONNode::JSONNode(const JSONNode& t) {
   dep_unresolved_parent_ids_json = t.dep_unresolved_parent_ids_json;
   children_vec_json = t.children_vec_json;
   children_set_json = t.children_set_json;
-  /* 	COMM_SEND_NODE = 5,
-          COMM_RECV_NODE = 6,
-          COMM_COLL_NODE = 7 	*/
-  if (node_type == 5 || node_type == 6 || node_type == 7) {
+
+  if (node_type == NodeType::COMM_SEND_NODE || \
+    node_type == NodeType::COMM_RECV_NODE || \
+    node_type == NodeType::COMM_COLL_NODE) {
     tensor_size = t.tensor_size;
     comm_type = t.comm_type;
     comm_priority = t.comm_priority;
@@ -60,10 +60,10 @@ JSONNode::JSONNode(json data, uint64_t id) {
   } catch (...) {
     std::cerr << "data deps not specified in ET" << std::endl;
   }
-  /* 	COMM_SEND_NODE = 5,
-          COMM_RECV_NODE = 6,
-          COMM_COLL_NODE = 7 	*/
-  if (node_type == 5 || node_type == 6 || node_type == 7) {
+
+  if (node_type == NodeType::COMM_SEND_NODE || \
+    node_type == NodeType::COMM_RECV_NODE || \
+    node_type == NodeType::COMM_COLL_NODE) {
     try {
       tensor_size = data["workload_graph"][id]["tensor_size"];
     } catch (...) {

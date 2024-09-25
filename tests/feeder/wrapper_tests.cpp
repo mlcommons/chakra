@@ -18,7 +18,8 @@ class WrapperNodeTest : public ::testing::Test {
 };
 
 TEST_F(WrapperNodeTest, ConstructorNodeIDTest) {
-  // SetUp("tests/data/chakra.0.et");
+  // tests/data/small_chakra.0.json is a pruned dataset for quick tests
+  // tests/data/chakra.0.json is the full dataset, which is also available
   SetUp("tests/data/small_chakra.0.json");
   node.getNextIssuableNode();
   uint64_t firstNodeID = node.getNodeID();
@@ -30,7 +31,6 @@ TEST_F(WrapperNodeTest, ConstructorNodeIDTest) {
 }
 
 TEST_F(WrapperNodeTest, ConstructorNodeValuesTest) {
-  // SetUp("tests/data/chakra.0.et");
   SetUp("tests/data/small_chakra.0.json");
   node.getNextIssuableNode();
   uint64_t firstNodeType = node.getNodeType();
@@ -44,7 +44,6 @@ TEST_F(WrapperNodeTest, ConstructorNodeValuesTest) {
 }
 
 TEST_F(WrapperNodeTest, ConstructorWrapperNodeTest) {
-  // std::string filename = "tests/data/chakra.0.et";
   std::string filename = "tests/data/small_chakra.0.json";
   std::string ext = filename.substr(filename.find_last_of(".") + 1);
   SetUp(filename);
@@ -65,7 +64,6 @@ TEST_F(WrapperNodeTest, ConstructorWrapperNodeTest) {
 }
 
 TEST_F(WrapperNodeTest, RemoveTest) {
-  // SetUp("tests/data/chakra.0.et");
   SetUp("tests/data/small_chakra.0.json");
   node.lookupNode(216);
   ASSERT_EQ(node.getNodeID(), 216);
@@ -81,7 +79,6 @@ TEST_F(WrapperNodeTest, RemoveTest) {
 }
 
 TEST_F(WrapperNodeTest, RemoveAndGetNextTest) {
-  // SetUp("tests/data/chakra.0.et");
   SetUp("tests/data/small_chakra.0.json");
   node.lookupNode(216);
   ASSERT_EQ(node.getNodeID(), 216);
@@ -91,7 +88,6 @@ TEST_F(WrapperNodeTest, RemoveAndGetNextTest) {
 }
 
 TEST_F(WrapperNodeTest, FreeChildrenTest) {
-  // SetUp("tests/data/chakra.0.et");
   SetUp("tests/data/small_chakra.0.json");
   node.lookupNode(216);
   ASSERT_EQ(node.getNodeID(), 216);
@@ -103,7 +99,6 @@ TEST_F(WrapperNodeTest, FreeChildrenTest) {
 }
 
 TEST_F(WrapperNodeTest, HasNodesToIssueTest) {
-  // SetUp("tests/data/chakra.0.et");
   SetUp("tests/data/small_chakra.0.json");
   node.getNextIssuableNode();
   ASSERT_EQ(node.getNodeID(), 216);
@@ -113,7 +108,6 @@ TEST_F(WrapperNodeTest, HasNodesToIssueTest) {
 }
 
 TEST_F(WrapperNodeTest, PushBackIssuableNodeTest) {
-  // SetUp("tests/data/chakra.0.et");
   SetUp("tests/data/small_chakra.0.json");
   node.pushBackIssuableNode(217);
   node.getNextIssuableNode();
@@ -123,7 +117,6 @@ TEST_F(WrapperNodeTest, PushBackIssuableNodeTest) {
 }
 
 TEST_F(WrapperNodeTest, AddNodeTest) {
-  // std::string filename = "tests/data/chakra.0.et";
   std::string filename = "tests/data/small_chakra.0.json";
   std::string ext = filename.substr(filename.find_last_of(".") + 1);
   SetUp(filename);
@@ -151,7 +144,6 @@ TEST_F(WrapperNodeTest, AddNodeTest) {
 }
 
 TEST_F(WrapperNodeTest, NodeGetChildrenTest) {
-  // std::string filename = "tests/data/chakra.0.et";
   std::string filename = "tests/data/small_chakra.0.json";
   std::string ext = filename.substr(filename.find_last_of(".") + 1);
   SetUp(filename);

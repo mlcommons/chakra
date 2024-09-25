@@ -1,6 +1,6 @@
 #pragma once
 
-#include "JSONNode.h"
+#include "json_node.h"
 #include "et_feeder.h"
 #include "et_feeder_node.h"
 
@@ -8,7 +8,7 @@ using json = nlohmann::json;
 
 enum format { Protobuf, JSON };
 
-/// WrapperNode class wraps protobuf and JSON
+// WrapperNode class wraps protobuf and JSON
 class WrapperNode {
  private:
   enum format format_type_;

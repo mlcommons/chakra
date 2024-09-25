@@ -1,4 +1,4 @@
-#include "WrapperNode.h"
+#include "wrapper_node.h"
 
 // WrapperNode default constructor
 WrapperNode::WrapperNode() {}
