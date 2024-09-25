@@ -15,8 +15,8 @@ JSONNode::JSONNode(const JSONNode& t) {
   children_vec_json = t.children_vec_json;
   children_set_json = t.children_set_json;
 
-  if (node_type == NodeType::COMM_SEND_NODE || \
-      node_type == NodeType::COMM_RECV_NODE || \
+  if (node_type == NodeType::COMM_SEND_NODE ||
+      node_type == NodeType::COMM_RECV_NODE ||
       node_type == NodeType::COMM_COLL_NODE) {
     tensor_size = t.tensor_size;
     comm_type = t.comm_type;
@@ -61,8 +61,8 @@ JSONNode::JSONNode(json data, uint64_t id) {
     std::cerr << "data deps not specified in ET" << std::endl;
   }
 
-  if (node_type == NodeType::COMM_SEND_NODE || \
-      node_type == NodeType::COMM_RECV_NODE || \
+  if (node_type == NodeType::COMM_SEND_NODE ||
+      node_type == NodeType::COMM_RECV_NODE ||
       node_type == NodeType::COMM_COLL_NODE) {
     try {
       tensor_size = data["workload_graph"][id]["tensor_size"];
