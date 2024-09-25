@@ -10,7 +10,7 @@
 
 using json = nlohmann::json;
 
-enum NodeType: int {
+enum NodeType : int {
   INVALID_NODE = 0,
   METADATA_NODE = 1,
   MEM_LOAD_NODE = 2,

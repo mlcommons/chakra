@@ -16,8 +16,8 @@ JSONNode::JSONNode(const JSONNode& t) {
   children_set_json = t.children_set_json;
 
   if (node_type == NodeType::COMM_SEND_NODE || \
-    node_type == NodeType::COMM_RECV_NODE || \
-    node_type == NodeType::COMM_COLL_NODE) {
+      node_type == NodeType::COMM_RECV_NODE || \
+      node_type == NodeType::COMM_COLL_NODE) {
     tensor_size = t.tensor_size;
     comm_type = t.comm_type;
     comm_priority = t.comm_priority;
@@ -62,8 +62,8 @@ JSONNode::JSONNode(json data, uint64_t id) {
   }
 
   if (node_type == NodeType::COMM_SEND_NODE || \
-    node_type == NodeType::COMM_RECV_NODE || \
-    node_type == NodeType::COMM_COLL_NODE) {
+      node_type == NodeType::COMM_RECV_NODE || \
+      node_type == NodeType::COMM_COLL_NODE) {
     try {
       tensor_size = data["workload_graph"][id]["tensor_size"];
     } catch (...) {
