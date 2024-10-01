@@ -764,6 +764,7 @@ class PyTorchConverter:
             node: ChakraNode
             for node in protobuf_node_map.values():
                 if node.type is COMM_COLL_NODE:
+                    node_name = node.name.replace(',','_') # protect the csv
                     comm_size = None
                     pg_name = None
                     root_rank=None
@@ -790,4 +791,4 @@ class PyTorchConverter:
                         og_root_rank=False
                         root_rank=0
 
-                    f.write(f"{rank},{node.id},{node.name},{comm_size},{og_comm_size},{pg_name},{og_pg_name},{root_rank},{og_root_rank}\n")
+                    f.write(f"{rank},{node.id},{node_name},{comm_size},{og_comm_size},{pg_name},{og_pg_name},{root_rank},{og_root_rank}\n")
