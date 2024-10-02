@@ -365,6 +365,7 @@ class PyTorchConverter:
             "gather": ALL_GATHER,
             "reducescatter": REDUCE_SCATTER,
             "broadcast": BROADCAST,
+            "sendrecv": ALL_GATHER,
             # Additional cases can be added here
         }
         normalized_name = name.replace("_", "").replace("-", "").lower()
