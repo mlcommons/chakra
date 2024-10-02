@@ -219,7 +219,7 @@ class ChakraDeviceTraceLoader:
             sorted_ops = sorted(ops, key=lambda op: (op.timestamp, op.inclusive_dur))
 
             fn = partial(self.get_exclusive_dur_for_op, sorted_ops)
-            exclusive_durs = process_map(fn, enumerate(sorted_ops), chunksize=max(len(sorted_ops)//1000, 1), total=len(sorted_ops))
+            exclusive_durs = process_map(fn, enumerate(sorted_ops), max_workers=6, chunksize=max(len(sorted_ops)//1000, 1), total=len(sorted_ops))
             for kineto_op, excl_dur in zip(sorted_ops, exclusive_durs):
                 kineto_op.exclusive_dur = excl_dur
             # for i, op in tqdm(enumerate(sorted_ops), total=len(sorted_ops)):
