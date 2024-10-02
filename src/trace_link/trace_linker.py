@@ -10,7 +10,9 @@ from et_replay.execution_trace import (
     EXECUTION_TRACE_THREAD_ANNOTATION,
 )
 from et_replay.execution_trace import Node as PyTorchOperator
+from tqdm import tqdm
 
+from param.et_replay.utils import read_dictionary_from_json_file
 from .chakra_device_trace_loader import ChakraDeviceTraceLoader
 from .chakra_host_trace_loader import ChakraHostTraceLoader
 from .kineto_operator import KinetoOperator
@@ -649,12 +651,13 @@ class TraceLinker:
             Dict: The constructed ET+ data.
         """
         logging.debug("Constructing ET+ data.")
-        with open(chakra_host_trace, "r") as file:
-            pytorch_et_data = json.load(file)
+        pytorch_et_data = read_dictionary_from_json_file(chakra_host_trace)
+        # with open(chakra_host_trace, "r") as file:
+        #     pytorch_et_data = read_dictionary_from_json_file(et_file_path)
 
         sorted_nodes = sorted(pytorch_et_data["nodes"], key=lambda x: x["id"])
         gpu_ops = []
-        for op in sorted_nodes:
+        for op in tqdm(sorted_nodes):
             gpu_ops += self.process_op_and_dependents(
                 op,
                 host_op_id_to_kineto_ops_map,
@@ -667,7 +670,7 @@ class TraceLinker:
 
         # Update parent-child relationships with new IDs
         sorted_nodes = sorted(pytorch_et_data["nodes"], key=lambda x: x["id"])
-        for op in sorted_nodes:
+        for op in tqdm(sorted_nodes):
             if "ctrl_deps" in op:
                 op["ctrl_deps"] = self.id_assigner.assign_or_retrieve_id(op["ctrl_deps"])
 
