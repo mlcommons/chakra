@@ -362,7 +362,7 @@ class PyTorchConverter:
         comm_type_mapping = {
             "allreduce": ALL_REDUCE,
             "alltoall": ALL_TO_ALL,
-            "gather": ALL_GATHER,
+            "allgather": ALL_GATHER,
             "reducescatter": REDUCE_SCATTER,
             "broadcast": BROADCAST,
             # Additional cases can be added here
