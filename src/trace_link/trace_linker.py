@@ -12,7 +12,7 @@ from et_replay.execution_trace import (
 from et_replay.execution_trace import Node as PyTorchOperator
 from tqdm import tqdm
 
-from param.et_replay.utils import read_dictionary_from_json_file
+from et_replay.utils import read_dictionary_from_json_file
 from .chakra_device_trace_loader import ChakraDeviceTraceLoader
 from .chakra_host_trace_loader import ChakraHostTraceLoader
 from .kineto_operator import KinetoOperator
