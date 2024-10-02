@@ -330,6 +330,7 @@ class PyTorchConverter:
         Returns:
             int: The corresponding Chakra node type.
         """
+        logging.debug(f"{json_node.is_gpu_op()=}, {json_node.name=}, {json_node_map[json_node.parent]=}, {json_node_map[json_node.parent].name=}")
         if json_node.is_gpu_op():
             if "ncclDevKernel_SendRecv" in json_node.name:
                 parent_node = json_node_map[json_node.parent]
