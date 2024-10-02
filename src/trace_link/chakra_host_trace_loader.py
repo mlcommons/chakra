@@ -22,13 +22,13 @@ class ChakraHostTraceLoader:
         Returns:
             List[PyTorchOperator]: List of PyTorch operators.
         """
-        logging.debug(f"Starting to load Chakra host execution trace from file: {chakra_host_trace_file}.")
+        logging.info(f"Starting to load Chakra host execution trace from file: {chakra_host_trace_file}.")
         chakra_host_trace = load_execution_trace_file(chakra_host_trace_file)
 
         root_node = chakra_host_trace.get_nodes()[1]  # Root node is usually 1-based
         chakra_host_ops = self.extract_chakra_host_ops(root_node)
         logging.debug(f"Extracted {len(chakra_host_ops)} operators from Chakra host execution trace.")
-        logging.debug("Chakra host execution trace has been loaded and processed successfully.")
+        logging.info("Chakra host execution trace has been loaded and processed successfully.")
 
         return chakra_host_ops
 

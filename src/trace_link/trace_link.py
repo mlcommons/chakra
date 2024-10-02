@@ -40,7 +40,7 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    logging.basicConfig(level=args.log_level.upper())
+    logging.basicConfig(level="INFO", force=True)
 
     linker = TraceLinker()
     linker.link(args.chakra_host_trace, args.chakra_device_trace, args.output_file)

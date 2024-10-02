@@ -11,7 +11,7 @@ license = {file = "LICENSE.md"}
 authors = [
     {name = "MLCommons", email = "chakra@mlcommons.org"},
 ]
-dependencies = ["protobuf==4.*", "graphviz", "networkx", "pydot"]
+dependencies = ["protobuf==5.*", "graphviz", "networkx", "pydot"]
 
 [project.urls]
 Homepage = "https://github.com/mlcommons/chakra"
@@ -46,6 +46,7 @@ exclude = [
     "src/converter/text_converter.py",
     "src/third_party/utils/protolib.py",
 ]
+
 
 [tool.ruff.lint]
 select = ["I", "B", "E", "D", "F", "SIM", "W", "C90", "EXE"]

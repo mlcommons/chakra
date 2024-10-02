@@ -1,9 +1,13 @@
 import logging
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from functools import partial
+from threading import Thread
 from typing import Dict, List, Tuple
 
 from et_replay.utils import read_dictionary_from_json_file
+from tqdm import tqdm
+from tqdm.contrib.concurrent import thread_map, process_map
 
 from .kineto_operator import KinetoOperator
 
@@ -36,7 +40,7 @@ class ChakraDeviceTraceLoader:
         Returns:
             Tuple containing various data structures needed for linking traces.
         """
-        logging.debug(f"Starting to load Chakra device trace from file: {chakra_device_trace}.")
+        logging.info(f"Starting to load Chakra device trace from file: {chakra_device_trace}.")
         chakra_trace_data = read_dictionary_from_json_file(chakra_device_trace)
         sorted_kineto_ops = sorted(
             [KinetoOperator(op) for op in chakra_trace_data["traceEvents"]],
@@ -84,7 +88,7 @@ class ChakraDeviceTraceLoader:
         Returns:
             Dict: Dictionary containing categorized operators and timing boundaries.
         """
-        logging.debug("Categorizing Kineto operators and calculating timing boundaries.")
+        logging.info("Categorizing Kineto operators and calculating timing boundaries.")
         process_start_time = sys.maxsize
         process_end_time = 0
         thread_info = {}
@@ -96,7 +100,7 @@ class ChakraDeviceTraceLoader:
         kineto_id_arrow_op_map = {}
         kineto_id_cuda_launch_op_map = {}
 
-        for op in kineto_ops:
+        for op in tqdm(kineto_ops):
             if op.is_cpu_op():
                 kineto_cpu_ops.append(op)
                 kineto_tid_cpu_ops_map.setdefault(op.tid, []).append(op)
@@ -161,6 +165,42 @@ class ChakraDeviceTraceLoader:
             "sorted_kineto_cpu_op_ts": [],
         }
 
+    def get_exclusive_dur_for_op(self, sorted_ops: list[KinetoOperator], enumerate_op: tuple[int, KinetoOperator]) -> int:
+
+        i = enumerate_op[0]
+        op = enumerate_op[1]
+        # logging.info(f"Op {i}: {op.name}")
+        exclusive_dur = op.inclusive_dur
+        overlapping_regions = []
+
+        # Identify overlapping regions with child operators
+        for child_op in sorted_ops[i + 1:]:
+            if child_op.timestamp >= op.timestamp and (child_op.timestamp + child_op.inclusive_dur) <= (
+                    op.timestamp + op.inclusive_dur
+            ):
+                overlap_start = child_op.timestamp
+                overlap_end = child_op.timestamp + child_op.inclusive_dur
+                overlapping_regions.append((overlap_start, overlap_end))
+            if (op.timestamp + op.inclusive_dur) < child_op.timestamp:
+                break
+
+        # Merge overlapping regions and calculate exclusive duration
+        merged_regions = self.merge_overlapping_intervals(overlapping_regions)
+        for start, end in merged_regions:
+            exclusive_dur -= end - start
+
+        # Check if exclusive_dur is not negative or zero
+        if exclusive_dur < 0:
+            error_msg = (
+                f"Exclusive duration calculation error for node '{op.name}' "
+                f"(ts: {op.timestamp}, inclusive_dur: {op.inclusive_dur}, rf_id: {op.rf_id}): "
+                f"Duration cannot be less than zero."
+            )
+            logging.error(error_msg)
+            raise ValueError(error_msg)
+
+        return exclusive_dur
+
     def calculate_exclusive_dur(self, kineto_tid_cpu_ops_map: Dict[int, List[KinetoOperator]]) -> None:
         """
         Calculate the exclusive duration of each operator in the Kineto traces in parallel.
@@ -172,54 +212,60 @@ class ChakraDeviceTraceLoader:
             kineto_tid_cpu_ops_map (Dict[int, List[KinetoOperator]]): Map of thread IDs to their corresponding Kineto
                 operators.
         """
-        logging.debug("Calculating exclusive durations for Kineto operators in parallel.")
+        logging.info("Calculating exclusive durations for Kineto operators in parallel.")
 
-        def process_ops_for_thread(ops: List[KinetoOperator]) -> None:
-            logging.debug(f"Processing {len(ops)} operators in thread.")
+        for ops in  kineto_tid_cpu_ops_map.values():
+            logging.info(f"Processing {len(ops)} operators in thread.")
             sorted_ops = sorted(ops, key=lambda op: (op.timestamp, op.inclusive_dur))
-            for i, op in enumerate(sorted_ops):
-                exclusive_dur = op.inclusive_dur
-                overlapping_regions = []
 
-                # Identify overlapping regions with child operators
-                for child_op in sorted_ops[i + 1 :]:
-                    if child_op.timestamp >= op.timestamp and (child_op.timestamp + child_op.inclusive_dur) <= (
-                        op.timestamp + op.inclusive_dur
-                    ):
-                        overlap_start = child_op.timestamp
-                        overlap_end = child_op.timestamp + child_op.inclusive_dur
-                        overlapping_regions.append((overlap_start, overlap_end))
-                    if (op.timestamp + op.inclusive_dur) < child_op.timestamp:
-                        break
+            fn = partial(self.get_exclusive_dur_for_op, sorted_ops)
+            exclusive_durs = process_map(fn, enumerate(sorted_ops), chunksize=max(len(sorted_ops)//1000, 1), total=len(sorted_ops))
+            for kineto_op, excl_dur in zip(sorted_ops, exclusive_durs):
+                kineto_op.exclusive_dur = excl_dur
+            # for i, op in tqdm(enumerate(sorted_ops), total=len(sorted_ops)):
+            #     exclusive_dur = op.inclusive_dur
+            #     overlapping_regions = []
+            #
+            #     # Identify overlapping regions with child operators
+            #     for child_op in sorted_ops[i + 1 :]:
+            #         if child_op.timestamp >= op.timestamp and (child_op.timestamp + child_op.inclusive_dur) <= (
+            #             op.timestamp + op.inclusive_dur
+            #         ):
+            #             overlap_start = child_op.timestamp
+            #             overlap_end = child_op.timestamp + child_op.inclusive_dur
+            #             overlapping_regions.append((overlap_start, overlap_end))
+            #         if (op.timestamp + op.inclusive_dur) < child_op.timestamp:
+            #             break
+            #
+            #     # Merge overlapping regions and calculate exclusive duration
+            #     merged_regions = self.merge_overlapping_intervals(overlapping_regions)
+            #     for start, end in merged_regions:
+            #         exclusive_dur -= end - start
+            #
+            #     # Check if exclusive_dur is not negative or zero
+            #     if exclusive_dur < 0:
+            #         error_msg = (
+            #             f"Exclusive duration calculation error for node '{op.name}' "
+            #             f"(ts: {op.timestamp}, inclusive_dur: {op.inclusive_dur}, rf_id: {op.rf_id}): "
+            #             f"Duration cannot be less than zero."
+            #         )
+            #         logging.error(error_msg)
+            #         raise ValueError(error_msg)
+            #
+            #     op.exclusive_dur = exclusive_dur
+            #     logging.debug(
+            #         f"Node '{op.name}' (ts: {op.timestamp}, inclusive_dur: {op.inclusive_dur}, "
+            #         f"rf_id: {op.rf_id}) exclusive duration: {op.exclusive_dur} microseconds."
+            #     )
+        # for thread_ops in kineto_tid_cpu_ops_map.values():
+        #     process_ops_for_thread(thread_ops)
+        # with ThreadPoolExecutor() as executor:
+        #     futures = [executor.submit(process_ops_for_thread, ops) for ops in kineto_tid_cpu_ops_map.values()]
+        #
+        #     for future in as_completed(futures):
+        #         future.result()  # Wait for all threads to complete and handle any exceptions
 
-                # Merge overlapping regions and calculate exclusive duration
-                merged_regions = self.merge_overlapping_intervals(overlapping_regions)
-                for start, end in merged_regions:
-                    exclusive_dur -= end - start
-
-                # Check if exclusive_dur is not negative or zero
-                if exclusive_dur < 0:
-                    error_msg = (
-                        f"Exclusive duration calculation error for node '{op.name}' "
-                        f"(ts: {op.timestamp}, inclusive_dur: {op.inclusive_dur}, rf_id: {op.rf_id}): "
-                        f"Duration cannot be less than zero."
-                    )
-                    logging.error(error_msg)
-                    raise ValueError(error_msg)
-
-                op.exclusive_dur = exclusive_dur
-                logging.debug(
-                    f"Node '{op.name}' (ts: {op.timestamp}, inclusive_dur: {op.inclusive_dur}, "
-                    f"rf_id: {op.rf_id}) exclusive duration: {op.exclusive_dur} microseconds."
-                )
-
-        with ThreadPoolExecutor() as executor:
-            futures = [executor.submit(process_ops_for_thread, ops) for ops in kineto_tid_cpu_ops_map.values()]
-
-            for future in as_completed(futures):
-                future.result()  # Wait for all threads to complete and handle any exceptions
-
-        logging.debug("Exclusive durations for Kineto operators calculated successfully.")
+        logging.info("Exclusive durations for Kineto operators calculated successfully.")
 
     @staticmethod
     def merge_overlapping_intervals(intervals: List[Tuple[int, int]]) -> List[Tuple[int, int]]:
