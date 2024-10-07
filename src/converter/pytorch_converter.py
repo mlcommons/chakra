@@ -244,7 +244,11 @@ class PyTorchConverter:
                             [
                                 ChakraAttr(name="comm_type", int64_val=collective_comm_type),
                                 ChakraAttr(name="comm_size", int64_val=pytorch_gpu_node.comm_size),
-                                *( [ChakraAttr(name="pg_name", string_val=pytorch_gpu_node.pg_name)] if pytorch_gpu_node.pg_name != "" else [] ),
+                                *(
+                                    [ChakraAttr(name="pg_name", string_val=pytorch_gpu_node.pg_name)]
+                                    if pytorch_gpu_node.pg_name != ""
+                                    else []
+                                ),
                             ]
                         )
 
@@ -252,7 +256,11 @@ class PyTorchConverter:
                         chakra_gpu_node.attr.extend(
                             [
                                 ChakraAttr(name="comm_size", int64_val=pytorch_gpu_node.comm_size),
-                                *( [ChakraAttr(name="pg_name", string_val=pytorch_gpu_node.pg_name)] if pytorch_gpu_node.pg_name != "" else [] ),
+                                *(
+                                    [ChakraAttr(name="pg_name", string_val=pytorch_gpu_node.pg_name)]
+                                    if pytorch_gpu_node.pg_name != ""
+                                    else []
+                                ),
                             ]
                         )
 
@@ -449,6 +457,15 @@ class PyTorchConverter:
                 last_visited_non_gpu = current_node
                 last_visited_any = current_node
 
+            if json_node.sync_dep:
+                for sync_dep in json_node.sync_dep:
+                    if sync_dep not in current_node.data_deps:
+                        current_node.data_deps.append(sync_dep)
+                        logging.info(
+                            f"Node ID {current_node.id} now has an synchonization dependency on Node ID {sync_dep}"
+                        )
+
+            # Add children to the stack
             children_chakra_ids = [child.id for child in json_node.children]
             for child_chakra_id in sorted(children_chakra_ids, reverse=True):
                 child_chakra_node = protobuf_node_map.get(child_chakra_id)
