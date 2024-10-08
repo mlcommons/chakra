@@ -350,6 +350,11 @@ class PyTorchConverter:
                     return COMM_SEND_NODE
                 if "recv" in keyword:
                     return COMM_RECV_NODE
+                # In NCCL, all-to-all communication is implemented using point-to-point
+                # communications. More details can be found here:
+                # https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/usage/p2p.html
+                if "nccl:all_to_all" in keyword:
+                    return COMM_COLL_NODE
             if "ncclKernel" in json_node.name or "ncclDevKernel" in json_node.name:
                 return COMM_COLL_NODE
         return COMP_NODE
@@ -379,6 +384,10 @@ class PyTorchConverter:
         for key in comm_type_mapping:
             if key in normalized_name:
                 return comm_type_mapping[key]
+        # If both COMM_COLL_NAME and ncclDevKernel_SendRecv are present, this is nccl:all_to_all.
+        if "ncclDevKernel_SendRecv" in name:
+            return comm_type_mapping["alltoall"]
+
         raise ValueError(
             f"The name '{name}' does not correspond to a recognized collective communication type. "
             "The converter determines collective communication types based on the node name of a GPU operator. "
