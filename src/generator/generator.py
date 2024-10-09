@@ -191,7 +191,7 @@ def generate_comm_coll_node(num_npus: int, comm_size: int, comm_type: int, node_
 
             node = get_node(node_name, COMM_COLL_NODE)
             node.attr.append(ChakraAttr(name="is_cpu_op", bool_val=False))
-            node.attr.extend([get_comm_type_attr(comm_type), ChakraAttr(name="comm_size", uint64_val=comm_size)])
+            node.attr.extend([get_comm_type_attr(comm_type), ChakraAttr(name="comm_size", int64_val=comm_size)])
             encode_message(et, node)
 
 

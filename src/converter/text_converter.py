@@ -104,7 +104,7 @@ class TextConverter:
     def get_comm_coll_node(self, layer_name: str, comm_type: str, comm_size: int) -> Any:
         node = self.get_node(f"COMM_COLL_NODE_{layer_name}_{comm_type}", COMM_COLL_NODE)
         node.attr.append(ChakraAttr(name="comm_type", int64_val=self.get_comm_type(comm_type)))
-        node.attr.append(ChakraAttr(name="comm_size", uint64_val=comm_size))
+        node.attr.append(ChakraAttr(name="comm_size", int64_val=comm_size))
         return node
 
     def add_parent(self, child_node: Any, parent_node: Any) -> None:
