@@ -10,6 +10,9 @@ ETFeederNode::ETFeederNode(std::shared_ptr<ChakraProtoMsg::Node> node) {
   this->runtime_ = node->duration_micros();
   this->is_cpu_op_ = 1;
 
+  for (uint64_t unresolved_data_dep : node->data_deps())
+    this->unresolved_data_deps_.insert(unresolved_data_dep);
+
   for (const auto& attr : node->attr()) {
     const string& attr_name = attr.name();
 
@@ -85,62 +88,70 @@ bool ETFeederNode::has_other_attr(const string& attr_name) const {
   return item != this->other_attrs_.end();
 }
 
-uint64_t ETFeederNode::id() {
+const std::unordered_set<uint64_t>& ETFeederNode::unresolved_data_deps() const {
+  return this->unresolved_data_deps_;
+}
+
+std::unordered_set<uint64_t>& ETFeederNode::mutable_unresolved_data_deps() {
+  return this->unresolved_data_deps_;
+}
+
+uint64_t ETFeederNode::id() const {
   return id_;
 }
 
-string ETFeederNode::name() {
+string ETFeederNode::name() const {
   return name_;
 }
 
-bool ETFeederNode::is_cpu_op() {
+bool ETFeederNode::is_cpu_op() const {
   return is_cpu_op_;
 }
 
-ChakraProtoMsg::NodeType ETFeederNode::type() {
+ChakraProtoMsg::NodeType ETFeederNode::type() const {
   return node_->type();
 }
 
-uint64_t ETFeederNode::runtime() {
+uint64_t ETFeederNode::runtime() const {
   return runtime_;
 }
 
-uint64_t ETFeederNode::num_ops() {
+uint64_t ETFeederNode::num_ops() const {
   return num_ops_;
 }
 
-uint32_t ETFeederNode::tensor_loc() {
+uint32_t ETFeederNode::tensor_loc() const {
   return tensor_loc_;
 }
 
-uint64_t ETFeederNode::tensor_size() {
+uint64_t ETFeederNode::tensor_size() const {
   return tensor_size_;
 }
 
-ChakraProtoMsg::CollectiveCommType ETFeederNode::comm_type() {
+ChakraProtoMsg::CollectiveCommType ETFeederNode::comm_type() const {
   return comm_type_;
 }
 
-uint32_t ETFeederNode::comm_priority() {
+uint32_t ETFeederNode::comm_priority() const {
   return comm_priority_;
 }
 
-uint64_t ETFeederNode::comm_size() {
+uint64_t ETFeederNode::comm_size() const {
   return comm_size_;
 }
 
-uint32_t ETFeederNode::comm_src() {
+uint32_t ETFeederNode::comm_src() const {
   return comm_src_;
 }
 
-uint32_t ETFeederNode::comm_dst() {
+uint32_t ETFeederNode::comm_dst() const {
   return comm_dst_;
 }
 
-uint32_t ETFeederNode::comm_tag() {
+uint32_t ETFeederNode::comm_tag() const {
   return comm_tag_;
 }
 
-string ETFeederNode::pg_name() {
+string ETFeederNode::pg_name() const {
   return pg_name_;
 }
