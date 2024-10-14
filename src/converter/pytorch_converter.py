@@ -470,7 +470,7 @@ class PyTorchConverter:
                 for sync_dep in json_node.sync_dep:
                     if sync_dep not in current_node.data_deps:
                         current_node.data_deps.append(sync_dep)
-                        logging.info(
+                        logging.debug(
                             f"Node ID {current_node.id} now has an synchonization dependency on Node ID {sync_dep}"
                         )
 
