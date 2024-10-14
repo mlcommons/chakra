@@ -469,11 +469,15 @@ class PyTorchConverter:
             if json_node.sync_dep:
                 for sync_dep in json_node.sync_dep:
                     if sync_dep not in current_node.data_deps:
-                        current_node.data_deps.append(sync_dep)
-                        logging.debug(
-                            f"Node ID {current_node.id} now has an synchonization dependency on Node ID {sync_dep}"
-                        )
-
+                        # Found a bug encoding false dependency HTA.
+                        # Compare start_time to eliminate false sync dependency.
+                        prior_node = protobuf_node_map.get(sync_dep)
+                        if prior_node is not None and prior_node.start_time_micros < current_node.start_time_micros:
+                            current_node.data_deps.append(sync_dep)
+                            logging.debug(
+                                f"Node ID {current_node.id} now has an synchonization dependency on Node ID "
+                                f"{sync_dep}"
+                            )
             # Add children to the stack
             children_chakra_ids = [child.id for child in json_node.children]
             for child_chakra_id in sorted(children_chakra_ids, reverse=True):
