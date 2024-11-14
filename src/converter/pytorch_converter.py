@@ -346,6 +346,8 @@ class PyTorchConverter:
                     if parent_node.name == "record_param_comms"
                     else parent_node.name
                 )
+                if parent_node.name == "record_param_comms" and parent_node.pg_name != "":
+                    json_node.pg_name = parent_node.pg_name
                 if "send" in keyword:
                     return COMM_SEND_NODE
                 if "recv" in keyword:
