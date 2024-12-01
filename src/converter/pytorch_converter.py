@@ -11,6 +11,7 @@ from ...schema.protobuf.et_def_pb2 import (
     COMM_RECV_NODE,
     COMM_SEND_NODE,
     COMP_NODE,
+    METADATA_NODE,
     REDUCE_SCATTER,
     GlobalMetadata,
 )
@@ -338,6 +339,8 @@ class PyTorchConverter:
         Returns:
             int: The corresponding Chakra node type.
         """
+        if json_node.is_metadata_op():
+            return METADATA_NODE
         if json_node.is_gpu_op():
             if "ncclDevKernel_SendRecv" in json_node.name:
                 parent_node = json_node_map[json_node.parent]
