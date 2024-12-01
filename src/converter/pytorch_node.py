@@ -137,6 +137,15 @@ class PyTorchNode:
         else:
             return PyTorchNodeType.LABEL
 
+    def is_metadata_op(self) -> bool:
+        """
+        Check if the node is a METADATA operator.
+
+        Returns
+            bool: True if the node is a METADATA operator, False otherwise.
+        """
+        return self.get_op_type() == PyTorchNodeType.METADATA
+
     def is_cpu_op(self) -> bool:
         """
         Check if the node is a CPU operator.
