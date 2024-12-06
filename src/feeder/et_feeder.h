@@ -33,13 +33,12 @@ class ETFeeder {
   void pushBackIssuableNode(uint64_t node_id);
   std::shared_ptr<ETFeederNode> lookupNode(uint64_t node_id);
   void freeChildrenNodes(uint64_t node_id);
-
- private:
   void readGlobalMetadata();
   std::shared_ptr<ETFeederNode> readNode();
   void readNextWindow();
   void resolveDep();
 
+ private:
   ProtoInputStream trace_;
   const uint32_t window_size_;
   bool et_complete_;
