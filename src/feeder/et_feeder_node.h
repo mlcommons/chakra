@@ -39,6 +39,12 @@ class ETFeederNode {
   uint32_t comm_dst();
   uint32_t comm_tag();
   std::string pg_name();
+  std::string get_inputs_values() const;
+  std::string get_inputs_shapes() const;
+  std::string get_inputs_types() const;
+  std::string get_outputs_values() const;
+  std::string get_outputs_shapes() const;
+  std::string get_outputs_types() const;
 
  private:
   void assign_attr_val(
@@ -67,6 +73,12 @@ class ETFeederNode {
   uint32_t comm_dst_;
   uint32_t comm_tag_;
   std::string pg_name_;
+  std::string inputs_values_;
+  std::string inputs_shapes_;
+  std::string inputs_types_;
+  std::string outputs_values_;
+  std::string outputs_shapes_;
+  std::string outputs_types_;
 };
 
 } // namespace Chakra

@@ -10,6 +10,7 @@ from chakra.schema.protobuf.et_def_pb2 import (
     BROADCAST,
     COMM_COLL_NODE,
     COMP_NODE,
+    METADATA_NODE,
     REDUCE_SCATTER,
 )
 from chakra.schema.protobuf.et_def_pb2 import Node as ChakraNode
@@ -167,10 +168,11 @@ def test_write_chakra_et(mock_file: MagicMock, sample_pytorch_data: Dict) -> Non
 @pytest.mark.parametrize(
     "pytorch_node_data, expected_type",
     [
-        ({"name": "ncclKernel", "is_gpu_op": True}, COMM_COLL_NODE),
-        ({"name": "ncclDevKernel", "is_gpu_op": True}, COMM_COLL_NODE),
-        ({"name": "c10d::all_reduce", "is_gpu_op": True}, COMP_NODE),
-        ({"name": "other_op", "is_gpu_op": False}, COMP_NODE),
+        ({"name": "process_group:init", "is_gpu_op": False, "is_metadata_op": True}, METADATA_NODE),
+        ({"name": "ncclKernel", "is_gpu_op": True, "is_metadata_op": False}, COMM_COLL_NODE),
+        ({"name": "ncclDevKernel", "is_gpu_op": True, "is_metadata_op": False}, COMM_COLL_NODE),
+        ({"name": "c10d::all_reduce", "is_gpu_op": True, "is_metadata_op": False}, COMP_NODE),
+        ({"name": "other_op", "is_gpu_op": False, "is_metadata_op": False}, COMP_NODE),
     ],
 )
 def test_get_protobuf_node_type_from_json_node(pytorch_node_data: Dict, expected_type: int) -> None:
@@ -178,6 +180,7 @@ def test_get_protobuf_node_type_from_json_node(pytorch_node_data: Dict, expected
     pytorch_node = MagicMock(spec=PyTorchNode)
     pytorch_node.name = pytorch_node_data["name"]
     pytorch_node.is_gpu_op = MagicMock(return_value=pytorch_node_data["is_gpu_op"])
+    pytorch_node.is_metadata_op = MagicMock(return_value=pytorch_node_data["is_metadata_op"])
 
     # Create a mock json_node_map dictionary with actual PyTorchNode instances
     mock_pytorch_node_data = {
