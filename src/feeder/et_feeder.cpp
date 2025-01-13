@@ -68,17 +68,10 @@ shared_ptr<ETFeederNode> ETFeeder::lookupNode(uint64_t node_id) {
 void ETFeeder::freeChildrenNodes(uint64_t node_id) {
   shared_ptr<ETFeederNode> node = dep_graph_[node_id];
   for (auto child : node->getChildren()) {
-    auto child_chakra = child->getChakraNode();
-    for (auto it = child_chakra->mutable_data_deps()->begin();
-         it != child_chakra->mutable_data_deps()->end();
-         ++it) {
-      if (*it == node_id) {
-        child_chakra->mutable_data_deps()->erase(it);
-        break;
-      }
-    }
-    if (child_chakra->data_deps().size() == 0) {
-      dep_free_node_id_set_.emplace(child_chakra->id());
+    auto& unresolved_data_deps = child->mutable_unresolved_data_deps();
+    unresolved_data_deps.erase(node_id);
+    if (unresolved_data_deps.size() == 0) {
+      dep_free_node_id_set_.emplace(child->id());
       dep_free_node_queue_.emplace(child);
     }
   }

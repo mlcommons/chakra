@@ -24,34 +24,32 @@ class ETFeederNode {
       const std::string& attr_name) const;
   bool has_other_attr(const std::string& attr_name) const;
 
-  uint64_t id();
-  std::string name();
-  bool is_cpu_op();
-  ChakraProtoMsg::NodeType type();
-  uint64_t runtime();
-  uint64_t num_ops();
-  uint32_t tensor_loc();
-  uint64_t tensor_size();
-  ChakraProtoMsg::CollectiveCommType comm_type();
-  uint32_t comm_priority();
-  uint64_t comm_size();
-  uint32_t comm_src();
-  uint32_t comm_dst();
-  uint32_t comm_tag();
-  std::string pg_name();
+  uint64_t id() const;
+  std::string name() const;
+  bool is_cpu_op() const;
+  ChakraProtoMsg::NodeType type() const;
+  uint64_t runtime() const;
+  uint64_t num_ops() const;
+  uint32_t tensor_loc() const;
+  uint64_t tensor_size() const;
+  ChakraProtoMsg::CollectiveCommType comm_type() const;
+  uint32_t comm_priority() const;
+  uint64_t comm_size() const;
+  uint32_t comm_src() const;
+  uint32_t comm_dst() const;
+  uint32_t comm_tag() const;
+  std::string pg_name() const;
+  const std::unordered_set<uint64_t>& unresolved_data_deps() const;
+  std::unordered_set<uint64_t>& mutable_unresolved_data_deps();
 
  private:
-  void assign_attr_val(
-      std::shared_ptr<ChakraProtoMsg::Node> node,
-      int i,
-      void* member);
-
   std::shared_ptr<ChakraProtoMsg::Node> node_{nullptr};
   std::unordered_set<std::shared_ptr<ETFeederNode>> children_set_{};
   std::vector<std::shared_ptr<ETFeederNode>> children_vec_{};
   std::vector<uint64_t> dep_unresolved_parent_ids_{};
   std::unordered_map<std::string, const ChakraProtoMsg::AttributeProto&>
       other_attrs_{};
+  std::unordered_set<uint64_t> unresolved_data_deps_{};
 
   uint64_t id_;
   std::string name_;
