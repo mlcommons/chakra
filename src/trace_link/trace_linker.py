@@ -117,7 +117,7 @@ class TraceLinker:
         sync_dependencies = {}
         absolute_kineto_file = os.path.abspath(kineto_file)
         trace_dir = os.path.dirname(absolute_kineto_file)
-        trace_analysis = TraceAnalysis(trace_dir=trace_dir)
+        trace_analysis = TraceAnalysis(trace_dir=trace_dir, trace_files={rank: kineto_file})
         cp_graph, success = trace_analysis.critical_path_analysis(
             rank=rank, annotation=annotation, instance_id=instance_id
         )
