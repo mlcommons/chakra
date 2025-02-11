@@ -251,6 +251,142 @@ def one_comm_recv_node(num_npus: int, tensor_size: int) -> None:
             encode_message(et, node)
 
 
+def dts_two_aic_indep(num_npus: int, runtime: int) -> None:
+    """Generate two independent aic computation nodes."""
+    for npu_id in range(num_npus):
+        output_filename = f"dts_two_aic_indep.{npu_id}.et"
+        with open(output_filename, "wb") as et:
+            encode_message(et, GlobalMetadata(version="0.0.4"))
+
+            for _ in range(2):
+                node = get_node("COMP_NODE", COMP_NODE)
+                node.attr.append(ChakraAttr(name="is_cpu_op", bool_val=False))
+                node.attr.append(ChakraAttr(name="gpu_comp_res", string_val="aic"))
+                node.duration_micros = runtime
+                encode_message(et, node)
+
+
+def dts_one_aic_one_aiv_indep(num_npus: int, runtime: int) -> None:
+    """Generate independent aic and aiv computation nodes."""
+    for npu_id in range(num_npus):
+        output_filename = f"dts_one_aic_one_aiv_indep.{npu_id}.et"
+        with open(output_filename, "wb") as et:
+            encode_message(et, GlobalMetadata(version="0.0.4"))
+
+            node = get_node("COMP_NODE", COMP_NODE)
+            node.attr.append(ChakraAttr(name="is_cpu_op", bool_val=False))
+            node.attr.append(ChakraAttr(name="gpu_comp_res", string_val="aic"))
+            node.duration_micros = runtime
+            encode_message(et, node)
+
+            node = get_node("COMP_NODE", COMP_NODE)
+            node.attr.append(ChakraAttr(name="is_cpu_op", bool_val=False))
+            node.attr.append(ChakraAttr(name="gpu_comp_res", string_val="aiv"))
+            node.duration_micros = runtime
+            encode_message(et, node)
+
+
+def dts_one_aic_one_aiv_dep(num_npus: int, runtime: int) -> None:
+    """Generate dependent aic and aiv computation nodes."""
+    for npu_id in range(num_npus):
+        output_filename = f"dts_one_aic_one_aiv_dep.{npu_id}.et"
+        with open(output_filename, "wb") as et:
+            encode_message(et, GlobalMetadata(version="0.0.4"))
+
+            parent_node = get_node("COMP_NODE", COMP_NODE)
+            parent_node.attr.append(ChakraAttr(name="is_cpu_op", bool_val=False))
+            parent_node.attr.append(ChakraAttr(name="gpu_comp_res", string_val="aic"))
+            parent_node.duration_micros = runtime
+            encode_message(et, parent_node)
+
+            child_node = get_node("COMP_NODE", COMP_NODE)
+            child_node.attr.append(ChakraAttr(name="is_cpu_op", bool_val=False))
+            child_node.attr.append(ChakraAttr(name="gpu_comp_res", string_val="aiv"))
+            child_node.duration_micros = runtime
+            child_node.data_deps.append(parent_node.id)
+            encode_message(et, child_node)
+
+
+def dts_one_pg_two_allreduce(num_npus: int, comm_size: int) -> None:
+    """Generate two AllReduce communication collective node within one process group."""
+    for npu_id in range(num_npus):
+        output_filename = f"dts_one_pg_two_allreduce.{npu_id}.et"
+        with open(output_filename, "wb") as et:
+            encode_message(et, GlobalMetadata(version="0.0.4"))
+
+            node = get_node("dts_one_pg_two_allreduce", COMM_COLL_NODE)
+            node.attr.append(ChakraAttr(name="is_cpu_op", bool_val=False))
+            node.attr.extend([get_comm_type_attr(ALL_REDUCE), ChakraAttr(name="comm_size", uint64_val=comm_size), ChakraAttr(name="pg_name", string_val="0")])
+            encode_message(et, node)
+
+            node = get_node("dts_one_pg_two_allreduce", COMM_COLL_NODE)
+            node.attr.append(ChakraAttr(name="is_cpu_op", bool_val=False))
+            node.attr.extend([get_comm_type_attr(ALL_REDUCE), ChakraAttr(name="comm_size", uint64_val=comm_size), ChakraAttr(name="pg_name", string_val="0")])
+            encode_message(et, node)
+
+
+def dts_two_pg_one_allreduce(num_npus: int, comm_size: int) -> None:
+    """Generate one AllReduce communication collective node within two process group."""
+    for npu_id in range(num_npus):
+        output_filename = f"dts_two_pg_one_allreduce.{npu_id}.et"
+        with open(output_filename, "wb") as et:
+            encode_message(et, GlobalMetadata(version="0.0.4"))
+
+            node = get_node("dts_two_pg_one_allreduce", COMM_COLL_NODE)
+            node.attr.append(ChakraAttr(name="is_cpu_op", bool_val=False))
+            node.attr.extend([get_comm_type_attr(ALL_REDUCE), ChakraAttr(name="comm_size", uint64_val=comm_size), ChakraAttr(name="pg_name", string_val="0")])
+            encode_message(et, node)
+
+            node = get_node("dts_two_pg_one_allreduce", COMM_COLL_NODE)
+            node.attr.append(ChakraAttr(name="is_cpu_op", bool_val=False))
+            node.attr.extend([get_comm_type_attr(ALL_REDUCE), ChakraAttr(name="comm_size", uint64_val=comm_size), ChakraAttr(name="pg_name", string_val="1")])
+            encode_message(et, node)
+
+
+def dts_one_pg_two_sndrcv_ring(num_npus: int, comm_size: int) -> None:
+    """Generate two ring send-recv communication within one process group."""
+    for npu_id in range(num_npus):
+        output_filename = f"dts_one_pg_two_sndrcv_ring.{npu_id}.et"
+        prev = (npu_id + num_npus - 1) % num_npus
+        next = (npu_id + 1) % num_npus
+        with open(output_filename, "wb") as et:
+            encode_message(et, GlobalMetadata(version="0.0.4"))
+
+            parent_send_node = get_node("COMM_SEND_NODE", COMM_SEND_NODE)
+            parent_send_node.attr.append(ChakraAttr(name="is_cpu_op", bool_val=False))
+            parent_send_node.attr.append(get_comm_type_attr(COMM_SEND_NODE))
+            parent_send_node.attr.append(ChakraAttr(name="comm_size", uint64_val=comm_size))
+            parent_send_node.attr.append(ChakraAttr(name="comm_dst", uint32_val=next))
+            parent_send_node.attr.append(ChakraAttr(name="comm_tag", uint32_val=0))
+            encode_message(et, parent_send_node)
+
+            parent_recv_node = get_node("COMM_RECV_NODE", COMM_RECV_NODE)
+            parent_recv_node.attr.append(ChakraAttr(name="is_cpu_op", bool_val=False))
+            parent_recv_node.attr.append(get_comm_type_attr(COMM_RECV_NODE))
+            parent_recv_node.attr.append(ChakraAttr(name="comm_size", uint64_val=comm_size))
+            parent_recv_node.attr.append(ChakraAttr(name="comm_src", uint32_val=prev))
+            parent_recv_node.attr.append(ChakraAttr(name="comm_tag", uint32_val=0))
+            encode_message(et, parent_recv_node)
+
+            child_send_node = get_node("COMM_SEND_NODE", COMM_SEND_NODE)
+            child_send_node.data_deps.append(parent_send_node.id)
+            child_send_node.attr.append(ChakraAttr(name="is_cpu_op", bool_val=False))
+            child_send_node.attr.append(get_comm_type_attr(COMM_SEND_NODE))
+            child_send_node.attr.append(ChakraAttr(name="comm_size", uint64_val=comm_size))
+            child_send_node.attr.append(ChakraAttr(name="comm_dst", uint32_val=next))
+            child_send_node.attr.append(ChakraAttr(name="comm_tag", uint32_val=1))
+            encode_message(et, child_send_node)
+
+            child_recv_node = get_node("COMM_RECV_NODE", COMM_RECV_NODE)
+            child_recv_node.data_deps.append(parent_send_node.id)
+            child_recv_node.attr.append(ChakraAttr(name="is_cpu_op", bool_val=False))
+            child_recv_node.attr.append(get_comm_type_attr(COMM_RECV_NODE))
+            child_recv_node.attr.append(ChakraAttr(name="comm_size", uint64_val=comm_size))
+            child_recv_node.attr.append(ChakraAttr(name="comm_src", uint32_val=prev))
+            child_recv_node.attr.append(ChakraAttr(name="comm_tag", uint32_val=1))
+            encode_message(et, child_recv_node)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Execution Trace Generator")
     parser.add_argument("--num_npus", type=int, default=64, help="Number of NPUs")
@@ -259,23 +395,33 @@ def main() -> None:
     parser.add_argument(
         "--default_comm_size", type=int, default=65536, help="Default communication size of communication nodes"
     )
+    parser.add_argument("--mode", type=str, default="DTS", help="Mode of generation, Astra or DTS.")
     args = parser.parse_args()
 
-    one_metadata_node_all_types(args.num_npus)
-    one_remote_mem_load_node(args.num_npus, args.default_tensor_size)
-    one_remote_mem_store_node(args.num_npus, args.default_tensor_size)
-    one_comp_node(args.num_npus, args.default_runtime)
-    two_comp_nodes_independent(args.num_npus, args.default_runtime)
-    two_comp_nodes_dependent(args.num_npus, args.default_runtime)
-    one_comm_coll_node_allreduce(args.num_npus, args.default_comm_size)
-    one_comm_coll_node_alltoall(args.num_npus, args.default_comm_size)
-    one_comm_coll_node_allgather(args.num_npus, args.default_comm_size)
-    one_comm_coll_node_reducescatter(args.num_npus, args.default_comm_size)
-    one_comm_coll_node_broadcast(args.num_npus, args.default_comm_size)
-    one_comm_coll_node_barrier(args.num_npus)
-    one_comm_send_node(args.num_npus, args.default_tensor_size)
-    one_comm_recv_node(args.num_npus, args.default_tensor_size)
-
+    if "DTS" == args.mode:
+        dts_two_aic_indep(args.num_npus, args.default_runtime)
+        dts_one_aic_one_aiv_indep(args.num_npus, args.default_runtime)
+        dts_one_aic_one_aiv_dep(args.num_npus, args.default_runtime)
+        dts_one_pg_two_allreduce(args.num_npus, args.default_comm_size)
+        dts_two_pg_one_allreduce(args.num_npus, args.default_comm_size)
+        dts_one_pg_two_sndrcv_ring(args.num_npus, args.default_comm_size)
+    elif "Astra" == args.mode:
+        one_metadata_node_all_types(args.num_npus)
+        one_remote_mem_load_node(args.num_npus, args.default_tensor_size)
+        one_remote_mem_store_node(args.num_npus, args.default_tensor_size)
+        one_comp_node(args.num_npus, args.default_runtime)
+        two_comp_nodes_independent(args.num_npus, args.default_runtime)
+        two_comp_nodes_dependent(args.num_npus, args.default_runtime)
+        one_comm_coll_node_allreduce(args.num_npus, args.default_comm_size)
+        one_comm_coll_node_alltoall(args.num_npus, args.default_comm_size)
+        one_comm_coll_node_allgather(args.num_npus, args.default_comm_size)
+        one_comm_coll_node_reducescatter(args.num_npus, args.default_comm_size)
+        one_comm_coll_node_broadcast(args.num_npus, args.default_comm_size)
+        one_comm_coll_node_barrier(args.num_npus)
+        one_comm_send_node(args.num_npus, args.default_tensor_size)
+        one_comm_recv_node(args.num_npus, args.default_tensor_size)
+    else:
+        print(f'Invalid mode: {args.mode}')
 
 if __name__ == "__main__":
     main()

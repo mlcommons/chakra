@@ -151,6 +151,7 @@ message IOInfo {
   string values = 1;
   string shapes = 2;
   string types = 3;
+  string strides = 4;
 }
 
 message Tensor {

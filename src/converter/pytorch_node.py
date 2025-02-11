@@ -45,9 +45,10 @@ class PyTorchNode:
         cat (Any): Category of the node.
         stream (int): Stream associated with the node.
         pg_name (str): Process Group name for the inter-GPU communication.
+        pg_desc (str): Process Group description for the inter-GPU communication.
     """
 
-    SUPPORTED_VERSIONS = ["1.0.2-chakra.0.0.4", "1.0.3-chakra.0.0.4", "1.1.0-chakra.0.0.4"]
+    SUPPORTED_VERSIONS = ["1.0.2-chakra.0.0.4", "1.0.3-chakra.0.0.4", "1.1.0-chakra.0.0.4", "1.1.1-chakra.0.0.4"]
 
     def __init__(self, schema: str, node_data: Dict[str, Any]) -> None:
         """
@@ -86,8 +87,7 @@ class PyTorchNode:
             node_data (Dict[str, Any]): The node data to be parsed.
         """
         if self.schema in self.SUPPORTED_VERSIONS:
-            if self.schema in ["1.0.2-chakra.0.0.4", "1.0.3-chakra.0.0.4", "1.1.0-chakra.0.0.4"]:
-                self._parse_data_1_0_3_chakra_0_0_4(node_data)
+            self._parse_data_1_0_3_chakra_0_0_4(node_data)
         else:
             raise ValueError(
                 f"Unsupported schema version '{self.schema}'. Please check if the schema version is in the list of "
@@ -117,6 +117,7 @@ class PyTorchNode:
         # In SendRecv nodes, pg_name is in the attrs if exists.
         # Otherwise, pg_name is not present.
         self.pg_name = node_data.get("pg_name", "")
+        self.pg_desc = node_data.get("pg_desc", "")
 
         for attr in node_data.get("attrs", []):
             setattr(self, attr["name"], attr["value"])
@@ -221,6 +222,49 @@ class PyTorchNode:
                     input_size = tensor.num_elem * tensor.elem_bytes
                     comm_size += input_size
         return comm_size
+    
+    @property
+    def comm_src(self) -> int:
+        return self.inputs["values"][3]
+    
+    @property
+    def comm_dst(self) -> int:
+        return self.inputs["values"][3]
+    
+    @property
+    def tensor_size(self) -> int:
+        """
+        Calculate the computation size for the given input types and shapes.
+
+        Returns
+            int: The calculated computation size.
+        """
+        tensor_size = 0
+        for input_value, input_type in zip(self.inputs["values"], self.inputs["types"]):
+            if "Tensor" in input_type:
+                if input_type.startswith("GenericList[Tensor"):
+                    for inner_value in input_value:
+                        tensor = PyTorchTensor(inner_value)
+                        input_size = tensor.num_elem * tensor.elem_bytes
+                        tensor_size += input_size
+                else:
+                    tensor = PyTorchTensor(input_value)
+                    input_size = tensor.num_elem * tensor.elem_bytes
+                    tensor_size += input_size
+
+        for output_value, output_type in zip(self.outputs["values"], self.outputs["types"]):
+            if "Tensor" in output_type:
+                if output_type.startswith("GenericList[Tensor"):
+                    for inner_value in output_value:
+                        tensor = PyTorchTensor(inner_value)
+                        output_size = tensor.num_elem * tensor.elem_bytes
+                        tensor_size += output_size
+                else:
+                    tensor = PyTorchTensor(output_value)
+                    output_size = tensor.num_elem * tensor.elem_bytes
+                    tensor_size += output_size
+        
+        return tensor_size
 
     @staticmethod
     def get_data_type_size(data_type: str) -> int:
@@ -270,3 +314,4 @@ class PyTorchNode:
                 f"data_type_size_map or report this issue to the maintainer by creating an issue. Traceback:\n"
                 f"{traceback_str}"
             ) from e
+        

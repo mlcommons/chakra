@@ -39,6 +39,7 @@ class PyTorchConverter:
             output_filename (str): Output Chakra host + device execution trace in the protobuf format.
             simulate (bool): Flag to indicate whether to simulate the execution of the converted trace. If True,
                 the method will simulate the execution after writing the protobuf trace to the output file.
+
         """
         json_trace = self.load_json_execution_traces(input_filename)
         json_metadata, json_node_map = self.parse_json_trace(json_trace)
@@ -56,6 +57,7 @@ class PyTorchConverter:
         self.identify_cyclic_dependencies(protobuf_node_map)
 
         self.write_protobuf_execution_trace(output_filename, json_metadata, protobuf_node_map)
+
 
         if simulate:
             self.simulate_execution(json_node_map, protobuf_node_map, parent_to_children_map)
@@ -244,26 +246,35 @@ class PyTorchConverter:
                             [
                                 ChakraAttr(name="comm_type", int64_val=collective_comm_type),
                                 ChakraAttr(name="comm_size", int64_val=pytorch_gpu_node.comm_size),
-                                *(
-                                    [ChakraAttr(name="pg_name", string_val=pytorch_gpu_node.pg_name)]
-                                    if pytorch_gpu_node.pg_name != ""
-                                    else []
-                                ),
+                                *( [ChakraAttr(name="pg_name", string_val=pytorch_gpu_node.pg_name)] if pytorch_gpu_node.pg_name != "" else [] ),
+                                *( [ChakraAttr(name="pg_desc", string_val=pytorch_gpu_node.pg_desc)] if pytorch_gpu_node.pg_desc != "" else [] ),
                             ]
                         )
-
-                    elif chakra_gpu_node.type in {COMM_SEND_NODE, COMM_RECV_NODE}:
+                    elif chakra_gpu_node.type == COMM_SEND_NODE:
                         chakra_gpu_node.attr.extend(
                             [
                                 ChakraAttr(name="comm_size", int64_val=pytorch_gpu_node.comm_size),
-                                *(
-                                    [ChakraAttr(name="pg_name", string_val=pytorch_gpu_node.pg_name)]
-                                    if pytorch_gpu_node.pg_name != ""
-                                    else []
-                                ),
+                                ChakraAttr(name="comm_dst", int32_val=pytorch_gpu_node.comm_dst),
+                                *( [ChakraAttr(name="pg_name", string_val=pytorch_gpu_node.pg_name)] if pytorch_gpu_node.pg_name != "" else [] ),
+                                *( [ChakraAttr(name="pg_desc", string_val=pytorch_gpu_node.pg_desc)] if pytorch_gpu_node.pg_desc != "" else [] ),
                             ]
                         )
-
+                    elif chakra_gpu_node.type == COMM_RECV_NODE:
+                        chakra_gpu_node.attr.extend(
+                            [
+                                ChakraAttr(name="comm_size", int64_val=pytorch_gpu_node.comm_size),
+                                ChakraAttr(name="comm_src", int32_val=pytorch_gpu_node.comm_src),
+                                *( [ChakraAttr(name="pg_name", string_val=pytorch_gpu_node.pg_name)] if pytorch_gpu_node.pg_name != "" else [] ),
+                                *( [ChakraAttr(name="pg_desc", string_val=pytorch_gpu_node.pg_desc)] if pytorch_gpu_node.pg_desc != "" else [] ),
+                            ]
+                        )
+                    elif chakra_gpu_node.type == COMP_NODE:
+                        chakra_gpu_node.attr.extend(
+                            [
+                                ChakraAttr(name="tensor_size", int64_val=pytorch_gpu_node.tensor_size),
+                                ChakraAttr(name="num_ops", int64_val=pytorch_gpu_node.tensor_size),
+                            ]
+                        )
                     protobuf_node_map[chakra_gpu_node.id] = chakra_gpu_node
 
     def convert_json_to_protobuf_node(
@@ -272,6 +283,7 @@ class PyTorchConverter:
         protobuf_node_map: Dict[int, ChakraNode],
         json_node: PyTorchNode,
     ) -> ChakraNode:
+      
         """
         Convert a JSON node (PyTorchNode) to a protobuf node (ChakraNode).
 
@@ -305,9 +317,11 @@ class PyTorchConverter:
         protobuf_node.inputs.values = str(json_node.inputs["values"])
         protobuf_node.inputs.shapes = str(json_node.inputs["shapes"])
         protobuf_node.inputs.types = str(json_node.inputs["types"])
+        protobuf_node.inputs.strides = str(json_node.inputs["strides"])
         protobuf_node.outputs.values = str(json_node.outputs["values"])
         protobuf_node.outputs.shapes = str(json_node.outputs["shapes"])
         protobuf_node.outputs.types = str(json_node.outputs["types"])
+        protobuf_node.outputs.strides = str(json_node.outputs["strides"])
         protobuf_node.attr.extend(
             [
                 ChakraAttr(name="rf_id", int64_val=json_node.rf_id),
@@ -373,6 +387,7 @@ class PyTorchConverter:
             "allgather": ALL_GATHER,
             "reducescatter": REDUCE_SCATTER,
             "broadcast": BROADCAST,
+            "sendrecv": ALL_TO_ALL,
             # Additional cases can be added here
         }
         normalized_name = name.replace("_", "").replace("-", "").lower()

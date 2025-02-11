@@ -97,6 +97,19 @@ def openFileRd(in_file):
     return proto_in
 
 
+def openFileWt(out_file):
+    """
+    This opens the file passed as argument for writting. It returns the 
+    file handle.
+    """
+    try:
+        proto_out = open(out_file, "wb")
+    except IOError:
+        print("Failed to open ", out_file, " for writting")
+        exit(-1)
+    return proto_out
+
+
 def _DecodeVarint32(in_file):
     """
     The decoding of the Varint32 is copied from

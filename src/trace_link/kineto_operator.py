@@ -1,6 +1,7 @@
 from typing import Any, Dict, List, Optional
 
-from et_replay.execution_trace import Node as PyTorchOperator
+
+from .execution_trace import Node as PyTorchOperator
 
 
 class KinetoOperator:
@@ -27,6 +28,7 @@ class KinetoOperator:
         rf_id (Optional[int]): Record function identifier.
         correlation (int): Identifier used to correlate CUDA runtime and GPU operations.
         pg_name (Optional[str]): Process Group name for the collective communication.
+        pg_desc (Optional[str]): Process Group description for the collective communication.
     """
 
     def __init__(self, kineto_op: Dict[str, Any]) -> None:
@@ -55,6 +57,7 @@ class KinetoOperator:
         self.rf_id: Optional[int] = kineto_op.get("args", {}).get("Record function id", None)
         self.correlation: int = kineto_op.get("args", {}).get("correlation", -1)
         self.pg_name: Optional[str] = kineto_op.get("args", {}).get("Process Group Name", None)
+        self.pg_desc: Optional[str] = kineto_op.get("args", {}).get("Process Group Description", None)
 
     def __repr__(self) -> str:
         """

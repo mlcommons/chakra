@@ -2,6 +2,7 @@ import argparse
 import json
 import logging
 import sys
+import re
 from enum import IntEnum
 from logging import FileHandler
 from typing import Any, Dict, List, Tuple
@@ -23,6 +24,24 @@ class TID(IntEnum):
     COMP = 3
     COMM = 4
 
+def setup_logger(log_filename: str) -> logging.Logger:
+    logger = logging.getLogger("LogConverter")
+    logger.setLevel(logging.DEBUG)
+
+    fh = logging.FileHandler(log_filename)
+    fh.setLevel(logging.DEBUG)
+
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.DEBUG)
+
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    fh.setFormatter(formatter)
+    ch.setFormatter(formatter)
+
+    logger.addHandler(fh)
+    logger.addHandler(ch)
+
+    return logger
 
 def get_logger(log_filename: str) -> logging.Logger:
     formatter = logging.Formatter("%(levelname)s [%(asctime)s] %(message)s", datefmt="%m/%d/%Y %I:%M:%S %p")
@@ -138,6 +157,111 @@ def write_trace_events(output_filename: str, num_npus: int, trace_events: List[D
     with open(output_filename, "w") as f:
         json.dump(output_dict, f)
 
+def parse_callback_line(line: str) -> Dict[str, Any]:
+    pattern_with_name = re.compile(r'\[Callback\] \[trace\] (\d+), (\d+), (\d+), (\d+), (.+)')
+    pattern_without_name = re.compile(r'\[Callback\] \[trace\] (\d+), (\d+), (\d+), (\d+)')
+
+    match_with_name = pattern_with_name.search(line)
+    match_without_name = pattern_without_name.search(line)
+
+    if match_with_name:
+        return {
+            "mpi_id": int(match_with_name.group(1)),
+            "gpu_id": int(match_with_name.group(2)),
+            "et_node_id": int(match_with_name.group(3)),
+            "system_tick": int(match_with_name.group(4)),
+            "et_node_name": match_with_name.group(5).strip()
+        }
+    elif match_without_name:
+        return {
+            "mpi_id": int(match_without_name.group(1)),
+            "gpu_id": int(match_without_name.group(2)),
+            "et_node_id": int(match_without_name.group(3)),
+            "system_tick": int(match_without_name.group(4)),
+            "et_node_name": None
+        }
+    else:
+        raise ValueError(f"Line format is incorrect: {line}")
+
+
+def parse_profile_line(line: str) -> Dict[str, Any]:
+    pattern = re.compile(r'\[Profile\] \[trace\] (\w+), (\d+), (\[.+\]|.+), (\d+), (\d+)')
+    match = pattern.search(line)
+    if match:
+        return {
+            "et_node_type": match.group(1),
+            "et_node_id": int(match.group(2)),
+            "et_node_name": match.group(3).strip(),
+            "gpu_id": int(match.group(4)),
+            "mpi_id": int(match.group(5))
+        }
+    else:
+        raise ValueError(f"Line format is incorrect: {line}")
+
+
+def parse_issue_line(line: str) -> Dict[str, Any]:
+    pattern_6 = re.compile(r'\[Issue\] \[trace\] (\w+), (\d+), (\[.+\]|.+), (\d+), (\d+), (\d+)')
+    pattern_7 = re.compile(r'\[Issue\] \[trace\] (\w+), (\d+), (\[.+\]|.+), (\d+), (\d+), (\d+), (\d+)')
+
+    match_6 = pattern_6.search(line)
+    match_7 = pattern_7.search(line)
+
+    if match_6:
+        return {
+            "et_node_type": match_6.group(1),
+            "et_node_id": int(match_6.group(2)),
+            "et_node_name": match_6.group(3).strip(),
+            "system_tick": int(match_6.group(4)),
+            "gpu_id": int(match_6.group(5)),
+            "mpi_id": int(match_6.group(6))
+        }
+    elif match_7:
+        return {
+            "et_node_type": match_7.group(1),
+            "et_node_id": int(match_7.group(2)),
+            "et_node_name": match_7.group(3).strip(),
+            "system_tick": int(match_7.group(4)),
+            "gpu_id": int(match_7.group(5)),
+            "mpi_id": int(match_7.group(6)),
+            "comm_group_id": int(match_7.group(7))
+        }
+    else:
+        raise ValueError(f"Line format is incorrect: {line}")
+
+
+def parse_log_file(input_filename: str, logger: logging.Logger) -> List[Dict[str, Any]]:
+    trace_events = []
+
+    try:
+        with open(input_filename, 'r') as file:
+            for line in file:
+                line = line.strip()
+                if '[Callback]' in line:
+                    trace_event = parse_callback_line(line)
+                    trace_event["type"] = "callback"
+                    trace_events.append(trace_event)
+                elif '[Profile]' in line:
+                    trace_event = parse_profile_line(line)
+                    trace_event["type"] = "profile"
+                    trace_events.append(trace_event)
+                elif '[Issue]' in line:
+                    trace_event = parse_issue_line(line)
+                    trace_event["type"] = "issue"
+                    trace_events.append(trace_event)
+    except Exception as e:
+        logger.error(f"Failed to parse log file {input_filename}: {e}")
+        raise
+
+    return trace_events
+
+
+def write_trace_dts(output_filename: str, trace_events: List[Dict[str, Any]], logger: logging.Logger) -> None:
+    try:
+        with open(output_filename, "w") as f:
+            json.dump(trace_events, f, indent=4)
+    except Exception as e:
+        logger.error(f"Failed to write JSON file {output_filename}: {e}")
+        raise
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Timeline Visualizer")
@@ -146,17 +270,31 @@ def main() -> None:
     parser.add_argument("--num_npus", type=int, default=None, required=True, help="Number of NPUs in a system")
     parser.add_argument("--npu_frequency", type=int, default=None, required=True, help="NPU frequency in MHz")
     parser.add_argument("--log_filename", type=str, default="debug.log", help="Log filename")
+    parser.add_argument("--mode", type=str, default="DTS", help="Mode of generation, Astra or DTS.")
     args = parser.parse_args()
 
-    logger = get_logger(args.log_filename)
-    logger.debug(" ".join(sys.argv))
+    if "DTS" == args.mode:
+        logger = setup_logger(args.log_filename)
+        logger.debug(
+            f"Starting log file parsing with input file: {args.input_filename} and output file: {args.output_filename}")
+        try:
+            trace_events = parse_log_file(args.input_filename, logger)
+            write_trace_dts(args.output_filename, trace_events, logger)
+            logger.debug("Finished parsing and writing JSON file successfully.")
+        except Exception as e:
+            logger.error(f"An error occurred: {e}")
+    elif "Astra" == args.mode:
 
-    try:
-        trace_events = get_trace_events(args.input_filename, args.num_npus, args.npu_frequency)
-        write_trace_events(args.output_filename, args.num_npus, trace_events)
-    except Exception as e:
-        logger.error(str(e))
-        sys.exit(1)
+        logger = get_logger(args.log_filename)
+        logger.debug(" ".join(sys.argv))
+        try:
+            trace_events = get_trace_events(args.input_filename, args.num_npus, args.npu_frequency)
+            write_trace_events(args.output_filename, args.num_npus, trace_events)
+        except Exception as e:
+            logger.error(str(e))
+            sys.exit(1)
+    else:
+        print(f'Invalid mode: {args.mode}')
 
 
 if __name__ == "__main__":

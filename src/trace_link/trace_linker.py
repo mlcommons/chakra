@@ -6,11 +6,12 @@ import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Optional, Tuple
 
-from et_replay.execution_trace import (
+
+from .execution_trace import (
     EXECUTION_TRACE_PROCESS_ANNOTATION,
     EXECUTION_TRACE_THREAD_ANNOTATION,
 )
-from et_replay.execution_trace import Node as PyTorchOperator
+from .execution_trace import Node as PyTorchOperator
 from hta.analyzers.critical_path_analysis import CPEdgeType
 from hta.trace_analysis import TraceAnalysis
 
@@ -117,7 +118,7 @@ class TraceLinker:
         sync_dependencies = {}
         absolute_kineto_file = os.path.abspath(kineto_file)
         trace_dir = os.path.dirname(absolute_kineto_file)
-        trace_analysis = TraceAnalysis(trace_dir=trace_dir)
+        trace_analysis = TraceAnalysis(trace_dir=trace_dir, trace_files={rank: kineto_file})
         cp_graph, success = trace_analysis.critical_path_analysis(
             rank=rank, annotation=annotation, instance_id=instance_id
         )
@@ -971,6 +972,11 @@ class TraceLinker:
                     **(
                         {"pg_name": gpu_op.pg_name}
                         if gpu_op.is_inter_gpu_comms_op() and gpu_op.pg_name is not None
+                        else {}
+                    ),
+                    **(
+                        {"pg_desc": gpu_op.pg_desc}
+                        if gpu_op.is_inter_gpu_comms_op() and gpu_op.pg_desc is not None
                         else {}
                     ),
                 }

@@ -8,7 +8,9 @@ ETFeederNode::ETFeederNode(std::shared_ptr<ChakraProtoMsg::Node> node) {
   this->id_ = node->id();
   this->name_ = node->name();
   this->runtime_ = node->duration_micros();
-  this->is_cpu_op_ = 1;
+  this->is_cpu_op_ = true;
+  this->num_ops_ = 0;
+  uint64_t min_comm_size = 8;
 
   for (const auto& attr : node->attr()) {
     const string& attr_name = attr.name();
@@ -18,7 +20,7 @@ ETFeederNode::ETFeederNode(std::shared_ptr<ChakraProtoMsg::Node> node) {
     } else if (attr_name == "num_ops") {
       this->num_ops_ = static_cast<uint64_t>(attr.int64_val());
     } else if (attr_name == "tensor_size") {
-      this->tensor_size_ = attr.uint64_val();
+      this->tensor_size_ = static_cast<uint64_t>(attr.int64_val());
     } else if (attr_name == "comm_type") {
       this->comm_type_ =
           static_cast<ChakraProtoMsg::CollectiveCommType>(attr.int64_val());
@@ -34,10 +36,15 @@ ETFeederNode::ETFeederNode(std::shared_ptr<ChakraProtoMsg::Node> node) {
       this->comm_tag_ = static_cast<uint32_t>(attr.int32_val());
     } else if (attr_name == "pg_name") {
       this->pg_name_ = static_cast<string>(attr.string_val());
+    } else if (attr_name == "pg_desc") {
+      this->pg_desc_ = static_cast<string>(attr.string_val());
+    } else if (attr_name == "gpu_comp_res") {
+      this->gpu_comp_res_ = static_cast<string>(attr.string_val());
     } else {
       this->other_attrs_.emplace(attr_name, attr);
     }
   }
+  this->comm_size_ = max(min_comm_size, this->comm_size_);
 }
 
 shared_ptr<ChakraProtoMsg::Node> ETFeederNode::getChakraNode() {
@@ -143,4 +150,12 @@ uint32_t ETFeederNode::comm_tag() {
 
 string ETFeederNode::pg_name() {
   return pg_name_;
+}
+
+string ETFeederNode::pg_desc() {
+  return pg_desc_;
+}
+
+std::string ETFeederNode::gpu_comp_res() {
+  return gpu_comp_res_;
 }

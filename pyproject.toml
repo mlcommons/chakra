@@ -26,24 +26,32 @@ Repository = "https://github.com/mlcommons/chakra.git"
 
 [tool.setuptools.package-dir]
 "chakra.schema.protobuf" = "schema/protobuf"
+"chakra.src.cleaner" = "src/cleaner"
 "chakra.src.converter" = "src/converter"
 "chakra.src.generator" = "src/generator"
 "chakra.src.jsonizer" = "src/jsonizer"
+"chakra.src.pg_extractor" = "src/pg_extractor"
 "chakra.src.third_party" = "src/third_party"
 "chakra.src.timeline_visualizer" = "src/timeline_visualizer"
 "chakra.src.trace_link" = "src/trace_link"
 "chakra.src.visualizer" = "src/visualizer"
+"chakra.src.parallel_expander" = "src/parallel_expander"
+"chakra.src.addnode" = "src/addnode"
 
 [tool.setuptools.package-data]
 "chakra.schema.protobuf" = ["et_def.proto"]
 
 [project.scripts]
+chakra_cleaner = "chakra.src.cleaner.cleaner:main"
 chakra_converter = "chakra.src.converter.converter:main"
 chakra_generator = "chakra.src.generator.generator:main"
 chakra_jsonizer = "chakra.src.jsonizer.jsonizer:main"
+chakra_pg_extractor = "chakra.src.pg_extractor.pg_extractor:main"
 chakra_timeline_visualizer = "chakra.src.timeline_visualizer.timeline_visualizer:main"
 chakra_trace_link = "chakra.src.trace_link.trace_link:main"
 chakra_visualizer = "chakra.src.visualizer.visualizer:main"
+chakra_parallel_expander = "chakra.src.parallel_expander.parallel_expander:main"
+chakra_addnode = "chakra.src.addnode.addnode:main"
 
 [tool.ruff]
 target-version = "py39"
