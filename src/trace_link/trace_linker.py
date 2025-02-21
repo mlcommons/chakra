@@ -679,8 +679,6 @@ class TraceLinker:
             f"Found CUDA runtime operation '{kineto_runtime_op.name}' for GPU operator '{kineto_gpu_op.name}'."
         )
 
-        kineto_gpu_op.timestamp = kineto_runtime_op.timestamp
-
         # Find the closest CPU operator that precedes the CUDA runtime operation
         parent_cpu_op = self.find_closest_op(
             kineto_gpu_op, sorted_kineto_cpu_ops, sorted_kineto_cpu_op_ts, kineto_runtime_op.timestamp
