@@ -381,14 +381,14 @@ def test_group_gpu_ops_by_cpu_launchers(trace_linker):
     kineto_gpu_op2.tid = 2
 
     kineto_runtime_op1 = MagicMock(spec=KinetoOperator)
-    kineto_runtime_op1.ev_idx = "cpu_op1"
+    kineto_runtime_op1.external_id = "cpu_op1"
     kineto_runtime_op1.timestamp = 100
     kineto_runtime_op1.tid = 1
     kineto_runtime_op1.name = "runtime_op1"
     kineto_runtime_op1.correlation = 123
 
     kineto_runtime_op2 = MagicMock(spec=KinetoOperator)
-    kineto_runtime_op2.ev_idx = "cpu_op2"
+    kineto_runtime_op2.external_id = "cpu_op2"
     kineto_runtime_op2.timestamp = 200
     kineto_runtime_op2.tid = 2
     kineto_runtime_op2.name = "runtime_op2"
@@ -445,7 +445,7 @@ def test_find_parent_cpu_op(mock_find_closest_op, trace_linker):
             MagicMock(spec=PyTorchOperator, id=1),
             MagicMock(
                 spec=KinetoOperator,
-                ev_idx="1",
+                external_id="1",
                 inclusive_dur=100,
                 exclusive_dur=50,
                 timestamp=123456,
@@ -461,7 +461,7 @@ def test_find_parent_cpu_op(mock_find_closest_op, trace_linker):
             MagicMock(spec=PyTorchOperator, id=2),
             MagicMock(
                 spec=KinetoOperator,
-                ev_idx="2",
+                external_id="2",
                 inclusive_dur=200,
                 exclusive_dur=150,
                 timestamp=223456,
@@ -491,7 +491,7 @@ def test_link_ops(
 ):
     mock_get_inter_thread_dep.return_value = expected_inter_thread_dep
 
-    cpu_ev_idx_to_gpu_ops_map = {kineto_op.ev_idx: expected_linked_gpu_ops}
+    cpu_external_id_to_gpu_ops_map = {kineto_op.external_id: expected_linked_gpu_ops}
     kineto_rf_id_to_kineto_op_map = {1: MagicMock(spec=KinetoOperator, host_op=MagicMock(id=42))}
     kineto_external_id_to_kineto_op_map = {
         2: MagicMock(spec=KinetoOperator, host_op=MagicMock(id=3)),
@@ -501,7 +501,7 @@ def test_link_ops(
     result = trace_linker.link_ops(
         host_op,
         kineto_op,
-        cpu_ev_idx_to_gpu_ops_map,
+        cpu_external_id_to_gpu_ops_map,
         kineto_rf_id_to_kineto_op_map,
         kineto_external_id_to_kineto_op_map,
     )
@@ -520,7 +520,7 @@ def test_link_ops_with_no_gpu_ops(trace_linker):
     host_op = MagicMock(spec=PyTorchOperator, id=1)
     kineto_op = MagicMock(
         spec=KinetoOperator,
-        ev_idx="1",
+        external_id="1",
         inclusive_dur=100,
         exclusive_dur=50,
         timestamp=123456,
@@ -529,14 +529,14 @@ def test_link_ops_with_no_gpu_ops(trace_linker):
         sync_dep=[],
     )
 
-    cpu_ev_idx_to_gpu_ops_map = {}
+    cpu_external_id_to_gpu_ops_map = {}
     kineto_rf_id_to_kineto_op_map = {}
     kineto_external_id_to_kineto_op_map = {}
 
     result = trace_linker.link_ops(
         host_op,
         kineto_op,
-        cpu_ev_idx_to_gpu_ops_map,
+        cpu_external_id_to_gpu_ops_map,
         kineto_rf_id_to_kineto_op_map,
         kineto_external_id_to_kineto_op_map,
     )

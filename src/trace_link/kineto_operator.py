@@ -147,7 +147,16 @@ class KinetoOperator:
             "cudaMemcpyToSymbol",
             "cudaLaunchCooperativeKernel",
         }
-        return cuda_launch_categories and self.name in cuda_launch_operations
+
+        hip_launch_operations = {
+            "hipLaunchKernel",
+            "hipExtLaunchKernel",
+            "hipExtModuleLaunchKernel",
+            "hipModuleLaunchKernel",
+            "hipMemcpyWithStream",
+            "hipMemcpyAsync",
+        }
+        return cuda_launch_categories and (self.name in cuda_launch_operations or self.name in hip_launch_operations)
 
     def is_gpu_op(self) -> bool:
         """
