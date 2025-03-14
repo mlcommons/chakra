@@ -119,11 +119,17 @@ class TraceLinker:
         trace_dir = os.path.dirname(absolute_kineto_file)
         kineto_file_base = os.path.basename(kineto_file)
         trace_analysis = TraceAnalysis(trace_dir=trace_dir, trace_files={rank: kineto_file_base})
-        cp_graph, success = trace_analysis.critical_path_analysis(
-            rank=rank, annotation=annotation, instance_id=instance_id
-        )
-        if not success:
-            logging.error("Failed to load Critical Path Graph")
+        try:
+            cp_graph, success = trace_analysis.critical_path_analysis(
+                rank=rank, annotation=annotation, instance_id=instance_id
+            )
+            if not success:
+                logging.error("Critical path analysis completed but failed to load Critical Path Graph.")
+                return sync_dependencies
+
+        except ValueError as e:
+            logging.error("Critical path analysis encountered an invalid graph structure: %s", e)
+            # Optionally, you could log more details or include rank-specific information if relevant
             return sync_dependencies
 
         raw_events = trace_analysis.t.get_raw_trace_for_one_rank(rank=rank)["traceEvents"]
