@@ -50,7 +50,8 @@ class PyTorchConverter:
         for root_node in root_node_list:
             self.convert_ctrl_dep_to_data_dep(json_node_map, protobuf_node_map, root_node)
 
-        protobuf_node_map = self.remove_dangling_nodes(protobuf_node_map)
+        # do not remove secondary connected components
+        # protobuf_node_map = self.remove_dangling_nodes(protobuf_node_map)
 
         parent_to_children_map = self.update_parent_to_children_map(protobuf_node_map)
 
