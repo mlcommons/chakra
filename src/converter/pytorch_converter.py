@@ -438,7 +438,7 @@ class PyTorchConverter:
             current_node = stack.pop()       
             if current_node.type == COMM_COLL_NODE:
                 pg_name = json_node_map[current_node.id].pg_name
-                if pg_name in pg_name_to_nccl_ops.keys():
+                if pg_name in pg_name_to_nccl_ops:
                     current_node.data_deps.append(pg_name_to_nccl_ops[pg_name][-1])
                     pg_name_to_nccl_ops[pg_name].append(current_node.id)
                 else:
