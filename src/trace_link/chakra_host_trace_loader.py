@@ -2,9 +2,9 @@ import logging
 import sys
 from typing import Any, Callable, Dict, List, Tuple
 
-from et_replay.execution_trace import Node as PyTorchOperator
-from et_replay.execution_trace import ExecutionTrace as PyTorchTrace
 from et_replay.execution_trace import EXECUTION_TRACE_THREAD_ANNOTATION
+from et_replay.execution_trace import ExecutionTrace as PyTorchTrace
+from et_replay.execution_trace import Node as PyTorchOperator
 from et_replay.utils import read_dictionary_from_json_file
 
 # Increase the recursion limit for deep Chakra host execution traces.
@@ -22,7 +22,7 @@ class ChakraHostTraceLoader:
             chakra_host_trace_file (str): Path to the PyTorch execution trace file.
 
         Returns:
-            Tuple[List[PyTorchOperator], Dict[str, Any]]: A tuple containing a list of PyTorch operators and a host trace.
+            Tuple[List[PyTorchOperator], Dict[str, Any]]: Tuple containing list of PyTorch operators and host trace.
         """
         logging.debug(f"Starting to load Chakra host execution trace from file: {chakra_host_trace_file}.")
         host_trace = read_dictionary_from_json_file(chakra_host_trace_file)
@@ -80,4 +80,4 @@ class ChakraHostTraceLoader:
             "1.1.1-chakra.0.0.4": PyTorchTrace._create_node_v1_1_1_chakra_0_0_4,
             # Add future versions here
         }
-        return node_creation_func.get(schema, None)
+        return node_creation_func.get(schema)
