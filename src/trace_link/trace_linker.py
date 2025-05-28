@@ -4,7 +4,7 @@ import json
 import logging
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from et_replay.execution_trace import (
     EXECUTION_TRACE_PROCESS_ANNOTATION,
@@ -46,7 +46,7 @@ class TraceLinker:
             chakra_device_trace (str): Path to the Kineto trace file.
             output_file (str): Path for the output nyTorch execution trace plus file.
         """
-        host_ops = self.chakra_host_trace_loader.load(chakra_host_trace)
+        host_ops, host_trace = self.chakra_host_trace_loader.load(chakra_host_trace)
 
         (
             kineto_cpu_ops,
@@ -77,7 +77,7 @@ class TraceLinker:
         )
 
         chakra_execution_trace_plus_data = self.link_traces(
-            chakra_host_trace,
+            host_trace,
             host_ops,
             kineto_cpu_ops,
             sorted_kineto_cpu_ops,
@@ -382,7 +382,7 @@ class TraceLinker:
 
     def link_traces(
         self,
-        chakra_host_trace: str,
+        host_trace: Dict[str, Any],
         host_ops: List[PyTorchOperator],
         kineto_cpu_ops: List[KinetoOperator],
         sorted_kineto_cpu_ops: List[KinetoOperator],
@@ -399,7 +399,7 @@ class TraceLinker:
         Link Chakra Host ET and Chakra Device ET to produce an enhanced Chakra ET (ET +).
 
         Args:
-            chakra_host_trace (str): Path to the Chakra host execution trace file.
+            host_trace (Dict[str, Any]): The Chakra host execution trace.
             host_ops (List[PyTorchOperator]): List of Chakra host operators.
             kineto_cpu_ops (List[KinetoOperator]): List of Kineto CPU operators.
             sorted_kineto_cpu_ops (List[KinetoOperator]): Sorted list of Kineto CPU operators.
@@ -448,7 +448,7 @@ class TraceLinker:
             kineto_external_id_to_kineto_op_map,
         )
         chakra_execution_trace_plus_data = self.construct_et_plus_data(
-            chakra_host_trace,
+            host_trace,
             host_op_id_to_kineto_ops_map,
             host_op_id_to_inclusive_dur_map,
             host_op_id_to_exclusive_dur_map,
@@ -813,7 +813,7 @@ class TraceLinker:
 
     def construct_et_plus_data(
         self,
-        chakra_host_trace: str,
+        host_trace: Dict[str, Any],
         host_op_id_to_kineto_ops_map: Dict[int, List[KinetoOperator]],
         host_op_id_to_inclusive_dur_map: Dict[int, int],
         host_op_id_to_exclusive_dur_map: Dict[int, int],
@@ -827,7 +827,7 @@ class TraceLinker:
         offering a comprehensive view of the execution.
 
         Args:
-            chakra_host_trace (str): Path to the Chakra host execution trace file.
+            host_trace (Dict[str, Any]): The Chakra host execution trace.
             host_op_id_to_kineto_ops_map (Dict[int, List[KinetoOperator]]): Map from Chakra host op IDs to Kineto
                 GPU ops.
             host_op_id_to_inclusive_dur_map (Dict[int, int]): Inclusive duration map for Chakra host ops.
@@ -840,10 +840,8 @@ class TraceLinker:
             Dict: The constructed ET+ data.
         """
         logging.debug("Constructing ET+ data.")
-        with open(chakra_host_trace, "r") as file:
-            pytorch_et_data = json.load(file)
 
-        sorted_nodes = sorted(pytorch_et_data["nodes"], key=lambda x: x["id"])
+        sorted_nodes = sorted(host_trace["nodes"], key=lambda x: x["id"])
         gpu_ops = []
         for op in sorted_nodes:
             gpu_ops += self.process_op_and_dependents(
@@ -854,7 +852,7 @@ class TraceLinker:
                 host_op_id_to_timestamp_map,
                 host_op_id_to_inter_thread_dep_map,
             )
-        pytorch_et_data["nodes"] += gpu_ops
+        host_trace["nodes"] += gpu_ops
 
         # Add sync dependencies
         sync_dep_mapping = {}
@@ -867,7 +865,7 @@ class TraceLinker:
                 del gpu_op["sync_dep_to"]
 
         # Update parent-child relationships with new IDs
-        sorted_nodes = sorted(pytorch_et_data["nodes"], key=lambda x: x["id"])
+        sorted_nodes = sorted(host_trace["nodes"], key=lambda x: x["id"])
         for op in sorted_nodes:
             for key in sync_dep_mapping:
                 if self.id_assigner.lookup_new_id(key) == op["id"]:
@@ -875,7 +873,7 @@ class TraceLinker:
             if "ctrl_deps" in op:
                 op["ctrl_deps"] = self.id_assigner.assign_or_retrieve_id(op["ctrl_deps"])
 
-        return pytorch_et_data
+        return host_trace
 
     def process_op_and_dependents(
         self,
