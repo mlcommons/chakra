@@ -77,8 +77,7 @@ class ChakraHostTraceLoader:
 
         Returns:
             Dict[int, PyTorchOperator]: A dictionary mapping operator IDs to PyTorchOperator instances.
-        """
-        
+        """ 
         schema: str = host_trace["schema"]
         pid: int = host_trace["pid"]
         nodes: List[Dict[str, Any]] = host_trace["nodes"]
