@@ -36,7 +36,11 @@ class TraceLinker:
         self.chakra_device_trace_loader = ChakraDeviceTraceLoader()
         self.id_assigner = UniqueIdAssigner()
 
-    def link(self, rank: int, chakra_host_trace: str, chakra_device_trace: str, output_file: str) -> None:
+    def link(self, rank: int,
+        chakra_host_trace: str,
+        chakra_device_trace: str,
+        output_file: str,
+        connect_host_trace: bool) -> None:
         """
         Links Chakra host execution traces (ET) and Chakra device ET to generate Chakra host + device ET.
 
@@ -45,8 +49,9 @@ class TraceLinker:
             chakra_host_trace (str): Path to the Chakra host execution trace file.
             chakra_device_trace (str): Path to the Kineto trace file.
             output_file (str): Path for the output nyTorch execution trace plus file.
+            connect_host_trace (bool): Connect host nodes with missing parents to the corresponding thread root node.
         """
-        host_ops, host_trace = self.chakra_host_trace_loader.load(chakra_host_trace)
+        host_ops, host_trace = self.chakra_host_trace_loader.load(chakra_host_trace, connect_host_trace)
 
         (
             kineto_cpu_ops,
