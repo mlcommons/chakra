@@ -23,6 +23,7 @@ class ChakraHostTraceLoader:
         Args:
             chakra_host_trace_file (str): Path to the PyTorch execution trace file.
             connect_host_trace (bool): Connect host nodes with missing parents to the corresponding thread root node.
+
         Returns:
             Tuple[List[PyTorchOperator], Dict[str, Any]]: Tuple containing list of PyTorch operators and host trace.
         """
@@ -48,6 +49,7 @@ class ChakraHostTraceLoader:
 
         Args:
             node (PyTorchOperator): Starting node for extraction.
+
         Returns:
             List[PyTorchOperator]: Sorted list of extracted PyTorchOperator nodes.
         """
@@ -65,12 +67,14 @@ class ChakraHostTraceLoader:
     def _create_host_ops(self, host_trace: Dict[str, Any], connect_host_trace: bool) -> Dict[int, PyTorchOperator]:
         """
         Create host operators from the provided host trace.
+        
         This method processes the host trace, extracts nodes, and creates PyTorchOperator instances based on the schema
         version specified in the host trace.
 
         Args:
             host_trace (Dict[str, Any]): The host trace dictionary.
             connect_host_trace (bool): Connect host nodes with missing parents to the corresponding thread root node.
+
         Returns:
             Dict[int, PyTorchOperator]: A dictionary mapping operator IDs to PyTorchOperator instances.
         """
@@ -119,9 +123,10 @@ class ChakraHostTraceLoader:
         Get the operator creation method for the specified schema version.
         
         Args:
-            schema (str): The schema version of the host trace.   
+            schema (str): The schema version of the host trace. 
+
         Returns:
-            Callable[[int, Dict[str, Any]], PyTorchOperator] | None: The operator creation functor for the schema version,
+            Callable[[int, Dict[str, Any]], PyTorchOperator] | None: Operator creation functor for the schema version,
             or None if no functor is found.
         """
         node_creation_func = {
