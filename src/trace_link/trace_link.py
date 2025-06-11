@@ -37,6 +37,11 @@ def main() -> None:
         required=True,
         help="Path for the output Chakra host + device trace in the JSON format",
     )
+    parser.add_argument("--connect-host-trace",
+        type=bool,
+        default=False,
+        help="Whether to connect host nodes with missing parents to the corresponding thread root node.",
+    )
     parser.add_argument("--log-level", default="INFO", type=str, help="Log output verbosity level")
 
     args = parser.parse_args()
@@ -44,7 +49,7 @@ def main() -> None:
     logging.basicConfig(level=args.log_level.upper())
 
     linker = TraceLinker()
-    linker.link(args.rank, args.chakra_host_trace, args.chakra_device_trace, args.output_file)
+    linker.link(args.rank, args.chakra_host_trace, args.chakra_device_trace, args.output_file, args.connect_host_trace)
 
     logging.info(f"Linking process successful. Output file is available at {args.output_file}.")
     logging.info("Please run the chakra_converter for further postprocessing.")
