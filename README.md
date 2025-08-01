@@ -4,7 +4,7 @@ Chakra is an open and interoperable graph-based representation of AI/ML workload
 
 This is a repository of Chakra schema and a complementary set of tools and capabilities to enable the collection, analysis, generation, and adoption of Chakra execution traces by a broad range of simulators, emulators, and replay tools.
 
-Chakra is under active development as a [MLCommons](https://mlcommons.org/en) research project. Please see [MLCommons Chakra Working Group](https://mlcommons.org/en/groups/research-chakratracebench/) for more details for participating in this effort.
+Chakra is under active development as a [MLCommons](https://mlcommons.org/en)® research project. Please see [MLCommons Chakra Working Group](https://mlcommons.org/en/groups/research-chakratracebench/) for more details for participating in this effort.
 
 A detailed description of the original motivation and guiding principles can be found [here](https://arxiv.org/abs/2305.14516). The paper was published prior to Chakra becoming a MLCommons project. Please cite this repository to refer to the latest Chakra schema and tools.
 
