@@ -594,7 +594,7 @@ def test_construct_et_plus_data(mock_json_load, mock_open, mock_process_op_and_d
     host_op_id_to_inter_thread_dep_map = {1: None, 2: None}
 
     pytorch_et_plus_data = trace_linker.construct_et_plus_data(
-        "path/to/pytorch_et_file",
+        mock_json_load.return_value,
         host_op_id_to_kineto_ops_map,
         host_op_id_to_inclusive_dur_map,
         host_op_id_to_exclusive_dur_map,
