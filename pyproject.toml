@@ -12,7 +12,7 @@ authors = [
     {name = "MLCommons", email = "chakra@mlcommons.org"},
 ]
 dependencies = [
-    "protobuf==5.*",
+    "protobuf",
     "graphviz",
     "networkx",
     "pydot",
