@@ -29,7 +29,7 @@ $ pip install https://github.com/mlcommons/chakra/archive/ae7c671db702eb1384015b
 Installing PARAM is necessary for Chakra to function properly as it imports essential components from it.
 
 ```bash
-$ git clone git@github.com:facebookresearch/param.git
+$ git clone https://github.com/facebookresearch/param.git
 $ cd param/et_replay
 $ git checkout 7b19f586dd8b267333114992833a0d7e0d601630
 $ pip install .
