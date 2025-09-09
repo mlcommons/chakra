@@ -9,6 +9,7 @@ ETFeederNode::ETFeederNode(std::shared_ptr<ChakraProtoMsg::Node> node) {
   this->name_ = node->name();
   this->runtime_ = node->duration_micros();
   this->is_cpu_op_ = 0;
+  this->num_ops_ = 0;
 
   if (node->has_inputs()) {
     this->inputs_values_ = static_cast<string>(node->inputs().values());
