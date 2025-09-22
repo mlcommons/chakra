@@ -1,3 +1,7 @@
+/*
+ * Copyright (C) 2025 Advanced Micro Devices
+ */
+
 #!/usr/bin/env python3
 
 import json
