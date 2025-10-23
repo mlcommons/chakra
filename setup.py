@@ -1,7 +1,5 @@
-from distutils.command.build import build
-
 from setuptools import setup
-
+from setuptools.command.build import build
 
 class build_grpc(build):
     """
