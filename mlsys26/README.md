@@ -116,10 +116,10 @@ cd plots
 $ pip install matplotlib 
 
 # Figure 6
-bash chakra_kineto_reconstruct.py
+python chakra_kineto_reconstruct.py
 
 # Figure 7
-bash plot_coll_ib.py
+python plot_coll_ib.py
 
 # Figure 8
 bash run_plot_memory.sh
