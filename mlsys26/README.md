@@ -57,21 +57,26 @@ Outputs are written to:
 ASTRA-sim leverages Chakra’s ET feeder to replace its original custom workload format. This integration has enabled a range of co-design studies on emerging platforms, particularly for exploring and optimizing networking infrastructures.
 
 ### ASTRA-sim Installation
+> [!WARNING]
+> Run the below command inside the `${CHAKRA_REPO_ROOT}/mlsys26` directory.
+
 ```bash
-# # Inside the .../mlsys26 directory, clone astra-sim and pin to the validated commit for this artifact
+# Clone ASTRA-sim.
 git clone git@github.com:astra-sim/astra-sim.git
 
 
 cd ./astra-sim
+# Pin ASTRA-sim to the validated commit for this artifact
 git checkout changhai/chakra_main_paper
 git submodule update --init --recursive
 cd ..
 ```
 
+> [!NOTE]
+> Building the docker container can take several minutes.
 ```bash
-# Run from the mlsys26/ directory
-
 # Align the protobuf versions through the following patch
+cd ${CHAKRA_REPO_ROOT}/mlsys26
 bash astra-sim-patch.sh ./astra-sim/Dockerfile
 
 # Remove any old container and image first, if any (full clean rebuild)
@@ -95,7 +100,6 @@ docker run -it --name astra-sim-mlsys26 --shm-size=8g \
 ### Build ASTRA-sim inside the container
 ```bash
 # Inside the container:
-cd /app/astra-sim
 ./build/astra_analytical/build.sh
 ```
 
