@@ -9,3 +9,5 @@ __pycache__/
 .pyre
 *et_def.pb.cc
 *et_def.pb.h
+/mlsys26/traces
+chakra_env/

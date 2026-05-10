@@ -1,0 +1,4 @@
+topology: [ Ring ]
+npus_count: [ 8 ]
+bandwidth: [ 150.0 ]  # GB/s
+latency: [ 936.25 ]  # ns
