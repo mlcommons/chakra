@@ -1,7 +1,9 @@
-import sys
 import os
-import pandas as pd
+import sys
+
 import matplotlib.pyplot as plt
+import pandas as pd
+
 
 def main():
     if len(sys.argv) < 3:
