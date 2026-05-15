@@ -1,4 +1,21 @@
 """Simple script to collect post-execution traces with multiple ranks via torchrun."""
+"""
+    # When running across multiple nodes
+    mpirun -np 4 -N 2 \
+    torchrun \
+        --nnodes=2 \
+        --nproc_per_node=2 \
+        --rdzv_backend=c10d \
+        rdzv_endpoint=<node0-ip>:29501 \
+        --simple_multirank.py
+"""
+"""OR"""
+"""
+    # When running on one node
+    torchrun \
+        --nproc_per_node=2 \
+        --simple_multirank.py
+"""
 
 import os
 
