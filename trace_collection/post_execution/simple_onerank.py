@@ -1,4 +1,7 @@
 """Simple script to collect post-execution traces with one rank only(=compute only)."""
+"""
+   python simple_onerank.py
+"""
 
 import os
 
