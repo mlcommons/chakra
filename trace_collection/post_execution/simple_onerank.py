@@ -1,16 +1,15 @@
-"""Simple script to collect post-execution traces with one rank only(=compute only)."""
-"""
-   python simple_onerank.py
-"""
-
 import os
 
 import torch
 import torch.nn as nn
+from sample_model import SampleModel
 from torch.profiler import ExecutionTraceObserver, profile
 
-from sample_model import SampleModel
+"""Simple script to collect post-execution traces with one rank only(=compute only)."""
 
+"""
+   python simple_onerank.py
+"""
 
 def main() -> None:
     """Run 10 iterations of forward and backward passes."""
@@ -26,7 +25,7 @@ def main() -> None:
     model.to(device)
 
     # Initializing Host profiler and Kineto profiler
-    rank = 0 # Single rank for compute-only
+    rank = 0  # Single rank for compute-only
     wait_iters = 0
     warmup_iters = 5
     active_iters = 5
@@ -72,7 +71,7 @@ def main() -> None:
                 torch.cuda.synchronize()
 
             print(f"Iteration {step_id + 1}/{total_steps}, Loss: {loss.item():.4f}")
-            
+
             # Mark the end of a step
             prof.step()
 

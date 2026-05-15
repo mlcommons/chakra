@@ -1,4 +1,14 @@
+import os
+
+import torch
+import torch.distributed as dist
+import torch.nn as nn
+from sample_model import SampleModel
+from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.profiler import ExecutionTraceObserver, profile
+
 """Simple script to collect post-execution traces with multiple ranks via torchrun."""
+
 """
     # When running across multiple nodes
     mpirun -np 4 -N 2 \
@@ -16,17 +26,6 @@
         --nproc_per_node=2 \
         --simple_multirank.py
 """
-
-import os
-
-import torch
-import torch.distributed as dist
-import torch.nn as nn
-from torch.nn.parallel import DistributedDataParallel as DDP
-from torch.profiler import ExecutionTraceObserver, profile
-
-from sample_model import SampleModel
-
 
 def main() -> None:
     """Run 10 iterations of forward and backward passes."""
@@ -52,7 +51,7 @@ def main() -> None:
     model = SampleModel()
     criterion = nn.MSELoss()
     model.to(device)
-    if torch.cuda.is_available():
+    if torch.cuda.is_available(): # noqa: SIM108
         model = DDP(model, device_ids=[local_rank], output_device=local_rank)
     else:
         model = DDP(model)
@@ -104,7 +103,7 @@ def main() -> None:
                 torch.cuda.synchronize()
 
             print(f"Rank {rank} Iteration {step_id + 1}/{total_steps}, Loss: {loss.item():.4f}")
-            
+
             # Mark the end of a step
             prof.step()
 
