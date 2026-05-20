@@ -3,7 +3,14 @@ import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Tuple
 
-from et_replay.utils import read_dictionary_from_json_file
+try:
+    from et_replay.utils import read_dictionary_from_json_file
+except ImportError as e:
+    if "et_replay" in str(e):
+        from .et_replay_import_error import get_et_replay_install_error_msg
+
+        raise ImportError(get_et_replay_install_error_msg()) from None
+    raise
 
 from .kineto_operator import KinetoOperator
 

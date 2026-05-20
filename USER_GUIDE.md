@@ -15,6 +15,9 @@ $ source chakra_env/bin/activate
 With the virtual environment activated, install the Chakra package using pip.
 
 ```bash
+# Install package from PyPi
+$ pip install mlc-chakra
+
 # Install package from source
 $ pip install .
 
@@ -29,13 +32,11 @@ $ pip install https://github.com/mlcommons/chakra/archive/ae7c671db702eb1384015b
 Installing PARAM is necessary for Chakra to function properly as it imports essential components from it.
 
 ```bash
-$ git clone git@github.com:facebookresearch/param.git
-$ cd param/et_replay
-$ git checkout 7b19f586dd8b267333114992833a0d7e0d601630
-$ pip install .
+$ pip install "git+https://github.com/facebookresearch/param.git@7b19f586dd8b267333114992833a0d7e0d601630#subdirectory=et_replay"
 ```
 
 ### Step 4: Install Holistic Trace Analysis
+Skip this step if you installed the PyPi package.
 Installing Holistic Trace Analysis is necessary for Trace link.
 
 ```bash

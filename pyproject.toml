@@ -6,7 +6,7 @@ requires = [ "setuptools>=61",
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "chakra"
+name = "mlc-chakra"
 requires-python = ">=3.7"
 version = "1.0.0"
 readme = "README.md"
@@ -19,7 +19,7 @@ dependencies = [
     "graphviz",
     "networkx",
     "pydot",
-    "HolisticTraceAnalysis @ git+https://github.com/facebookresearch/HolisticTraceAnalysis.git@d731cc2e2249976c97129d409a83bd53d93051f6"
+    "HolisticTraceAnalysis <= 0.5.0",
 ]
 
 [project.urls]
