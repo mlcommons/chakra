@@ -9,3 +9,6 @@ __pycache__/
 .pyre
 *et_def.pb.cc
 *et_def.pb.h
+
+trace_collection/post_execution/traces
+
