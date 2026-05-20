@@ -1,6 +1,13 @@
 from typing import Any, Dict, List, Optional
 
-from et_replay.execution_trace import Node as PyTorchOperator
+try:
+    from et_replay.execution_trace import Node as PyTorchOperator
+except ImportError as e:
+    if "et_replay" in str(e):
+        from .et_replay_import_error import get_et_replay_install_error_msg
+
+        raise ImportError(get_et_replay_install_error_msg()) from None
+    raise
 
 
 class KinetoOperator:
