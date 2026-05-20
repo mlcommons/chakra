@@ -65,7 +65,7 @@ class TextConverter:
         with open(self.input_filename, "r") as input_file:
             input_text = input_file.read()
         attr = [
-            ChakraAttr(name="schema", string_val="1.0.2-chakra.0.0.4"),
+            ChakraAttr(name="schema", string_val="1.0.2-chakra.1.0.0"),
             ChakraAttr(name="input_file", string_val=input_text),
         ]
         metadata = GlobalMetadata(attr=attr)

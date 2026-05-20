@@ -47,7 +47,7 @@ class PyTorchNode:
         pg_name (str): Process Group name for the inter-GPU communication.
     """
 
-    SUPPORTED_VERSIONS = ["1.0.2-chakra.0.0.4", "1.0.3-chakra.0.0.4", "1.1.0-chakra.0.0.4", "1.1.1-chakra.0.0.4"]
+    SUPPORTED_VERSIONS = ["1.0.2-chakra.0.0.4", "1.0.3-chakra.0.0.4", "1.1.0-chakra.0.0.4", "1.1.1-chakra.0.0.4", "1.1.1-chakra.1.0.0"]
 
     def __init__(self, schema: str, node_data: Dict[str, Any]) -> None:
         """
