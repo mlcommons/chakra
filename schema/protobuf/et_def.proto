@@ -114,6 +114,9 @@ enum NodeType {
   COMM_SEND_NODE = 5;
   COMM_RECV_NODE = 6;
   COMM_COLL_NODE = 7;
+  STORAGE_NODE = 8;
+  BATCH_NODE = 9;
+  CHECKPOINT_NODE = 10;
 }
 
 enum CollectiveCommType {
@@ -145,6 +148,9 @@ message Node {
   IOInfo inputs = 8;
   IOInfo outputs = 9;
   repeated AttributeProto attr = 10;
+
+  // Populated when type == STORAGE_NODE. See StorageInfo.
+  optional StorageInfo storage = 11;
 }
 
 message IOInfo {
@@ -160,4 +166,167 @@ message Tensor {
     uint64 num_elem = 4;   // Number of elements in the storage.
     uint64 elem_bytes = 5; // Number of bytes per element.
     string device = 6;     // Tensor object device location.
+}
+
+// =============================================================================
+// Storage operations
+// =============================================================================
+
+// Layer within the storage stack at which the operation is observed.
+enum StorageLevel {
+  STORAGE_LEVEL_UNKNOWN = 0;
+  STORAGE_LEVEL_FS      = 1;  // VFS / filesystem syscalls
+  STORAGE_LEVEL_PAGE    = 2;  // page cache / mm
+  STORAGE_LEVEL_BLOCK   = 3;  // block layer (bio / request)
+  STORAGE_LEVEL_DEVICE  = 4;  // device transport (NVMe/SCSI/ATA) and below; typed schema intentionally omitted
+}
+
+message StorageInfo {
+  StorageLevel level = 1;
+
+  oneof detail {
+    FsOp    fs    = 10;
+    PageOp  page  = 11;
+    BlockOp block = 12;
+    // STORAGE_LEVEL_DEVICE: no typed detail — use Node.attr.
+  }
+}
+
+// Filesystem-level operation, modeled on POSIX syscalls and the Linux VFS.
+//
+// Scope: limited to operations that directly read or write file bytes to
+// storage, plus open/close for span context. Metadata-only ops (stat, lseek,
+// truncate, fallocate) and ops whose byte traffic surfaces at a lower layer
+// (mmap/munmap — see PageOp faults) are intentionally excluded.
+//
+// References:
+// - https://linasm.sourceforge.net/docs/syscalls/filesystem.php
+// - https://man7.org/linux/man-pages/dir_section_2.html
+//
+// int     open(const char *pathname, int flags, ... /* mode_t mode */);
+// int     close(int fd);
+// ssize_t read(int fd, void *buf, size_t count);
+// ssize_t write(int fd, const void *buf, size_t count);
+// ssize_t pread(int fd, void *buf, size_t count, off_t offset);
+// ssize_t pwrite(int fd, const void *buf, size_t count, off_t offset);
+// int     fsync(int fd);
+// int     fdatasync(int fd);
+// int     sync_file_range(int fd, off_t offset, off_t nbytes, unsigned int flags);
+
+message FsOp {
+  enum Op {
+    FS_OP_UNKNOWN         = 0;
+    FS_OP_OPEN            = 1;
+    FS_OP_CLOSE           = 2;
+    FS_OP_READ            = 3;
+    FS_OP_WRITE           = 4;
+    FS_OP_PREAD           = 5;
+    FS_OP_PWRITE          = 6;
+    FS_OP_FSYNC           = 7;  // flush file's dirty data + metadata to device
+    FS_OP_FDATASYNC       = 8;  // flush dirty data (+ metadata only if needed for retrieval)
+    FS_OP_SYNC_FILE_RANGE = 9;  // flush a specified byte range of dirty data to device
+  }
+  Op     op         = 1;
+  string pathname   = 2;
+  int32  fd         = 3;
+  uint64 offset     = 4;  // byte offset within the file
+  uint64 size_bytes = 5;  // bytes requested / transferred
+  uint32 flags      = 6;
+}
+
+// Page-cache operation.
+//
+// Scope: limited to page-cache events that are synchronously caused by an
+// in-scope FS syscall and that can be causally attributed back to that
+// syscall. Background-only events (eviction outside truncate,
+// memory-pressure reclaim) and events with no FS syscall upstream (mmap
+// page faults) are intentionally excluded.
+//
+// References:
+//   - Linux memory management concepts (page cache, writeback):
+//       https://www.kernel.org/doc/html/latest/admin-guide/mm/concepts.html
+//   - Tracepoint definitions (authoritative names, fields, print formats):
+//       filemap:   https://elixir.bootlin.com/linux/latest/source/include/trace/events/filemap.h
+//       writeback: https://elixir.bootlin.com/linux/latest/source/include/trace/events/writeback.h
+//   - Runtime introspection on a live kernel:
+//       /sys/kernel/debug/tracing/events/{filemap,writeback}/*/format
+//   - Readahead kprobe targets (no dedicated tracepoint; kprobed directly):
+//       page_cache_sync_ra:  https://elixir.bootlin.com/linux/latest/A/ident/page_cache_sync_ra
+//       page_cache_async_ra: https://elixir.bootlin.com/linux/latest/A/ident/page_cache_async_ra
+message PageOp {
+  enum Op {
+    PAGE_OP_UNKNOWN          = 0;
+    PAGE_OP_ADD_TO_CACHE     = 1;  // tracepoint: filemap:mm_filemap_add_to_page_cache
+    PAGE_OP_DIRTY            = 2;  // tracepoint: writeback:writeback_dirty_folio
+    // Two readahead variants distinguished by who triggered them.
+    // SYNC: cache-miss-driven during a read syscall — the user needs these
+    //       pages now, the kernel widens the request to also prefetch ahead.
+    PAGE_OP_READAHEAD_SYNC   = 3;  // kprobe: page_cache_sync_ra
+    // ASYNC: tripwire-driven follow-up — a previous readahead marked a
+    //        page with PG_readahead; when the user touches that page, the
+    //        kernel kicks off the next prefetch without blocking the user.
+    PAGE_OP_READAHEAD_ASYNC  = 6;  // kprobe: page_cache_async_ra
+  }
+
+  // Producers populate whichever of inode / page_index / nr_pages their chosen
+  // tracepoint provides.
+  Op     op         = 1;
+  uint64 inode      = 2;  // backing inode when applicable
+  uint64 page_index = 3;  // page offset within the file (PAGE_SIZE units)
+  uint32 nr_pages   = 4;  // number of contiguous pages affected
+}
+
+// Block-layer operation (bio / request).
+//
+// Scope: limited to block-layer ops synchronously caused by an in-scope FS
+// syscall via the page layer. Reads (page-cache-miss driven), writes
+// (writeback driven by fsync/fdatasync/sync_file_range), and device cache
+// flushes are in scope. Discard, secure erase, write-zeroes, and zone
+// management originate from filesystem maintenance (trim, fstrim, fallocate)
+// or zoned-storage management, not from the in-scope FS syscalls, and are
+// intentionally excluded.
+//
+// References:
+//   - Linux block layer documentation:
+//       https://www.kernel.org/doc/html/latest/block/index.html
+//   - blk-mq / multi-queue block layer:
+//       https://www.kernel.org/doc/html/latest/block/blk-mq.html
+//   - REQ_OP_* definitions (include/linux/blk_types.h):
+//       https://elixir.bootlin.com/linux/latest/source/include/linux/blk_types.h
+//   - Tracepoint definitions (block lifecycle events Q/G/I/D/C):
+//       https://elixir.bootlin.com/linux/latest/source/include/trace/events/block.h
+//   - Runtime introspection on a live kernel:
+//       /sys/kernel/debug/tracing/events/block/*/format
+//   - blktrace event semantics (Q/G/I/D/C action identifiers):
+//       https://man7.org/linux/man-pages/man8/blktrace.8.html
+message BlockOp {
+  // Mirrors REQ_OP_* in include/linux/blk_types.h. The op type is carried by
+  // every block lifecycle tracepoint (bi_opf & REQ_OP_MASK on the bio); it is
+  // not itself a distinct tracepoint.
+  enum Op {
+    BLOCK_OP_UNKNOWN = 0;
+    BLOCK_OP_READ    = 1;  // REQ_OP_READ — issued on page-cache miss inside read/pread
+    BLOCK_OP_WRITE   = 2;  // REQ_OP_WRITE — issued by writeback (caused by fsync/fdatasync/sync_file_range)
+    BLOCK_OP_FLUSH   = 3;  // REQ_OP_FLUSH — device cache flush (caused by fsync/fdatasync)
+  }
+  // Request lifecycle event at which this node was observed. See blktrace(8)
+  // and include/trace/events/block.h.
+  enum QueueEvent {
+    BLOCK_EVENT_UNKNOWN  = 0;
+    BLOCK_EVENT_QUEUE    = 1;  // Q — tracepoint: block:block_bio_queue (bio submitted via submit_bio)
+    BLOCK_EVENT_GET      = 2;  // G — tracepoint: block:block_getrq (request struct allocated)
+    BLOCK_EVENT_INSERT   = 3;  // I — tracepoint: block:block_rq_insert (added to scheduler queue)
+    BLOCK_EVENT_DISPATCH = 4;  // D — tracepoint: block:block_rq_issue (handed to driver)
+    BLOCK_EVENT_COMPLETE = 5;  // C — tracepoint: block:block_rq_complete (completion received)
+  }
+
+  // Producers populate whichever of lba / nr_sectors / req_op_flags their
+  // chosen tracepoint provides; for FLUSH ops, expect nr_sectors == 0 and
+  // lba == 0 since flushes carry no data payload.
+  Op         op           = 1;
+  QueueEvent queue_event  = 2;
+  string     device       = 3;
+  uint64     lba          = 4;  // logical block address (in sectors)
+  uint32     nr_sectors   = 5;
+  uint32     req_op_flags = 6;  // REQ_* flags (REQ_SYNC, REQ_FUA, ...)
 }
