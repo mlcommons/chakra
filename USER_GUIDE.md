@@ -36,15 +36,10 @@ $ pip install .
 ```
 
 ### Step 4: Install Holistic Trace Analysis
-Installing Holistic Trace Analysis is necessary for Trace link.
+Installing Holistic Trace Analysis (published on PyPI as `traceinsight`) is necessary for Trace link.
 
 ```bash
-$ git clone https://github.com/facebookresearch/HolisticTraceAnalysis.git
-$ cd HolisticTraceAnalysis
-$ git checkout d731cc2e2249976c97129d409a83bd53d93051f6
-$ git submodule update --init
-$ pip install -r requirements.txt
-$ pip install -e .
+$ pip install traceinsight
 ```
 
 ### Step 5: Uninstalling Chakra
