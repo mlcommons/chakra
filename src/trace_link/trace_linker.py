@@ -6,11 +6,19 @@ import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Optional, Tuple
 
-from et_replay.execution_trace import (
-    EXECUTION_TRACE_PROCESS_ANNOTATION,
-    EXECUTION_TRACE_THREAD_ANNOTATION,
-)
-from et_replay.execution_trace import Node as PyTorchOperator
+try:
+    from et_replay.execution_trace import (
+        EXECUTION_TRACE_PROCESS_ANNOTATION,
+        EXECUTION_TRACE_THREAD_ANNOTATION,
+    )
+    from et_replay.execution_trace import Node as PyTorchOperator
+except ImportError as e:
+    if "et_replay" in str(e):
+        from .et_replay_import_error import get_et_replay_install_error_msg
+
+        raise ImportError(get_et_replay_install_error_msg()) from None
+    raise
+
 from hta.analyzers.critical_path_analysis import CPEdgeType
 from hta.trace_analysis import TraceAnalysis
 
