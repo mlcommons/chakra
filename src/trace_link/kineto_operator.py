@@ -52,6 +52,7 @@ class KinetoOperator:
         self.inter_thread_dep: Optional[int] = None
         self.sync_dep: List[KinetoOperator] = []
         self.stream: Optional[int] = kineto_op.get("args", {}).get("stream", None)
+        self.device: Optional[int] = kineto_op.get("args", {}).get("device")
         self.rf_id: Optional[int] = kineto_op.get("args", {}).get("Record function id", None)
         self.correlation: int = kineto_op.get("args", {}).get("correlation", -1)
         self.pg_name: Optional[str] = kineto_op.get("args", {}).get("Process Group Name", None)

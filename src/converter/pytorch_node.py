@@ -112,7 +112,8 @@ class PyTorchNode:
         self.inter_thread_dep = node_data.get("inter_thread_dep")
         self.sync_dep = node_data.get("sync_dep")
         self.cat = node_data.get("cat")
-        self.stream = node_data.get("stream", 0)
+        self.stream = node_data.get("stream")
+        self.device = node_data.get("device")
         # In Colletive comms nodes, pg_name is in node_data if exists.
         # In SendRecv nodes, pg_name is in the attrs if exists.
         # Otherwise, pg_name is not present.
