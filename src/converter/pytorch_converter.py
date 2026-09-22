@@ -50,6 +50,7 @@ class PyTorchConverter:
         for root_node in root_node_list:
             self.convert_ctrl_dep_to_data_dep(json_node_map, protobuf_node_map, root_node)
 
+        self.add_stream_dependencies(json_node_map, protobuf_node_map)
         protobuf_node_map = self.remove_dangling_nodes(protobuf_node_map)
 
         parent_to_children_map = self.update_parent_to_children_map(protobuf_node_map)
@@ -474,10 +475,15 @@ class PyTorchConverter:
             if json_node.sync_dep:
                 for sync_dep in json_node.sync_dep:
                     if sync_dep not in current_node.data_deps:
-                        # Found a bug encoding false dependency HTA.
-                        # Compare start_time to eliminate false sync dependency.
-                        prior_node = protobuf_node_map.get(sync_dep)
-                        if prior_node is not None and prior_node.start_time_micros < current_node.start_time_micros:
+                        # Filter backward HTA edges using linked timestamps, not unset protobuf start times.
+                        prior_node = json_node_map.get(sync_dep)
+                        if (
+                            sync_dep in protobuf_node_map
+                            and prior_node is not None
+                            and prior_node.ts is not None
+                            and json_node.ts is not None
+                            and prior_node.ts < json_node.ts
+                        ):
                             current_node.data_deps.append(sync_dep)
                             logging.debug(
                                 f"Node ID {current_node.id} now has an synchonization dependency on Node ID "
@@ -489,6 +495,27 @@ class PyTorchConverter:
                 child_chakra_node = protobuf_node_map.get(child_chakra_id)
                 if child_chakra_node and child_chakra_node.id not in visited:
                     stack.append(child_chakra_node)
+
+    def add_stream_dependencies(
+        self, json_node_map: Dict[int, PyTorchNode], protobuf_node_map: Dict[int, ChakraNode]
+    ) -> None:
+        """Chain device operations in recorded order within each device and stream."""
+        streams: Dict[Tuple[int, int], List[PyTorchNode]] = {}
+        for node in json_node_map.values():
+            if not node.is_gpu_op() or node.id not in protobuf_node_map:
+                continue
+            if node.device is None or node.stream is None or node.ts is None:
+                logging.warning("Skipping stream dependency for GPU node %s: missing device, stream, or ts", node.id)
+                continue
+            streams.setdefault((node.device, node.stream), []).append(node)
+
+        for nodes in streams.values():
+            # Stable sorting preserves input order when timestamps are equal.
+            nodes.sort(key=lambda node: node.ts)
+            for previous, current in zip(nodes, nodes[1:]):
+                dependencies = protobuf_node_map[current.id].data_deps
+                if previous.id not in dependencies:
+                    dependencies.append(previous.id)
 
     def remove_dangling_nodes(self, protobuf_node_map: Dict[int, ChakraNode]) -> Dict[int, ChakraNode]:
         """

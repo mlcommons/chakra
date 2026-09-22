@@ -959,6 +959,7 @@ class TraceLinker:
                     "exclusive_dur": gpu_op.exclusive_dur,
                     "ts": gpu_op.timestamp,
                     "stream": gpu_op.stream,
+                    "device": gpu_op.device,
                     **(
                         {"pg_name": gpu_op.pg_name}
                         if gpu_op.is_inter_gpu_comms_op() and gpu_op.pg_name is not None

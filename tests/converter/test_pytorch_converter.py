@@ -1,4 +1,5 @@
 import json
+from copy import deepcopy
 from typing import Dict
 from unittest.mock import MagicMock, mock_open, patch
 
@@ -16,6 +17,125 @@ from chakra.schema.protobuf.et_def_pb2 import (
 from chakra.schema.protobuf.et_def_pb2 import Node as ChakraNode
 from chakra.src.converter.pytorch_converter import PyTorchConverter
 from chakra.src.converter.pytorch_node import PyTorchNode
+
+
+@pytest.fixture
+def stream_trace(sample_pytorch_data):
+    trace = deepcopy(sample_pytorch_data)
+    root, launcher = trace["nodes"]
+    root["name"] = "[pytorch|profiler|execution_trace|thread]"
+    for node_id, name, timestamp in [(40, "gemm", 10), (30, "ncclKernel_AllReduce", 20), (20, "consumer", 30)]:
+        node = deepcopy(launcher)
+        node.update(id=node_id, name=name, ctrl_deps=2, cat="kernel", device=0, stream=0, ts=timestamp)
+        node["inputs"] = node["outputs"] = {"values": [], "shapes": [], "types": []}
+        trace["nodes"].append(node)
+    return trace
+
+
+def converted_nodes(trace):
+    converter = PyTorchConverter()
+    with (
+        patch.object(converter, "load_json_execution_traces", return_value=trace),
+        patch.object(converter, "write_protobuf_execution_trace") as write,
+    ):
+        converter.convert("input.json", "output.et", False)
+    return write.call_args.args[2]
+
+
+def test_convert_preserves_stream_order_and_launcher_dependencies(stream_trace):
+    nodes = converted_nodes(stream_trace)
+    assert nodes[30].type == COMM_COLL_NODE
+    assert set(nodes[30].data_deps) == {2, 40}
+    assert set(nodes[20].data_deps) == {2, 30}
+    assert list(nodes[40].data_deps) == [2]
+    assert list(nodes[20].ctrl_deps) == [2]
+
+
+@pytest.mark.parametrize("field,value", [("stream", 1), ("device", 1)])
+def test_convert_keeps_device_streams_independent(stream_trace, field, value):
+    stream_trace["nodes"][-2][field] = value
+    nodes = converted_nodes(stream_trace)
+    assert list(nodes[30].data_deps) == [2]
+    assert set(nodes[20].data_deps) == {2, 40}
+
+
+def test_convert_sorts_stream_timestamps_stably(stream_trace):
+    stream_trace["nodes"][2:] = list(reversed(stream_trace["nodes"][2:]))
+    nodes = converted_nodes(stream_trace)
+    assert 40 in nodes[30].data_deps
+    assert 30 in nodes[20].data_deps
+    for node in stream_trace["nodes"][2:]:
+        node["ts"] = 10
+    nodes = converted_nodes(stream_trace)
+    assert 20 in nodes[30].data_deps
+    assert 30 in nodes[40].data_deps
+
+
+@pytest.mark.parametrize("field", ["device", "stream", "ts"])
+@pytest.mark.parametrize("explicit_null", [False, True])
+def test_convert_skips_missing_stream_metadata(stream_trace, field, explicit_null):
+    for node in stream_trace["nodes"][2:]:
+        if explicit_null:
+            node[field] = None
+        else:
+            del node[field]
+    nodes = converted_nodes(stream_trace)
+    assert all(list(nodes[node_id].data_deps) == [2] for node_id in (40, 30, 20))
+
+
+def test_convert_does_not_duplicate_sync_and_stream_edges(stream_trace):
+    stream_trace["nodes"][-1]["sync_dep"] = [30, 30]
+    nodes = converted_nodes(stream_trace)
+    assert list(nodes[20].data_deps).count(30) == 1
+
+
+@pytest.mark.parametrize(
+    "source_ts,target_ts,expected",
+    [(10, 30, True), (30, 10, False), (10, 10, False), (None, 30, False), (10, None, False)],
+)
+@pytest.mark.parametrize("cpu_target", [False, True])
+def test_convert_sync_uses_linked_timestamps(stream_trace, source_ts, target_ts, expected, cpu_target):
+    stream_trace["nodes"][2]["ts"] = source_ts
+    target = stream_trace["nodes"][-1]
+    target.update(ts=target_ts, stream=1, sync_dep=[40, 999])
+    if cpu_target:
+        target.pop("cat")
+        target["ctrl_deps"] = 1
+    nodes = converted_nodes(stream_trace)
+    assert (40 in nodes[20].data_deps) == expected
+    assert 999 not in nodes[20].data_deps
+
+
+def test_convert_preserves_copy_order(stream_trace):
+    stream_trace["nodes"][3].update(name="Memcpy DtoD", cat="gpu_memcpy")
+    nodes = converted_nodes(stream_trace)
+    assert 40 in nodes[30].data_deps
+    assert 30 in nodes[20].data_deps
+
+
+def test_stream_dependencies_are_idempotent(stream_trace):
+    converter = PyTorchConverter()
+    _, json_nodes = converter.parse_json_trace(stream_trace)
+    nodes = converted_nodes(stream_trace)
+    before = {node_id: list(node.data_deps) for node_id, node in nodes.items()}
+    converter.add_stream_dependencies(json_nodes, nodes)
+    assert before == {node_id: list(node.data_deps) for node_id, node in nodes.items()}
+
+
+def test_convert_rejects_cycles_after_adding_stream_edges(stream_trace):
+    converter = PyTorchConverter()
+
+    def add_conflicting_dependency(json_nodes, protobuf_nodes, root):
+        protobuf_nodes[40].data_deps.append(20)
+
+    with (
+        patch.object(converter, "load_json_execution_traces", return_value=stream_trace),
+        patch.object(converter, "convert_ctrl_dep_to_data_dep", side_effect=add_conflicting_dependency),
+        patch.object(converter, "write_protobuf_execution_trace") as write,
+        pytest.raises(Exception, match="Cyclic dependency"),
+    ):
+        converter.convert("input.json", "output.et", False)
+    write.assert_not_called()
 
 
 @pytest.fixture
