@@ -7,7 +7,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "chakra"
-requires-python = ">=3.7"
+requires-python = ">=3.10"
 version = "1.0.0"
 readme = "README.md"
 license = {file = "LICENSE.md"}
@@ -49,7 +49,7 @@ chakra_trace_link = "chakra.src.trace_link.trace_link:main"
 chakra_visualizer = "chakra.src.visualizer.visualizer:main"
 
 [tool.ruff]
-target-version = "py39"
+target-version = "py310"
 line-length = 120
 exclude = [
     "src/converter/text_converter.py",
