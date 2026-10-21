@@ -49,6 +49,8 @@ def main() -> None:
         on_trace_ready=device_trace_handler,
         record_shapes=True,
         execution_trace_observer=et,
+        # Record cudaStreamWaitEvent so that chakra_trace_link can add cross-stream dependencies.
+        experimental_config=torch.profiler._ExperimentalConfig(enable_cuda_sync_events=True),
     ) as prof:
         print("Starting training loop...")
         for step_id in range(total_steps):

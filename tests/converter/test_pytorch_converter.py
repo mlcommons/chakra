@@ -1,5 +1,4 @@
 import json
-from copy import deepcopy
 from typing import Dict
 from unittest.mock import MagicMock, mock_open, patch
 
@@ -17,125 +16,6 @@ from chakra.schema.protobuf.et_def_pb2 import (
 from chakra.schema.protobuf.et_def_pb2 import Node as ChakraNode
 from chakra.src.converter.pytorch_converter import PyTorchConverter
 from chakra.src.converter.pytorch_node import PyTorchNode
-
-
-@pytest.fixture
-def stream_trace(sample_pytorch_data):
-    trace = deepcopy(sample_pytorch_data)
-    root, launcher = trace["nodes"]
-    root["name"] = "[pytorch|profiler|execution_trace|thread]"
-    for node_id, name, timestamp in [(40, "gemm", 10), (30, "ncclKernel_AllReduce", 20), (20, "consumer", 30)]:
-        node = deepcopy(launcher)
-        node.update(id=node_id, name=name, ctrl_deps=2, cat="kernel", device=0, stream=0, ts=timestamp)
-        node["inputs"] = node["outputs"] = {"values": [], "shapes": [], "types": []}
-        trace["nodes"].append(node)
-    return trace
-
-
-def converted_nodes(trace):
-    converter = PyTorchConverter()
-    with (
-        patch.object(converter, "load_json_execution_traces", return_value=trace),
-        patch.object(converter, "write_protobuf_execution_trace") as write,
-    ):
-        converter.convert("input.json", "output.et", False)
-    return write.call_args.args[2]
-
-
-def test_convert_preserves_stream_order_and_launcher_dependencies(stream_trace):
-    nodes = converted_nodes(stream_trace)
-    assert nodes[30].type == COMM_COLL_NODE
-    assert set(nodes[30].data_deps) == {2, 40}
-    assert set(nodes[20].data_deps) == {2, 30}
-    assert list(nodes[40].data_deps) == [2]
-    assert list(nodes[20].ctrl_deps) == [2]
-
-
-@pytest.mark.parametrize("field,value", [("stream", 1), ("device", 1)])
-def test_convert_keeps_device_streams_independent(stream_trace, field, value):
-    stream_trace["nodes"][-2][field] = value
-    nodes = converted_nodes(stream_trace)
-    assert list(nodes[30].data_deps) == [2]
-    assert set(nodes[20].data_deps) == {2, 40}
-
-
-def test_convert_sorts_stream_timestamps_stably(stream_trace):
-    stream_trace["nodes"][2:] = list(reversed(stream_trace["nodes"][2:]))
-    nodes = converted_nodes(stream_trace)
-    assert 40 in nodes[30].data_deps
-    assert 30 in nodes[20].data_deps
-    for node in stream_trace["nodes"][2:]:
-        node["ts"] = 10
-    nodes = converted_nodes(stream_trace)
-    assert 20 in nodes[30].data_deps
-    assert 30 in nodes[40].data_deps
-
-
-@pytest.mark.parametrize("field", ["device", "stream", "ts"])
-@pytest.mark.parametrize("explicit_null", [False, True])
-def test_convert_skips_missing_stream_metadata(stream_trace, field, explicit_null):
-    for node in stream_trace["nodes"][2:]:
-        if explicit_null:
-            node[field] = None
-        else:
-            del node[field]
-    nodes = converted_nodes(stream_trace)
-    assert all(list(nodes[node_id].data_deps) == [2] for node_id in (40, 30, 20))
-
-
-def test_convert_does_not_duplicate_sync_and_stream_edges(stream_trace):
-    stream_trace["nodes"][-1]["sync_dep"] = [30, 30]
-    nodes = converted_nodes(stream_trace)
-    assert list(nodes[20].data_deps).count(30) == 1
-
-
-@pytest.mark.parametrize(
-    "source_ts,target_ts,expected",
-    [(10, 30, True), (30, 10, False), (10, 10, False), (None, 30, False), (10, None, False)],
-)
-@pytest.mark.parametrize("cpu_target", [False, True])
-def test_convert_sync_uses_linked_timestamps(stream_trace, source_ts, target_ts, expected, cpu_target):
-    stream_trace["nodes"][2]["ts"] = source_ts
-    target = stream_trace["nodes"][-1]
-    target.update(ts=target_ts, stream=1, sync_dep=[40, 999])
-    if cpu_target:
-        target.pop("cat")
-        target["ctrl_deps"] = 1
-    nodes = converted_nodes(stream_trace)
-    assert (40 in nodes[20].data_deps) == expected
-    assert 999 not in nodes[20].data_deps
-
-
-def test_convert_preserves_copy_order(stream_trace):
-    stream_trace["nodes"][3].update(name="Memcpy DtoD", cat="gpu_memcpy")
-    nodes = converted_nodes(stream_trace)
-    assert 40 in nodes[30].data_deps
-    assert 30 in nodes[20].data_deps
-
-
-def test_stream_dependencies_are_idempotent(stream_trace):
-    converter = PyTorchConverter()
-    _, json_nodes = converter.parse_json_trace(stream_trace)
-    nodes = converted_nodes(stream_trace)
-    before = {node_id: list(node.data_deps) for node_id, node in nodes.items()}
-    converter.add_stream_dependencies(json_nodes, nodes)
-    assert before == {node_id: list(node.data_deps) for node_id, node in nodes.items()}
-
-
-def test_convert_rejects_cycles_after_adding_stream_edges(stream_trace):
-    converter = PyTorchConverter()
-
-    def add_conflicting_dependency(json_nodes, protobuf_nodes, root):
-        protobuf_nodes[40].data_deps.append(20)
-
-    with (
-        patch.object(converter, "load_json_execution_traces", return_value=stream_trace),
-        patch.object(converter, "convert_ctrl_dep_to_data_dep", side_effect=add_conflicting_dependency),
-        patch.object(converter, "write_protobuf_execution_trace") as write,
-        pytest.raises(Exception, match="Cyclic dependency"),
-    ):
-        converter.convert("input.json", "output.et", False)
-    write.assert_not_called()
 
 
 @pytest.fixture
@@ -272,6 +152,75 @@ def test_convert_ctrl_dep_to_data_dep(sample_pytorch_data: Dict) -> None:
     root_node = chakra_nodes[1]
     converter.convert_ctrl_dep_to_data_dep(json_node_map, chakra_nodes, root_node)
     assert root_node.data_deps == []
+
+
+def linked_node(node_id: int, name: str, parent: int, ts: int, **fields) -> Dict:
+    empty = {"values": [], "shapes": [], "types": []}
+    attrs = [{"name": attr, "type": "uint64", "value": 0} for attr in ("rf_id", "fw_parent", "scope", "tid", "fw_tid")]
+    attrs += [{"name": "seq_id", "type": "int64", "value": -1}, {"name": "op_schema", "type": "string", "value": ""}]
+    return {
+        "id": node_id,
+        "name": name,
+        "ctrl_deps": parent,
+        "exclusive_dur": 10,
+        "ts": ts,
+        "inputs": empty,
+        "outputs": empty,
+        "attrs": attrs,
+        **fields,
+    }
+
+
+THREAD = "[pytorch|profiler|execution_trace|thread]"
+
+
+@pytest.fixture
+def gpu_trace(sample_pytorch_data: Dict) -> Dict:
+    # FSDP: aten::mm on stream 7 waits for an AllGather on stream 23 through cudaStreamWaitEvent.
+    sample_pytorch_data["nodes"] = [
+        linked_node(1, THREAD, None, 0),
+        linked_node(2, "nccl:_all_gather_base", 1, 10),
+        linked_node(3, "aten::mm", 1, 20),
+        linked_node(4, "ncclDevKernel_AllGather_RING_LL", 2, 100, cat="kernel", stream=23),
+        linked_node(5, "sm90_xmma_gemm", 3, 300, cat="kernel", stream=7, sync_dep=[4, 999]),
+    ]
+    return sample_pytorch_data
+
+
+def converted_nodes(trace: Dict) -> Dict[int, ChakraNode]:
+    converter = PyTorchConverter()
+    with (
+        patch.object(converter, "load_json_execution_traces", return_value=trace),
+        patch.object(converter, "write_protobuf_execution_trace") as write,
+    ):
+        converter.convert("input.json", "output.et", False)
+    return write.call_args.args[2]
+
+
+def test_convert_places_gpu_nodes_in_cpu_chain(gpu_trace: Dict) -> None:
+    gpu_trace["nodes"].append(linked_node(6, "Memcpy DtoD", 2, 110, cat="gpu_memcpy", stream=7))
+    nodes = converted_nodes(gpu_trace)
+    assert list(nodes[4].data_deps) == [2]
+    assert list(nodes[6].data_deps) == [2]
+    # aten::mm depends on the GPU nodes that the previous CPU node launched, not on the CPU node itself.
+    assert set(nodes[3].data_deps) == {4, 6}
+
+
+def test_convert_adds_cross_stream_dependency(gpu_trace: Dict) -> None:
+    assert set(converted_nodes(gpu_trace)[5].data_deps) == {3, 4}
+
+
+@pytest.mark.parametrize("prior_ts, ts", [(300, 100), (300, 300), (None, 300), (100, None)])
+def test_convert_skips_sync_dependency_not_earlier(gpu_trace: Dict, prior_ts, ts) -> None:
+    gpu_trace["nodes"][3]["ts"] = prior_ts
+    gpu_trace["nodes"][4]["ts"] = ts
+    assert list(converted_nodes(gpu_trace)[5].data_deps) == [3]
+
+
+def test_convert_adds_gpu_to_cpu_sync_dependency(gpu_trace: Dict) -> None:
+    # Before the converter compared linked timestamps, it compared unset protobuf start times and dropped this edge.
+    gpu_trace["nodes"] += [linked_node(10, THREAD, None, 0), linked_node(11, "aten::item", 10, 200, sync_dep=[4])]
+    assert set(converted_nodes(gpu_trace)[11].data_deps) == {10, 4}
 
 
 @patch("builtins.open", new_callable=mock_open)

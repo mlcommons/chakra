@@ -75,6 +75,7 @@ class TraceLinker:
             kineto_tid_ops_map,
             sync_deps,
         )
+        self.enforce_stream_wait_dep(kineto_gpu_ops, kineto_tid_ops_map)
 
         chakra_execution_trace_plus_data = self.link_traces(
             chakra_host_trace,
@@ -379,6 +380,50 @@ class TraceLinker:
                 break
 
         return closest_start_kineto_op
+
+    def enforce_stream_wait_dep(
+        self, kineto_gpu_ops: List[KinetoOperator], kineto_tid_ops_map: Dict[int, List[KinetoOperator]]
+    ) -> None:
+        """
+        Add GPU-to-GPU dependencies for cudaStreamWaitEvent calls.
+
+        cudaEventRecord captures the work submitted to a stream so far, and cudaStreamWaitEvent makes another stream
+        wait for that work. The first GPU operator submitted to the waiting stream after the wait therefore depends on
+        the last GPU operator submitted to the recording stream before the record. CUDA correlation IDs follow the
+        order of the API calls, so they place the record and wait calls among the kernel launches.
+
+        Kineto records the wait only with `_ExperimentalConfig(enable_cuda_sync_events=True)`.
+
+        Args:
+            kineto_gpu_ops (List[KinetoOperator]): Kineto GPU operators.
+            kineto_tid_ops_map (Dict[int, List[KinetoOperator]]): Kineto operators grouped by thread ID, including
+                the CUDA sync events.
+        """
+        stream_ops: Dict[int, List[KinetoOperator]] = {}
+        for gpu_op in sorted(kineto_gpu_ops, key=lambda op: op.correlation):
+            stream_ops.setdefault(gpu_op.stream, []).append(gpu_op)
+        stream_correlations = {stream: [op.correlation for op in ops] for stream, ops in stream_ops.items()}
+
+        for ops in kineto_tid_ops_map.values():
+            for wait in ops:
+                record_correlation = wait.wait_on_event_record_correlation
+                if (
+                    not wait.is_stream_wait_event()
+                    or wait.wait_on_stream == wait.stream
+                    or record_correlation is None
+                    or record_correlation < 0  # The event was recorded before the trace started.
+                ):
+                    continue
+                src_index = bisect.bisect_left(stream_correlations.get(wait.wait_on_stream, []), record_correlation) - 1
+                dst_index = bisect.bisect_right(stream_correlations.get(wait.stream, []), wait.correlation)
+                if src_index < 0 or dst_index >= len(stream_ops.get(wait.stream, [])):
+                    logging.debug(f"No GPU operators found for stream wait event: {wait}")
+                    continue
+
+                src, dst = stream_ops[wait.wait_on_stream][src_index], stream_ops[wait.stream][dst_index]
+                if src not in dst.stream_wait_dep:
+                    dst.stream_wait_dep.append(src)
+                    logging.debug(f"Stream wait dependency: {src.name} (stream {src.stream}) -> {dst.name}")
 
     def link_traces(
         self,
@@ -874,8 +919,23 @@ class TraceLinker:
                     op["sync_dep"] = sync_dep_mapping[key]
             if "ctrl_deps" in op:
                 op["ctrl_deps"] = self.id_assigner.assign_or_retrieve_id(op["ctrl_deps"])
+        self.add_stream_wait_dep(gpu_ops)
 
         return pytorch_et_data
+
+    def add_stream_wait_dep(self, gpu_ops: List[Dict]) -> None:
+        """
+        Record each GPU operator's cross-stream dependencies as sync dependencies on GPU node IDs.
+
+        Run this after every GPU operator has its ID in the linked trace.
+
+        Args:
+            gpu_ops (List[Dict]): GPU operators of the linked trace.
+        """
+        for gpu_op in gpu_ops:
+            for src in gpu_op.pop("stream_wait_dep", []):
+                if src.et_id is not None:
+                    gpu_op.setdefault("sync_dep", []).append(src.et_id)
 
     def process_op_and_dependents(
         self,
@@ -959,7 +1019,6 @@ class TraceLinker:
                     "exclusive_dur": gpu_op.exclusive_dur,
                     "ts": gpu_op.timestamp,
                     "stream": gpu_op.stream,
-                    "device": gpu_op.device,
                     **(
                         {"pg_name": gpu_op.pg_name}
                         if gpu_op.is_inter_gpu_comms_op() and gpu_op.pg_name is not None
@@ -967,6 +1026,9 @@ class TraceLinker:
                     ),
                 }
             )
+            gpu_op.et_id = new_gpu_op_id
+            if gpu_op.stream_wait_dep:
+                new_gpu_op["stream_wait_dep"] = gpu_op.stream_wait_dep
             updated_gpu_ops.append(new_gpu_op)
 
             for sync_dep in gpu_op.sync_dep:

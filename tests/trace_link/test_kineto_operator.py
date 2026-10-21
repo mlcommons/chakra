@@ -30,18 +30,11 @@ def test_init_kineto_operator(sample_operator_data):
     assert operator.ev_idx == 456
     assert operator.tid == 1234
     assert operator.stream == 7
-    assert operator.device is None
     assert operator.rf_id == 12
     assert operator.correlation == 99
     assert operator.host_op is None  # Ensure default None
     assert operator.parent_host_op_id is None  # Ensure default None
     assert operator.inter_thread_dep is None  # Ensure default None
-
-
-@pytest.mark.parametrize("device", [0, 1])
-def test_device_identity(sample_operator_data, device):
-    sample_operator_data["args"]["device"] = device
-    assert KinetoOperator(sample_operator_data).device == device
 
 
 def test_repr_method(sample_operator_data):
