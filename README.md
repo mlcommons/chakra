@@ -28,7 +28,7 @@ Check out [`USER_GUIDE`](USER_GUIDE.md) for details.
 
 ## License
 
-Chakra is released under the MIT license. Please see the [`LICENSE.md`](LICENSE.md) file for more information.
+Chakra is released under the Apache-2.0 license. Please see the [`LICENSE.md`](LICENSE.md) file for more information.
 
 ## Contributing
 
