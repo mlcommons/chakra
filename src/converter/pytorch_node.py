@@ -47,7 +47,13 @@ class PyTorchNode:
         pg_name (str): Process Group name for the inter-GPU communication.
     """
 
-    SUPPORTED_VERSIONS = ["1.0.2-chakra.0.0.4", "1.0.3-chakra.0.0.4", "1.1.0-chakra.0.0.4", "1.1.1-chakra.0.0.4", "1.1.1-chakra.1.0.0"]
+    SUPPORTED_VERSIONS = [
+        "1.0.2-chakra.0.0.4",
+        "1.0.3-chakra.0.0.4",
+        "1.1.0-chakra.0.0.4",
+        "1.1.1-chakra.0.0.4",
+        "1.1.1-chakra.1.0.0"
+    ]
 
     def __init__(self, schema: str, node_data: Dict[str, Any]) -> None:
         """
@@ -218,7 +224,7 @@ class PyTorchNode:
             int: The calculated communication size.
         """
         comm_size = 0
-        for input_value, input_type in zip(self.inputs["values"], self.inputs["types"]):
+        for input_value, input_type in zip(self.inputs["values"], self.inputs["types"], strict=False):
             if "Tensor" in input_type:
                 if input_type.startswith("GenericList[Tensor"):
                     for inner_value in input_value:

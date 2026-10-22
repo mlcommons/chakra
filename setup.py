@@ -1,6 +1,7 @@
 from setuptools import setup
 from setuptools.command.build import build
 
+
 class build_grpc(build):
     """
     Custom build class to include gRPC build commands.
