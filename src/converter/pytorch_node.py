@@ -52,7 +52,7 @@ class PyTorchNode:
         "1.0.3-chakra.0.0.4",
         "1.1.0-chakra.0.0.4",
         "1.1.1-chakra.0.0.4",
-        "1.1.1-chakra.1.0.0"
+        "1.1.1-chakra.1.0.0",
     ]
 
     def __init__(self, schema: str, node_data: Dict[str, Any]) -> None:

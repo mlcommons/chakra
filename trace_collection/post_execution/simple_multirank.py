@@ -27,6 +27,7 @@ from torch.profiler import ExecutionTraceObserver, profile
         --simple_multirank.py
 """
 
+
 def main() -> None:
     """Run 10 iterations of forward and backward passes."""
     batch_size = 64
@@ -51,7 +52,7 @@ def main() -> None:
     model = SampleModel()
     criterion = nn.MSELoss()
     model.to(device)
-    if torch.cuda.is_available(): # noqa: SIM108
+    if torch.cuda.is_available():  # noqa: SIM108
         model = DDP(model, device_ids=[local_rank], output_device=local_rank)
     else:
         model = DDP(model)
