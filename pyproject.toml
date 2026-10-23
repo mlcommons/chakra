@@ -19,7 +19,7 @@ dependencies = [
     "graphviz",
     "networkx",
     "pydot",
-    "HolisticTraceAnalysis @ git+https://github.com/facebookresearch/HolisticTraceAnalysis.git@d731cc2e2249976c97129d409a83bd53d93051f6"
+    "traceinsight"
 ]
 
 [project.urls]
