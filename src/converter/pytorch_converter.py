@@ -421,6 +421,11 @@ class PyTorchConverter:
         data dependency field. This method performs this conversion by traversing the control dependencies and
         encoding them as data dependencies.
 
+        A GPU node depends on the CPU node that launched it. The CPU node visited next depends on the GPU nodes that
+        the previous CPU node launched instead of on that CPU node, which places GPU nodes in the execution chain.
+        GPU nodes launched in sequence therefore depend on each other through the CPU nodes, without edges derived
+        from launch or stream order.
+
         Additionally, this method handles inter-thread dependencies. These dependencies are captured and encoded to
         ensure that the execution flow across multiple threads is correctly represented.
 
@@ -433,6 +438,7 @@ class PyTorchConverter:
         stack: List[ChakraNode] = [chakra_node]
         last_visited_non_gpu: Optional[ChakraNode] = None
         last_visited_any: Optional[ChakraNode] = None
+        last_launched_gpu: List[ChakraNode] = []
 
         while stack:
             current_node = stack.pop()
@@ -453,6 +459,7 @@ class PyTorchConverter:
                         f"GPU Node ID {current_node.id} now has a data dependency on Node ID {last_visited_any.id}"
                     )
                 last_visited_any = last_visited_non_gpu
+                last_launched_gpu.append(current_node)
             else:
                 if json_node.inter_thread_dep:
                     dep_id = json_node.inter_thread_dep
@@ -462,22 +469,31 @@ class PyTorchConverter:
                             f"CPU Node ID {current_node.id} now has an inter-thread data dependency on Node ID "
                             f"{dep_id}"
                         )
-                if last_visited_non_gpu and last_visited_non_gpu.id not in current_node.data_deps:
-                    current_node.data_deps.append(last_visited_non_gpu.id)
-                    logging.debug(
-                        f"CPU Node ID {current_node.id} now has a data dependency on non-GPU Node ID "
-                        f"{last_visited_non_gpu.id}"
-                    )
+                prior_nodes = last_launched_gpu or ([last_visited_non_gpu] if last_visited_non_gpu else [])
+                for prior_node in prior_nodes:
+                    if prior_node.id not in current_node.data_deps:
+                        current_node.data_deps.append(prior_node.id)
+                        logging.debug(
+                            f"CPU Node ID {current_node.id} now has a data dependency on Node ID {prior_node.id}"
+                        )
                 last_visited_non_gpu = current_node
                 last_visited_any = current_node
+                last_launched_gpu = []
 
             if json_node.sync_dep:
                 for sync_dep in json_node.sync_dep:
                     if sync_dep not in current_node.data_deps:
                         # Found a bug encoding false dependency HTA.
-                        # Compare start_time to eliminate false sync dependency.
-                        prior_node = protobuf_node_map.get(sync_dep)
-                        if prior_node is not None and prior_node.start_time_micros < current_node.start_time_micros:
+                        # Compare start times to eliminate false sync dependency. Protobuf start times are not set
+                        # yet, so use the linked timestamps.
+                        prior_node = json_node_map.get(sync_dep)
+                        if (
+                            sync_dep in protobuf_node_map
+                            and prior_node is not None
+                            and prior_node.ts is not None
+                            and json_node.ts is not None
+                            and prior_node.ts < json_node.ts
+                        ):
                             current_node.data_deps.append(sync_dep)
                             logging.debug(
                                 f"Node ID {current_node.id} now has an synchonization dependency on Node ID "

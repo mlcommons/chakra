@@ -605,6 +605,80 @@ def test_construct_et_plus_data(mock_json_load, mock_open, mock_process_op_and_d
     assert pytorch_et_plus_data["nodes"] == [{"id": 1}, {"id": 2}, {"id": 3}, {"id": 4}]
 
 
+@pytest.mark.parametrize("dst_first", [False, True])
+@patch("builtins.open", new_callable=MagicMock)
+@patch("json.load")
+def test_construct_et_plus_data_adds_stream_wait_dep(mock_json_load, mock_open, trace_linker, dst_first):
+    mock_json_load.return_value = {
+        "nodes": [{"id": 1, "inputs": [], "outputs": []}, {"id": 2, "inputs": [], "outputs": []}]
+    }
+    src = KinetoOperator({"cat": "kernel", "name": "ncclDevKernel_AllGather", "ts": 100, "args": {"stream": 23}})
+    dst = KinetoOperator({"cat": "kernel", "name": "gemm", "ts": 300, "args": {"stream": 7}})
+    dst.stream_wait_dep.append(src)
+    launched = {1: [dst], 2: [src]} if dst_first else {1: [src], 2: [dst]}
+
+    data = trace_linker.construct_et_plus_data("trace.json", launched, {}, {}, {}, {})
+
+    nodes = {node["id"]: node for node in data["nodes"]}
+    assert nodes[dst.et_id]["sync_dep"] == [src.et_id]
+    assert "sync_dep" not in nodes[src.et_id]
+    assert all("stream_wait_dep" not in node for node in data["nodes"])
+
+
+def kineto_gpu_op(stream: int, correlation: int) -> KinetoOperator:
+    return KinetoOperator(
+        {"cat": "kernel", "name": f"kernel_{correlation}", "args": {"stream": stream, "correlation": correlation}}
+    )
+
+
+def stream_wait_event(stream: int = 24, wait_on_stream: int = 20, record_correlation: int = 1385) -> KinetoOperator:
+    # Field values from a CUDA trace in HTA's tests (critical_path/cuda_event_sync_multi_stream).
+    args = {
+        "stream": stream,
+        "wait_on_stream": wait_on_stream,
+        "wait_on_cuda_event_record_corr_id": record_correlation,
+        "correlation": 1389,
+    }
+    return KinetoOperator({"cat": "cuda_sync", "name": "Stream Wait Event", "tid": stream, "args": args})
+
+
+@pytest.fixture
+def stream_wait_gpu_ops():
+    # Launch order: 27 (stream 20), 1300 (24), record 1385 on 20, 1386 (20), wait 1389 on 24, 1413 (24), 1500 (24).
+    return {
+        name: kineto_gpu_op(stream, correlation)
+        for name, stream, correlation in [
+            ("recorded", 20, 27),
+            ("after_record", 20, 1386),
+            ("before_wait", 24, 1300),
+            ("waiting", 24, 1413),
+            ("later", 24, 1500),
+        ]
+    }
+
+
+def test_enforce_stream_wait_dep(trace_linker, stream_wait_gpu_ops):
+    ops = stream_wait_gpu_ops
+    trace_linker.enforce_stream_wait_dep(list(ops.values()), {24: [stream_wait_event(), stream_wait_event()]})
+    assert {name: op.stream_wait_dep for name, op in ops.items() if op.stream_wait_dep} == {
+        "waiting": [ops["recorded"]]
+    }
+
+
+@pytest.mark.parametrize(
+    "wait",
+    [
+        stream_wait_event(record_correlation=-1),  # The event was recorded before the trace started.
+        stream_wait_event(record_correlation=20),  # No operator on stream 20 before the record.
+        stream_wait_event(stream=20),  # A stream waiting on its own event.
+        stream_wait_event(stream=25),  # No operator on the waiting stream after the wait.
+    ],
+)
+def test_enforce_stream_wait_dep_without_operator_pair(trace_linker, stream_wait_gpu_ops, wait):
+    trace_linker.enforce_stream_wait_dep(list(stream_wait_gpu_ops.values()), {wait.tid: [wait]})
+    assert not any(op.stream_wait_dep for op in stream_wait_gpu_ops.values())
+
+
 @pytest.mark.parametrize(
     "orig_op_id, cpu_op, kineto_gpu_ops, expected_ids, expected_fields",
     [
@@ -665,6 +739,7 @@ def test_process_dependent_gpu_ops(trace_linker, orig_op_id, cpu_op, kineto_gpu_
         gpu_op.stream = gpu_op_data["stream"]
         gpu_op.pg_name = gpu_op_data.get("pg_name", None)
         gpu_op.sync_dep = []
+        gpu_op.stream_wait_dep = []
         kineto_gpu_op_objects.append(gpu_op)
 
     host_op_id_to_kineto_ops_map = {orig_op_id: kineto_gpu_op_objects}
