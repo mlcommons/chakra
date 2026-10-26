@@ -2,3 +2,5 @@ pyright==1.1.359
 pytest==8.1.1
 ruff==0.3.7
 vulture==2.11
+build
+twine
