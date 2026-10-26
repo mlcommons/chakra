@@ -26,10 +26,6 @@ jobs:
         git checkout 7b19f586dd8b267333114992833a0d7e0d601630
         pip install .
 
-    - name: Install HTA
-      run: |
-        pip install traceinsight
-
     - name: Install Dependencies
       run: |
         pip install -r requirements-dev.txt

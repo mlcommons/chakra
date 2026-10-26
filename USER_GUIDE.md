@@ -35,14 +35,7 @@ $ git checkout 7b19f586dd8b267333114992833a0d7e0d601630
 $ pip install .
 ```
 
-### Step 4: Install Holistic Trace Analysis
-Installing Holistic Trace Analysis (published on PyPI as `traceinsight`) is necessary for Trace link.
-
-```bash
-$ pip install traceinsight
-```
-
-### Step 5: Uninstalling Chakra
+### Step 4: Uninstalling Chakra
 To uninstall Chakra, use the following command within the virtual environment.
 
 ```bash
