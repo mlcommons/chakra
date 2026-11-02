@@ -1,7 +1,7 @@
 # Chakra User Guide
 ## Installation
 ### Step 1: Set up a Virtual Environment
-It's advisable to create a virtual environment using Python 3.10 or later
+It's advisable to create a virtual environment using Python 3.11 or later
 
 ```bash
 # Create a virtual environment
