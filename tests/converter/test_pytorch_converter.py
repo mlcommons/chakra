@@ -197,13 +197,30 @@ def converted_nodes(trace: Dict) -> Dict[int, ChakraNode]:
     return write.call_args.args[2]
 
 
-def test_convert_places_gpu_nodes_in_cpu_chain(gpu_trace: Dict) -> None:
+def test_convert_keeps_cpu_chain_free_of_launched_gpu_nodes(gpu_trace: Dict) -> None:
     gpu_trace["nodes"].append(linked_node(6, "Memcpy DtoD", 2, 110, cat="gpu_memcpy", stream=7))
     nodes = converted_nodes(gpu_trace)
     assert list(nodes[4].data_deps) == [2]
     assert list(nodes[6].data_deps) == [2]
-    # aten::mm depends on the GPU nodes that the previous CPU node launched, not on the CPU node itself.
-    assert set(nodes[3].data_deps) == {4, 6}
+    assert list(nodes[3].data_deps) == [2]
+
+
+def test_convert_adds_cross_stream_dependencies_of_issue_215(sample_pytorch_data: Dict) -> None:
+    sample_pytorch_data["nodes"] = [
+        linked_node(1, THREAD, None, 0),
+        linked_node(361, "aten::mm", 1, 10),
+        linked_node(362, "ampere_sgemm", 361, 20, cat="kernel", stream=7),
+        linked_node(369, "c10d::allgather_", 1, 30),
+        linked_node(370, "ncclDevKernel_AllGather_RING_LL", 369, 40, cat="kernel", stream=23, sync_dep=[362]),
+        linked_node(371, "aten::mm", 1, 50),
+        linked_node(372, "ampere_sgemm", 371, 60, cat="kernel", stream=7, sync_dep=[370]),
+    ]
+    nodes = converted_nodes(sample_pytorch_data)
+    assert list(nodes[369].data_deps) == [361]
+    assert list(nodes[371].data_deps) == [369]
+    assert list(nodes[362].data_deps) == [361]
+    assert set(nodes[370].data_deps) == {369, 362}
+    assert set(nodes[372].data_deps) == {371, 370}
 
 
 def test_convert_adds_cross_stream_dependency(gpu_trace: Dict) -> None:

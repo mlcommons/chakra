@@ -74,10 +74,10 @@ records these waits only when the device trace is collected with
 ### Execution Trace Converter (chakra_converter)
 Converts the execution traces from `chakra_trace_link` into traces in the protobuf format. It is responsible for identifying and encoding dependencies for simulation as well. The converter is designed for any downstream simulators that take Chakra execution traces in the protobuf format. It takes an input file in another format and generates a Chakra execution trace output in the protobuf format.
 
-The converter chains the CPU operators of each thread in execution order and places GPU operators in that chain. A GPU
-operator depends on the CPU operator that launched it, and the next CPU operator depends on those GPU operators instead
-of on the launcher. An operator therefore starts only after the GPU work launched before it on the same thread has
-finished. The converter adds no edges from launch or stream order.
+The converter chains the CPU operators of each thread in execution order. A GPU operator depends on the CPU operator
+that launched it and on the GPU operators in its `sync_dep` field, such as those on other streams that it waits for
+through `cudaStreamWaitEvent`. A CPU operator does not wait for a GPU operator launched before it unless the trace
+records a synchronization between them. The converter adds no edges from launch or stream order.
 ```bash
 $ chakra_converter PyTorch \
     --input /path/to/chakra_host_device_trace.json \
