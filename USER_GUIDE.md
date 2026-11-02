@@ -31,14 +31,7 @@ $ pip install https://github.com/mlcommons/chakra/archive/refs/heads/main.zip
 $ pip install https://github.com/mlcommons/chakra/archive/ae7c671db702eb1384015bb2618dc753eed787f2.zip
 ```
 
-### Step 3: Install PARAM
-Installing PARAM is necessary for Chakra to function properly as it imports essential components from it.
-
-```bash
-$ pip install "git+https://github.com/facebookresearch/param.git@7b19f586dd8b267333114992833a0d7e0d601630#subdirectory=et_replay"
-```
-
-### Step 4: Uninstalling Chakra
+### Step 3: Uninstalling Chakra
 To uninstall Chakra, use the following command within the virtual environment.
 
 ```bash

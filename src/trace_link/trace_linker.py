@@ -6,14 +6,14 @@ import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Optional, Tuple
 
-from et_replay.execution_trace import (
-    EXECUTION_TRACE_PROCESS_ANNOTATION,
-    EXECUTION_TRACE_THREAD_ANNOTATION,
-)
-from et_replay.execution_trace import Node as PyTorchOperator
 from hta.analyzers.critical_path_analysis import CPEdgeType
 from hta.trace_analysis import TraceAnalysis
 
+from ..third_party.et_replay.execution_trace import (
+    EXECUTION_TRACE_PROCESS_ANNOTATION,
+    EXECUTION_TRACE_THREAD_ANNOTATION,
+)
+from ..third_party.et_replay.execution_trace import Node as PyTorchOperator
 from .chakra_device_trace_loader import ChakraDeviceTraceLoader
 from .chakra_host_trace_loader import ChakraHostTraceLoader
 from .kineto_operator import KinetoOperator

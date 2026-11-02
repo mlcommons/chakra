@@ -3,8 +3,7 @@ import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Tuple
 
-from et_replay.utils import read_dictionary_from_json_file
-
+from ..third_party.et_replay.utils import read_dictionary_from_json_file
 from .kineto_operator import KinetoOperator
 
 
