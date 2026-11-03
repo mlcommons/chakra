@@ -19,7 +19,7 @@ dependencies = [
     "graphviz",
     "networkx",
     "pydot",
-    "pandas<=3.1.0",
+    "pandas==3.1.0",
     "traceinsight" # This is HTA
 ]
 
