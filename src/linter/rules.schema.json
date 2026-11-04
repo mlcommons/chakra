@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Chakra linter rules",
+  "description": "Syntax of rules.toml: one [[rule]] table per check.",
+  "type": "object",
+  "required": ["rule"],
+  "additionalProperties": false,
+  "properties": {
+    "rule": {
+      "$comment": "Unique id and name across rules cannot be expressed in JSON Schema; enforced by tests/linter/test_rules_toml.py and load_rules in linter.py.",
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/rule" }
+    }
+  },
+  "$defs": {
+    "rule": {
+      "type": "object",
+      "required": ["id", "name", "description", "enabled", "message"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "Stable code, letters plus three digits, never reused.",
+          "type": "string",
+          "pattern": "^[A-Z]{2,3}[0-9]{3}$"
+        },
+        "name": {
+          "description": "Kebab-case label for the code.",
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+        },
+        "description": {
+          "description": "What the rule checks and why it matters.",
+          "type": "string",
+          "pattern": "\\.$"
+        },
+        "enabled": {
+          "description": "Run the rule or not.",
+          "type": "boolean"
+        },
+        "message": {
+          "description": "Report text; {placeholders} name values a check supplies.",
+          "type": "string",
+          "minLength": 1
+        },
+        "exempt": {
+          "description": "Shell-style name patterns exempt from the check (OPS001).",
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

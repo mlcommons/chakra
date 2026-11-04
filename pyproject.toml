@@ -19,6 +19,8 @@ dependencies = [
     "graphviz",
     "networkx",
     "pydot",
+    "jsonschema",
+    "markdown",
     "HolisticTraceAnalysis @ git+https://github.com/facebookresearch/HolisticTraceAnalysis.git@d731cc2e2249976c97129d409a83bd53d93051f6"
 ]
 
@@ -32,6 +34,7 @@ Repository = "https://github.com/mlcommons/chakra.git"
 "chakra.src.converter" = "src/converter"
 "chakra.src.generator" = "src/generator"
 "chakra.src.jsonizer" = "src/jsonizer"
+"chakra.src.linter" = "src/linter"
 "chakra.src.third_party" = "src/third_party"
 "chakra.src.timeline_visualizer" = "src/timeline_visualizer"
 "chakra.src.trace_link" = "src/trace_link"
@@ -39,11 +42,13 @@ Repository = "https://github.com/mlcommons/chakra.git"
 
 [tool.setuptools.package-data]
 "chakra.schema.protobuf" = ["et_def.proto", "storage.proto"]
+"chakra.src.linter" = ["rules.toml", "rules.schema.json"]
 
 [project.scripts]
 chakra_converter = "chakra.src.converter.converter:main"
 chakra_generator = "chakra.src.generator.generator:main"
 chakra_jsonizer = "chakra.src.jsonizer.jsonizer:main"
+chakra_linter = "chakra.src.linter.linter:main"
 chakra_timeline_visualizer = "chakra.src.timeline_visualizer.timeline_visualizer:main"
 chakra_trace_link = "chakra.src.trace_link.trace_link:main"
 chakra_visualizer = "chakra.src.visualizer.visualizer:main"

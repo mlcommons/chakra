@@ -1,0 +1,301 @@
+#:schema ./rules.schema.json
+# Chakra linter rules: one [[rule]] entry per check.
+# Syntax: rules.schema.json (keys, types, ID and name patterns).
+# Cross-rule checks: tests/linter/test_rules_toml.py.
+
+# Integrity
+
+[[rule]]
+id = "INT001"
+name = "decode-failure"
+description = "The Chakra protobuf decoder cannot read the file. Causes include a corrupt, truncated or non-Chakra file. Every use is unsuitable because no node can be read."
+enabled = true
+message = "decode failure: {error}"
+
+[[rule]]
+id = "INT002"
+name = "empty-trace"
+description = "The trace holds a metadata header but no nodes. Consumers have nothing to replay, simulate or analyze."
+enabled = true
+message = "trace contains no nodes"
+
+[[rule]]
+id = "INT003"
+name = "schema-unknown-type"
+description = "A node carries a type that the installed mlc-chakra schema does not define. The trace likely comes from a newer or foreign schema, so consumers may misread it."
+enabled = true
+message = "node type {type} not in Chakra schema version {version}"
+
+[[rule]]
+id = "DAG001"
+name = "dag-duplicate-node"
+description = "Two or more nodes share one ID. Dependencies become ambiguous, so the graph cannot be trusted."
+enabled = true
+message = "node ID reuses an earlier node ID"
+
+[[rule]]
+id = "DAG002"
+name = "dag-dangling-dep"
+description = "A node depends on an ID that no node carries. Dependency 0 is excluded because it marks a root node. The missing parent breaks execution order."
+enabled = true
+message = "dependency references a missing node"
+
+[[rule]]
+id = "DAG003"
+name = "dag-self-dep"
+description = "A node lists its own ID as a dependency. The node can never become ready, so replay and simulation stall."
+enabled = true
+message = "self-dependency"
+
+[[rule]]
+id = "DAG004"
+name = "dag-duplicate-dep"
+description = "A node repeats the same parent within ctrl_deps or within data_deps. The same parent once in each field is valid. A repeat signals a generator defect that the cycle check tolerates."
+enabled = true
+message = "repeated dependency ID within ctrl_deps or within data_deps"
+
+[[rule]]
+id = "DAG005"
+name = "dag-cycle"
+description = "Nodes form a dependency loop within ctrl_deps or within data_deps. The count includes nodes blocked behind the loop. A cyclic graph has no valid execution order."
+enabled = true
+message = "in or blocked by a {field} cycle"
+
+# Timing
+
+[[rule]]
+id = "TIM001"
+name = "timing-absent"
+description = "Most or all nodes, or every node of a checked type, have zero duration. The merge of host and device data likely did not complete. Analysis cannot use the trace, and the simulator needs review."
+enabled = true
+message = "zero duration"
+
+[[rule]]
+id = "TIM002"
+name = "timing-partial"
+description = "A share of nodes between 5% and 50% have zero duration. Healthy traces stay below 5%. Analysis fidelity drops, while replay and simulation still work."
+enabled = true
+message = "zero duration"
+
+[[rule]]
+id = "TIM003"
+name = "synthetic-timing-unknown"
+description = "A generated trace has zero duration on every node. The linter cannot tell whether the generator models durations, so a reviewer decides whether analysis applies."
+enabled = true
+message = "zero duration on all nodes; modeled values unknown"
+
+# Kineto link
+
+[[rule]]
+id = "KIN001"
+name = "kineto-no-stream"
+description = "No node has a stream attribute. The trace holds no device data, so the host trace was not linked to the Kineto device trace. A genuine CPU-only capture also triggers this rule; disable it for such traces."
+enabled = true
+message = "no node has a stream attribute (no device data)"
+
+[[rule]]
+id = "KIN002"
+name = "kineto-no-duration"
+description = "Nodes carry stream data but none has a duration. Device activity was linked without timing, so timing analysis is impossible."
+enabled = true
+message = "stream data present but no node has a duration"
+
+[[rule]]
+id = "KIN003"
+name = "kineto-orphan"
+description = "A device node, on a stream other than 0, has no host parent in the trace. The link between host operator and device kernel is lost."
+enabled = true
+message = "device node has no host parent"
+
+[[rule]]
+id = "KIN004"
+name = "kineto-multi-parent"
+description = "A device node has more than one host parent. The link between host operator and device kernel is ambiguous."
+enabled = true
+message = "device node has multiple host parents"
+
+# Communication
+
+[[rule]]
+id = "COM001"
+name = "comm-missing-type"
+description = "A collective node lacks comm_type. Replay and simulation cannot tell which collective to run, such as all-reduce or all-gather."
+enabled = true
+message = "missing comm_type attr"
+
+[[rule]]
+id = "COM002"
+name = "comm-missing-size"
+description = "A collective, send or receive node lacks comm_size. Replay and simulation cannot size the transfer."
+enabled = true
+message = "missing comm_size attr"
+
+[[rule]]
+id = "COM003"
+name = "comm-missing-pg-name"
+description = "A collective node lacks pg_name. Replay and simulation cannot map the collective to its process group."
+enabled = true
+message = "missing pg_name attr"
+
+[[rule]]
+id = "COM004"
+name = "comm-missing-src"
+description = "A send or receive node lacks comm_src. Replay and simulation cannot identify the sending peer. The mlc-chakra PyTorch converter does not write this attribute."
+enabled = true
+message = "missing comm_src attr"
+
+[[rule]]
+id = "COM005"
+name = "comm-missing-dst"
+description = "A send or receive node lacks comm_dst. Replay and simulation cannot identify the receiving peer. The mlc-chakra PyTorch converter does not write this attribute."
+enabled = true
+message = "missing comm_dst attr"
+
+[[rule]]
+id = "COM006"
+name = "comm-zero-size"
+description = "A communication node declares a comm_size of zero. Replay and simulation cannot model a transfer with no payload."
+enabled = true
+message = "zero comm_size"
+
+[[rule]]
+id = "COM007"
+name = "comm-default-stream"
+description = "Every collective that reports a stream uses default stream 0. Collectives normally run on a device stream, so the Kineto link may be incomplete."
+enabled = true
+message = "all nodes on default stream {stream}"
+
+# Operators
+
+[[rule]]
+id = "OPS001"
+name = "op-schema-missing"
+description = "A CPU node that replay would need to call has no op_schema. Replay starts at the outermost CPU node that carries an op_schema, runs it with its whole subtree, and moves on to the next such node. A node without an op_schema is a wrapper when it has children, and replay looks at its children. A childless node without an op_schema, outside any replayed subtree and not matching an exempt pattern, has nothing to call. The rule reports one finding per operator name, derived from the name (namespace, else leading words), so new operators appear without a rule change."
+enabled = true
+message = "CPU operators named {family} have no op_schema; replay cannot call them"
+# Shell-style name patterns of childless annotations that need no op_schema
+exempt = [
+    "record_param_comms",
+    "nccl:*",
+    "TorchDynamo*",
+    "Torch-Compiled Region*",
+    "Pregraph bytecode",
+    "AOTDispatcher*",
+    "CompiledFunction*",
+    "FullyShardedDataParallel*",
+    "autograd::*",
+    "torch::*",
+    "*Backward[0-9]",
+    "*Backward",
+    "triton_*",
+    "## *",
+    "[pytorch|*",
+    "enumerate(*",
+    "Optimizer.*",
+    "batch_id*",
+    "ProfilerStep*",
+    "detach",
+    "detach_",
+    "_[A-Z]*",
+    "*Function",
+    "FusedAttnFunc",
+    "MakeViewlessTensor",
+    "LinearWithGradAccumulationAndAsyncCommunication",
+]
+
+[[rule]]
+id = "OPS002"
+name = "op-schema-missing-kernel"
+description = "Informational note, no level change. GPU compute nodes without op_schema, listed per kernel family derived from the kernel name. Replay runs the CPU operator that launches the kernel, so the kernel needs no schema."
+enabled = true
+message = "GPU kernels named {family} have no op_schema; replay runs the CPU operator that launches them"
+
+[[rule]]
+id = "OPS003"
+name = "op-schema-no-cpu"
+description = "The trace has no replayable CPU operator: no CPU node with an op_schema, and no childless node outside the exempt wrappers. Replay has nothing to run. A synthetic trace reports REVIEW instead, because its origin is unknown."
+enabled = true
+message = "no replayable CPU operators: {total} compute nodes, {schema} have op_schema"
+
+[[rule]]
+id = "OPS004"
+name = "compute-no-cost"
+description = "A compute node in a captured trace has no tensor input or output and zero duration. The simulator has no cost to model for it."
+enabled = true
+message = "missing I/O and duration"
+
+# Operator I/O
+
+[[rule]]
+id = "IO001"
+name = "io-malformed"
+description = "A replay unit carries input or output fields that do not parse, or whose values, shapes and types lists differ in length. Replay cannot build the operator arguments."
+enabled = true
+message = "CPU operators with malformed I/O fields"
+
+[[rule]]
+id = "IO002"
+name = "io-schema-arity"
+description = "A replay unit records a number of inputs that differs from the argument count of its op_schema. Replay may pass the wrong arguments, so a reviewer decides."
+enabled = true
+message = "CPU operators with input count differing from op_schema"
+
+[[rule]]
+id = "IO003"
+name = "io-cpu-missing"
+description = "A replay unit has an op_schema that expects arguments, but records no inputs and no outputs. Replay has no tensors to pass, so a reviewer decides."
+enabled = true
+message = "CPU operators with op_schema but no I/O"
+
+# Metadata
+
+[[rule]]
+id = "MET001"
+name = "meta-missing-attr"
+description = "The global metadata of a PyTorch-derived trace lacks one of the attributes that the Chakra converter writes: schema, pid, time, start_ts, finish_ts. The capture cannot be identified or dated, so reviewers cannot trace its origin."
+enabled = true
+message = "global metadata lacks converter attributes: {names}"
+
+[[rule]]
+id = "MET002"
+name = "meta-time-order"
+description = "The finish_ts of a PyTorch-derived trace precedes its start_ts. The capture window is inconsistent, so timing analysis cannot rely on it."
+enabled = true
+message = "global metadata finish_ts {finish} precedes start_ts {start}"
+
+# Node attributes
+
+[[rule]]
+id = "ATT001"
+name = "attr-missing-converter"
+description = "A node of a PyTorch-derived trace lacks an attribute that the Chakra converter writes on every CPU node: rf_id, fw_parent, seq_id, scope, tid, fw_tid, op_schema or is_cpu_op. Only is_cpu_op is required on every node; the rest apply to CPU nodes, because older converters wrote little else on device nodes. Readers fall back to default values, which can misclassify the node. One finding per attribute name."
+enabled = true
+message = "missing {name} attr"
+
+[[rule]]
+id = "ATT002"
+name = "attr-unexpected-type"
+description = "A node carries a known attribute with a value type that readers do not expect, such as stream as uint64, or repeats an attribute name. Readers read the expected field and see a default value instead of the stored one."
+enabled = true
+message = "attribute of unexpected type or repeated attribute name"
+
+[[rule]]
+id = "ATT003"
+name = "attr-invalid-id"
+description = "A node of a PyTorch-derived trace has node ID 0 (uninitialized) or rf_id 0 (invalid). Thread root nodes, named [pytorch|*, carry rf_id 0 by design and are exempt. Readers use rf_id to pair nodes, so a sentinel breaks the link silently."
+enabled = true
+message = "node ID 0 or rf_id 0"
+
+[[rule]]
+id = "ATT004"
+name = "attr-invalid-scope"
+description = "A node of a PyTorch-derived trace has a scope outside the RecordScope values 0 to 9. The NUM_SCOPES sentinel is not a scope. Readers cannot classify the node, such as forward, backward or user annotation."
+enabled = true
+message = "scope outside 0 to 9"
+
+[[rule]]
+id = "ATT005"
+name = "attr-backward-link"
+description = "A node of a PyTorch-derived trace has a non-zero fw_tid but a fw_parent of 0. A backward node names its forward thread but no forward parent, so readers cannot pair it with the forward node."
+enabled = true
+message = "fw_tid set but fw_parent 0"
