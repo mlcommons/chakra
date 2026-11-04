@@ -160,47 +160,6 @@ SAMPLE_LIMIT = 3
 DEFAULT_RULES = Path(__file__).with_name("rules.toml")
 RULES_SCHEMA = Path(__file__).with_name("rules.schema.json")
 
-# Placeholders each rule's message template may name; the check supplies them
-COUNT, COUNT_TOTAL = frozenset({"count"}), frozenset({"count", "total"})
-RULE_PLACEHOLDERS: dict[str, frozenset[str]] = {
-    "INT001": frozenset({"error"}),
-    "INT002": frozenset(),
-    "INT003": frozenset({"type", "count", "version"}),
-    "DAG001": COUNT,
-    "DAG002": COUNT,
-    "DAG003": COUNT,
-    "DAG004": COUNT,
-    "DAG005": frozenset({"count", "field"}),
-    "TIM001": COUNT_TOTAL,
-    "TIM002": COUNT_TOTAL,
-    "TIM003": COUNT_TOTAL,
-    "KIN001": frozenset(),
-    "KIN002": frozenset(),
-    "KIN003": COUNT,
-    "KIN004": COUNT,
-    "COM001": COUNT,
-    "COM002": COUNT,
-    "COM003": COUNT,
-    "COM004": COUNT,
-    "COM005": COUNT,
-    "COM006": COUNT,
-    "COM007": frozenset({"count", "stream"}),
-    "OPS001": frozenset({"count", "total", "family"}),
-    "OPS002": frozenset({"count", "total", "family"}),
-    "OPS003": frozenset({"total", "schema"}),
-    "OPS004": COUNT,
-    "IO001": COUNT_TOTAL,
-    "IO002": COUNT_TOTAL,
-    "IO003": COUNT_TOTAL,
-    "MET001": frozenset({"count", "names"}),
-    "MET002": frozenset({"start", "finish"}),
-    "ATT001": frozenset({"count", "name"}),
-    "ATT002": COUNT,
-    "ATT003": COUNT,
-    "ATT004": COUNT,
-    "ATT005": COUNT,
-}
-
 # Families listed in a message; the rest fold into "N more"
 FAMILY_LIST_LIMIT = 10
 
@@ -876,10 +835,19 @@ def load_rules(path: Path = DEFAULT_RULES) -> dict[str, Rule]:
     return rules
 
 
+def master_placeholders() -> frozenset[str]:
+    """Return the placeholder names that the schema declares."""
+    try:
+        schema = json.loads(RULES_SCHEMA.read_text(encoding="utf-8"))
+        return frozenset(schema["x-placeholders"]) - {"$comment"}
+    except (OSError, json.JSONDecodeError, KeyError) as exc:
+        raise RuleConfigError(f"cannot load placeholders from {RULES_SCHEMA}: {exc!r}") from exc
+
+
 def check_template(path: Path, rule_id: str, template: str) -> None:
-    """Reject a template that names a value its check does not supply."""
-    allowed = RULE_PLACEHOLDERS.get(rule_id, frozenset())
-    names = ", ".join(f"{{{n}}}" for n in sorted(allowed)) or "none"
+    """Reject a template that names a value missing from the schema list."""
+    allowed = master_placeholders()
+    names = ", ".join(f"{{{n}}}" for n in sorted(allowed))
     where = f"{path}: rule {rule_id} message"
     try:
         fields = list(string.Formatter().parse(template))
@@ -897,12 +865,8 @@ def check_template(path: Path, rule_id: str, template: str) -> None:
 
 def rule_messages(rules: dict[str, Rule]) -> Messages:
     """Return the template per rule; the shipped file fills omitted rules."""
-    if any(rule_id not in rules for rule_id in RULE_PLACEHOLDERS):
-        rules = {**load_rules(DEFAULT_RULES), **rules}
-    missing = sorted(set(RULE_PLACEHOLDERS) - set(rules))
-    if missing:
-        raise RuleConfigError(f"{DEFAULT_RULES}: no message for {', '.join(missing)}")
-    return {rule_id: rule.message for rule_id, rule in rules.items()}
+    shipped = load_rules(DEFAULT_RULES)
+    return {rule_id: rule.message for rule_id, rule in {**shipped, **rules}.items()}
 
 
 def rule_exempt(rules: dict[str, Rule]) -> list[str]:
@@ -956,8 +920,12 @@ def render(messages: Messages, rule_id: str, **values: object) -> Message:
     }
     count = values.get("count")
     noun = COUNT_NOUNS.get(rule_id, ("node", "nodes"))
+    try:
+        body = messages[rule_id].format(**text)
+    except KeyError as exc:
+        raise RuleConfigError(f"rule {rule_id} message uses {{{exc.args[0]}}}, which its check does not supply") from exc
     return Message(
-        messages[rule_id].format(**text),
+        body,
         count if isinstance(count, int) and not isinstance(count, bool) else None,
         noun,
     )
@@ -1947,7 +1915,11 @@ def main(argv: list[str] | None = None) -> int:  # noqa: C901
         if progress:
             sys.stderr.write(f"\r\033[KLinting {index}/{len(traces)}: {trace}")
             sys.stderr.flush()
-        results.append((trace, lint_trace(trace, disabled, messages, exempt)))
+        try:
+            results.append((trace, lint_trace(trace, disabled, messages, exempt)))
+        except RuleConfigError as exc:
+            print(f"\r\033[Kerror: {exc}" if progress else f"error: {exc}", file=sys.stderr)
+            return 2
         if progress:
             sys.stderr.write("\r\033[K")
         # Print each trace as soon as it is evaluated

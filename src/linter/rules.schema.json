@@ -5,6 +5,22 @@
   "type": "object",
   "required": ["rule"],
   "additionalProperties": false,
+  "x-placeholders": {
+    "$comment": "Master list of message placeholders. Each key is a {name} that a message may use; the value says what the check substitutes. linter.py may supply only these names; tests/linter/test_rules_toml.py enforces it.",
+    "count": "Number of items the finding covers, such as nodes, dependencies or attributes. Rendered with thousands separators.",
+    "total": "Population size that count is drawn from, such as all nodes, replayable operators or GPU compute nodes. Rendered with thousands separators.",
+    "error": "Text of the exception that the protobuf decoder raised.",
+    "type": "Numeric node type that the installed Chakra schema does not define.",
+    "version": "Version of the installed mlc-chakra package.",
+    "field": "Dependency field that holds the cycle: ctrl_deps or data_deps.",
+    "stream": "Default stream ID (0) that all collectives use.",
+    "family": "Operator or kernel family name, derived from the node name and truncated for display.",
+    "schema": "Number of compute nodes that carry an op_schema.",
+    "names": "Comma-separated names of the metadata attributes that are absent.",
+    "name": "Name of the node attribute that is absent.",
+    "start": "Value of the start_ts metadata attribute.",
+    "finish": "Value of the finish_ts metadata attribute."
+  },
   "properties": {
     "rule": {
       "$comment": "Unique id and name across rules cannot be expressed in JSON Schema; enforced by tests/linter/test_rules_toml.py and load_rules in linter.py.",
@@ -39,7 +55,7 @@
           "type": "boolean"
         },
         "message": {
-          "description": "Report text; {placeholders} name values a check supplies.",
+          "description": "Report text; {placeholders} come from the x-placeholders master list and are limited per rule by linter.py.",
           "type": "string",
           "minLength": 1
         },

@@ -1,5 +1,6 @@
 """The shipped rules.toml meets the criteria stated in its header comments."""
 
+import ast
 import json
 import string
 import subprocess
@@ -47,13 +48,6 @@ def test_prefix_groups_are_contiguous_and_sequential(entries) -> None:
         seen[prefix], previous = number, prefix
 
 
-def test_message_placeholders_are_supplied_by_the_check(entries) -> None:
-    for entry in entries:
-        allowed = linter.RULE_PLACEHOLDERS[entry["id"]]
-        names = {name for _, name, _, _ in string.Formatter().parse(entry["message"]) if name is not None}
-        assert names <= allowed, f"{entry['id']}: unknown placeholder"
-
-
 def test_exempt_belongs_to_one_rule_only(entries) -> None:
     for entry in entries:
         if "exempt" not in entry:
@@ -85,3 +79,50 @@ def _repo_path(path: Path) -> str:
         cwd=path.parent,
     )
     return out.stdout.strip() or path.name
+
+
+def _master() -> set[str]:
+    """Return the placeholder names that the schema declares."""
+    schema = json.loads(SCHEMA_FILE.read_text())
+    return set(schema["x-placeholders"]) - {"$comment"}
+
+
+def _used_in_code() -> set[str]:
+    """Return keyword names that linter.py passes to render and issue."""
+    tree = ast.parse(Path(linter.__file__).read_text())
+    used: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and getattr(node.func, "id", None) in {"render", "issue"}:
+            used |= {kw.arg for kw in node.keywords if kw.arg}
+        # The shared zero-duration helper passes its values as a dict
+        if isinstance(node, ast.Assign) and getattr(node.targets[0], "id", None) == "ratio":
+            used |= {k.value for k in node.value.keys if isinstance(k, ast.Constant)}
+    return used
+
+
+def test_schema_describes_every_placeholder() -> None:
+    schema = json.loads(SCHEMA_FILE.read_text())
+    for name in _master():
+        text = schema["x-placeholders"][name]
+        assert isinstance(text, str) and text.endswith("."), f"{name}: no description"
+
+
+def test_schema_placeholders_are_the_source_of_truth(entries) -> None:
+    """Code and messages use only schema names; every name is in use."""
+    master = _master()
+    in_messages = {
+        name
+        for entry in entries
+        for _, name, _, _ in string.Formatter().parse(entry["message"])
+        if name is not None
+    }
+    used = _used_in_code()
+    assert used <= master, "code supplies a placeholder missing from the schema"
+    assert in_messages <= master, "rules.toml uses a placeholder missing from the schema"
+    assert master <= used, "schema lists a placeholder that no check supplies"
+
+
+def test_messages_render_with_their_checks_values(entries) -> None:
+    """Every shipped message renders once given values for each name."""
+    for entry in entries:
+        entry["message"].format(**dict.fromkeys(_master(), "0"))

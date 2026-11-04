@@ -1,5 +1,6 @@
 """BL-15: the shipped rule file matches the code and the CLI."""
 
+import ast
 from pathlib import Path
 
 import linter
@@ -14,7 +15,24 @@ def shipped_rules() -> dict[str, linter.Rule]:
 
 
 def test_rule_file_matches_code(shipped_rules) -> None:
-    assert sorted(shipped_rules) == sorted(linter.RULE_PLACEHOLDERS)
+    """Every rule ID that code names literally has a rule entry."""
+    tree = ast.parse(Path(linter.__file__).read_text())
+    named = {
+        arg.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and getattr(node.func, "id", None) == "render"
+        for arg in node.args[1:2]
+        if isinstance(arg, ast.Constant)
+    }
+    assert named <= set(shipped_rules)
+
+
+def test_every_rule_has_a_check(shipped_rules) -> None:
+    """Every rule ID in the file appears as a string constant in the code."""
+    tree = ast.parse(Path(linter.__file__).read_text())
+    literals = {n.value for n in ast.walk(tree) if isinstance(n, ast.Constant) and isinstance(n.value, str)}
+    missing = sorted(set(shipped_rules) - literals)
+    assert not missing, f"rules without a check: {missing}"
 
 
 def test_list_rules_shows_state(shipped_rules, capsys) -> None:
@@ -67,3 +85,9 @@ def test_selectors_accept_name_and_prefix(shipped_rules) -> None:
 def test_rule_ids_and_names_are_unique(shipped_rules) -> None:
     names = [rule.name for rule in shipped_rules.values()]
     assert len(names) == len(set(names))
+
+
+def test_unsupplied_placeholder_is_a_config_error() -> None:
+    """A message naming a value its check omits fails with a rule ID."""
+    with pytest.raises(linter.RuleConfigError, match=r"rule DAG001.*\{family\}"):
+        linter.render({"DAG001": "bad {family}"}, "DAG001", count=2)

@@ -113,7 +113,8 @@ message = "self-dependency"
 - `rules.toml` owns the rule catalog: which rules exist, their wording, and their default state.
 - `linter.py` owns the behavior: how each check detects a defect and which consumers a finding affects.
 - A rule requires both halves. A TOML entry without a check never fires; a check without an entry fails at startup.
-- `RULE_PLACEHOLDERS` in `linter.py` lists the values that each message template may use.
+- `x-placeholders` in `rules.schema.json` is the master list of placeholder names, each with a description.
+- Any rule may use any master name; a check that does not supply a name it is given fails at render.
 - The loader falls back to the shipped file for any rule that a custom file omits.
 
 | Concern                   | Defined in                      |
@@ -123,7 +124,7 @@ message = "self-dependency"
 | Exempt annotation names   | `rules.toml` (`OPS001`)         |
 | File syntax               | `rules.schema.json`             |
 | Detection logic           | `linter.py`                     |
-| Allowed placeholders      | `linter.py` (`RULE_PLACEHOLDERS`) |
+| Placeholder names, meaning | `rules.schema.json` (`x-placeholders`) |
 | Consumer impact per gap   | `linter.py`                     |
 
 ### Validation
@@ -157,6 +158,6 @@ chakra_linter traces/ --disable-rule KIN001
 ### Changing a Rule
 
 - Edit wording, default state, or `exempt` patterns in `rules.toml` alone. No code change applies.
-- Add a rule by adding a `[[rule]]` entry, a check in `linter.py`, and a `RULE_PLACEHOLDERS` entry.
+- Add a rule by adding a `[[rule]]` entry, and a check in `linter.py`. Add any new placeholder to `x-placeholders` first.
 - Retire a rule by leaving its ID unused. Do not reassign the ID.
 - Run the linter tests after every change to the file.
