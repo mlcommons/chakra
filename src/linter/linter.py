@@ -156,17 +156,9 @@ PASS, FAIL = "PASS", "FAIL"
 # Node IDs kept per defect so engineers can inspect the trace
 SAMPLE_LIMIT = 3
 
-# Rule file shipped beside the linter, and the type of each entry field
+# Rule file and its syntax schema, shipped beside the linter
 DEFAULT_RULES = Path(__file__).with_name("rules.toml")
 RULES_SCHEMA = Path(__file__).with_name("rules.schema.json")
-RULE_CODE = re.compile(r"[A-Z]{2,3}[0-9]{3}")
-RULE_FIELDS = {
-    "id": str,
-    "name": str,
-    "description": str,
-    "enabled": bool,
-    "message": str,
-}
 
 # Placeholders each rule's message template may name; the check supplies them
 COUNT, COUNT_TOTAL = frozenset({"count"}), frozenset({"count", "total"})
@@ -860,7 +852,7 @@ def _validate_schema(document: dict, path: Path) -> None:
         raise RuleConfigError(f"{path}: {where}: {exc.message}") from exc
 
 
-def load_rules(path: Path = DEFAULT_RULES) -> dict[str, Rule]:  # noqa: C901
+def load_rules(path: Path = DEFAULT_RULES) -> dict[str, Rule]:
     """Load and validate the rule file; return the rules keyed by ID."""
     try:
         with path.open("rb") as handle:
@@ -870,30 +862,14 @@ def load_rules(path: Path = DEFAULT_RULES) -> dict[str, Rule]:  # noqa: C901
     except tomllib.TOMLDecodeError as exc:
         raise RuleConfigError(f"malformed rules file {path}: {exc}") from exc
     _validate_schema(document, path)
-    entries = document.get("rule", [])
     rules: dict[str, Rule] = {}
-    for position, entry in enumerate(entries, 1):
-        if not isinstance(entry, dict):
-            raise RuleConfigError(f"{path}: rule {position} is not a table")
-        missing = [k for k in RULE_FIELDS if k not in entry]
-        if missing:
-            raise RuleConfigError(f"{path}: rule {position} lacks {', '.join(missing)}")
-        for key, kind in RULE_FIELDS.items():
-            if not isinstance(entry[key], kind):
-                raise RuleConfigError(f"{path}: rule {position} field {key} must be {kind.__name__}")
-        if not RULE_CODE.fullmatch(entry["id"]):
-            raise RuleConfigError(f"{path}: rule ID {entry['id']} must be letters plus three digits")
+    for entry in document["rule"]:
         if entry["id"] in rules:
             raise RuleConfigError(f"{path}: duplicate rule ID {entry['id']}")
         if any(entry["name"] == r.name for r in rules.values()):
             raise RuleConfigError(f"{path}: duplicate rule name {entry['name']}")
         check_template(path, entry["id"], entry["message"])
-        exempt = entry.get("exempt", [])
-        if not isinstance(exempt, list) or not all(isinstance(x, str) for x in exempt):
-            raise RuleConfigError(f"{path}: rule {position} exempt must be a list")
-        rules[entry["id"]] = Rule(**{k: entry[k] for k in RULE_FIELDS}, exempt=exempt)
-    if not rules:
-        raise RuleConfigError(f"{path}: no rules defined")
+        rules[entry["id"]] = Rule(**entry)
     fatal = [r for r in FATAL_RULES if r in rules and not rules[r].enabled]
     if fatal:
         raise RuleConfigError(f"{path}: rule cannot be disabled: {', '.join(fatal)}")
@@ -1638,10 +1614,6 @@ PASS_LABEL = "pass"
 
 # Fixed column widths keep every trace aligned while output streams
 CODE_WIDTH, SEVERITY_WIDTH = 6, len(WARNING)
-
-
-# ANSI style per usability level: green, yellow, or red
-LEVEL_STYLES = {READY: "32", LIMITED: "33", REVIEW: "33", NOT_SUITABLE: "31"}
 
 
 # Severity cell and style per usability level on the suitability rows

@@ -67,4 +67,3 @@ def test_selectors_accept_name_and_prefix(shipped_rules) -> None:
 def test_rule_ids_and_names_are_unique(shipped_rules) -> None:
     names = [rule.name for rule in shipped_rules.values()]
     assert len(names) == len(set(names))
-    assert all(linter.RULE_CODE.fullmatch(rule_id) for rule_id in shipped_rules)
