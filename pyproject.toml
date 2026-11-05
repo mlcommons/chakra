@@ -17,10 +17,10 @@ authors = [
 dependencies = [
     "protobuf",
     "graphviz",
-    "networkx",
+    "networkx!=3.6.0", # 3.6.0 breaks DiGraph subclasses with extra __init__ args (hta CPGraph), fixed in 3.6.1
     "pydot",
-    "pandas>=2.2,<4.0",
-    "traceinsight>=0.6.1,<1.0" # This is HTA
+    "pandas>=2.2,<4.0", # Transitive Dependency; With pandas 2.x, critical-path analysis fails
+    "traceinsight>=0.6.1,<1.0" # HolisticTraceAnalysis (HTA) which was renamed on PyPI; still imports as hta
 ]
 
 [project.urls]
