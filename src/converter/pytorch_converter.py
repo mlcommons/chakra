@@ -475,9 +475,16 @@ class PyTorchConverter:
                 for sync_dep in json_node.sync_dep:
                     if sync_dep not in current_node.data_deps:
                         # Found a bug encoding false dependency HTA.
-                        # Compare start_time to eliminate false sync dependency.
-                        prior_node = protobuf_node_map.get(sync_dep)
-                        if prior_node is not None and prior_node.start_time_micros < current_node.start_time_micros:
+                        # Compare start times to eliminate false sync dependency. Protobuf start times are not set
+                        # yet, so use the linked timestamps.
+                        prior_node = json_node_map.get(sync_dep)
+                        if (
+                            sync_dep in protobuf_node_map
+                            and prior_node is not None
+                            and prior_node.ts is not None
+                            and json_node.ts is not None
+                            and prior_node.ts < json_node.ts
+                        ):
                             current_node.data_deps.append(sync_dep)
                             logging.debug(
                                 f"Node ID {current_node.id} now has an synchonization dependency on Node ID "

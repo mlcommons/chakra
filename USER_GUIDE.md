@@ -53,8 +53,19 @@ $ chakra_trace_link \
     --output-file /path/to/chakra_host_device_trace.json
 ```
 
+The linker adds dependencies between GPU operators on different streams from the `cudaStreamWaitEvent` calls in the
+device trace. The first GPU operator submitted to the waiting stream after the wait depends on the last GPU operator
+submitted to the event's stream before `cudaEventRecord`; the linker writes this edge to the `sync_dep` field. Kineto
+records these waits only when the device trace is collected with
+`experimental_config=torch.profiler._ExperimentalConfig(enable_cuda_sync_events=True)`.
+
 ### Execution Trace Converter (chakra_converter)
 Converts the execution traces from `chakra_trace_link` into traces in the protobuf format. It is responsible for identifying and encoding dependencies for simulation as well. The converter is designed for any downstream simulators that take Chakra execution traces in the protobuf format. It takes an input file in another format and generates a Chakra execution trace output in the protobuf format.
+
+The converter chains the CPU operators of each thread in execution order. A GPU operator depends on the CPU operator
+that launched it and on the GPU operators in its `sync_dep` field, such as those on other streams that it waits for
+through `cudaStreamWaitEvent`. A CPU operator does not wait for a GPU operator launched before it unless the trace
+records a synchronization between them. The converter adds no edges from launch or stream order.
 ```bash
 $ chakra_converter PyTorch \
     --input /path/to/chakra_host_device_trace.json \

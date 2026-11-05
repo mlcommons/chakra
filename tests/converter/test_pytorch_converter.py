@@ -154,6 +154,92 @@ def test_convert_ctrl_dep_to_data_dep(sample_pytorch_data: Dict) -> None:
     assert root_node.data_deps == []
 
 
+def linked_node(node_id: int, name: str, parent: int, ts: int, **fields) -> Dict:
+    empty = {"values": [], "shapes": [], "types": []}
+    attrs = [{"name": attr, "type": "uint64", "value": 0} for attr in ("rf_id", "fw_parent", "scope", "tid", "fw_tid")]
+    attrs += [{"name": "seq_id", "type": "int64", "value": -1}, {"name": "op_schema", "type": "string", "value": ""}]
+    return {
+        "id": node_id,
+        "name": name,
+        "ctrl_deps": parent,
+        "exclusive_dur": 10,
+        "ts": ts,
+        "inputs": empty,
+        "outputs": empty,
+        "attrs": attrs,
+        **fields,
+    }
+
+
+THREAD = "[pytorch|profiler|execution_trace|thread]"
+
+
+@pytest.fixture
+def gpu_trace(sample_pytorch_data: Dict) -> Dict:
+    # FSDP: aten::mm on stream 7 waits for an AllGather on stream 23 through cudaStreamWaitEvent.
+    sample_pytorch_data["nodes"] = [
+        linked_node(1, THREAD, None, 0),
+        linked_node(2, "nccl:_all_gather_base", 1, 10),
+        linked_node(3, "aten::mm", 1, 20),
+        linked_node(4, "ncclDevKernel_AllGather_RING_LL", 2, 100, cat="kernel", stream=23),
+        linked_node(5, "sm90_xmma_gemm", 3, 300, cat="kernel", stream=7, sync_dep=[4, 999]),
+    ]
+    return sample_pytorch_data
+
+
+def converted_nodes(trace: Dict) -> Dict[int, ChakraNode]:
+    converter = PyTorchConverter()
+    with (
+        patch.object(converter, "load_json_execution_traces", return_value=trace),
+        patch.object(converter, "write_protobuf_execution_trace") as write,
+    ):
+        converter.convert("input.json", "output.et", False)
+    return write.call_args.args[2]
+
+
+def test_convert_keeps_cpu_chain_free_of_launched_gpu_nodes(gpu_trace: Dict) -> None:
+    gpu_trace["nodes"].append(linked_node(6, "Memcpy DtoD", 2, 110, cat="gpu_memcpy", stream=7))
+    nodes = converted_nodes(gpu_trace)
+    assert list(nodes[4].data_deps) == [2]
+    assert list(nodes[6].data_deps) == [2]
+    assert list(nodes[3].data_deps) == [2]
+
+
+def test_convert_adds_cross_stream_dependencies_of_issue_215(sample_pytorch_data: Dict) -> None:
+    sample_pytorch_data["nodes"] = [
+        linked_node(1, THREAD, None, 0),
+        linked_node(361, "aten::mm", 1, 10),
+        linked_node(362, "ampere_sgemm", 361, 20, cat="kernel", stream=7),
+        linked_node(369, "c10d::allgather_", 1, 30),
+        linked_node(370, "ncclDevKernel_AllGather_RING_LL", 369, 40, cat="kernel", stream=23, sync_dep=[362]),
+        linked_node(371, "aten::mm", 1, 50),
+        linked_node(372, "ampere_sgemm", 371, 60, cat="kernel", stream=7, sync_dep=[370]),
+    ]
+    nodes = converted_nodes(sample_pytorch_data)
+    assert list(nodes[369].data_deps) == [361]
+    assert list(nodes[371].data_deps) == [369]
+    assert list(nodes[362].data_deps) == [361]
+    assert set(nodes[370].data_deps) == {369, 362}
+    assert set(nodes[372].data_deps) == {371, 370}
+
+
+def test_convert_adds_cross_stream_dependency(gpu_trace: Dict) -> None:
+    assert set(converted_nodes(gpu_trace)[5].data_deps) == {3, 4}
+
+
+@pytest.mark.parametrize("prior_ts, ts", [(300, 100), (300, 300), (None, 300), (100, None)])
+def test_convert_skips_sync_dependency_not_earlier(gpu_trace: Dict, prior_ts, ts) -> None:
+    gpu_trace["nodes"][3]["ts"] = prior_ts
+    gpu_trace["nodes"][4]["ts"] = ts
+    assert list(converted_nodes(gpu_trace)[5].data_deps) == [3]
+
+
+def test_convert_adds_gpu_to_cpu_sync_dependency(gpu_trace: Dict) -> None:
+    # Before the converter compared linked timestamps, it compared unset protobuf start times and dropped this edge.
+    gpu_trace["nodes"] += [linked_node(10, THREAD, None, 0), linked_node(11, "aten::item", 10, 200, sync_dep=[4])]
+    assert set(converted_nodes(gpu_trace)[11].data_deps) == {10, 4}
+
+
 @patch("builtins.open", new_callable=mock_open)
 def test_write_chakra_et(mock_file: MagicMock, sample_pytorch_data: Dict) -> None:
     converter = PyTorchConverter()
