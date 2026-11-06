@@ -4,11 +4,20 @@ import pytest
 from chakra.src.trace_link.kineto_operator import KinetoOperator
 from chakra.src.trace_link.trace_linker import TraceLinker
 from chakra.src.trace_link.unique_id_assigner import UniqueIdAssigner
-from et_replay.execution_trace import (
-    EXECUTION_TRACE_PROCESS_ANNOTATION,
-    EXECUTION_TRACE_THREAD_ANNOTATION,
-)
-from et_replay.execution_trace import Node as PyTorchOperator
+
+try:
+    from et_replay.execution_trace import (
+        EXECUTION_TRACE_PROCESS_ANNOTATION,
+        EXECUTION_TRACE_THREAD_ANNOTATION,
+    )
+    from et_replay.execution_trace import Node as PyTorchOperator
+except ImportError as e:
+    if "et_replay" in str(e):
+        from chakra.src.trace_link.et_replay_import_error import get_et_replay_install_error_msg
+
+        raise ImportError(get_et_replay_install_error_msg()) from None
+    raise
+
 from hta.analyzers.critical_path_analysis import CPEdgeType, CPGraph
 
 
