@@ -2,15 +2,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from chakra.src.trace_link.chakra_host_trace_loader import ChakraHostTraceLoader
-
-try:
-    from et_replay.execution_trace import Node as PyTorchOperator
-except ImportError as e:
-    if "et_replay" in str(e):
-        from chakra.src.trace_link.et_replay_import_error import get_et_replay_install_error_msg
-
-        raise ImportError(get_et_replay_install_error_msg()) from None
-    raise
+from et_replay.execution_trace import Node as PyTorchOperator
 
 
 @pytest.fixture
