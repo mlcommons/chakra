@@ -1,0 +1,28 @@
+name: Clean Install Tests
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  clean-install:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.12', '3.13']
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Setup Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Check Clean Install
+      run: |
+        PYTHON=python scripts/check_clean_install.sh
