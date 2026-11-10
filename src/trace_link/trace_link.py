@@ -1,7 +1,9 @@
 import argparse
+import importlib.util
 import logging
+import sys
 
-from .trace_linker import TraceLinker
+from .et_replay_import_error import get_et_replay_install_error_msg
 
 
 def main() -> None:
@@ -40,6 +42,11 @@ def main() -> None:
     parser.add_argument("--log-level", default="INFO", type=str, help="Log output verbosity level")
 
     args = parser.parse_args()
+
+    if importlib.util.find_spec("et_replay") is None:
+        sys.exit(get_et_replay_install_error_msg())
+
+    from .trace_linker import TraceLinker
 
     logging.basicConfig(level=args.log_level.upper())
 

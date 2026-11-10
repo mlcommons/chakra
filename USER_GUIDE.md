@@ -1,7 +1,7 @@
 # Chakra User Guide
 ## Installation
 ### Step 1: Set up a Virtual Environment
-It's advisable to create a virtual environment using Python 3.11 or later
+It's advisable to create a virtual environment using Python 3.11 or later.
 
 ```bash
 # Create a virtual environment
@@ -14,7 +14,13 @@ $ source chakra_env/bin/activate
 ### Step 2: Install Chakra
 With the virtual environment activated, install the Chakra package using pip.
 
+**Note:** If you previously installed Chakra from source, run `pip uninstall chakra` first.
+The distribution is now named `mlc-chakra` but still provides the `chakra` import package,
+so having both installed leaves two distributions owning the same files.
 ```bash
+# Install package from PyPI
+$ pip install mlc-chakra
+
 # Install package from source
 $ pip install .
 
@@ -29,17 +35,15 @@ $ pip install https://github.com/mlcommons/chakra/archive/ae7c671db702eb1384015b
 Installing PARAM is necessary for Chakra to function properly as it imports essential components from it.
 
 ```bash
-$ git clone git@github.com:facebookresearch/param.git
-$ cd param/et_replay
-$ git checkout 7b19f586dd8b267333114992833a0d7e0d601630
-$ pip install .
+$ pip install "git+https://github.com/facebookresearch/param.git@7b19f586dd8b267333114992833a0d7e0d601630#subdirectory=et_replay"
 ```
 
 ### Step 4: Uninstalling Chakra
 To uninstall Chakra, use the following command within the virtual environment.
 
 ```bash
-$ pip uninstall chakra
+$ pip uninstall mlc-chakra
+# If you installed a pre-rename build, also: pip uninstall chakra
 ```
 
 ## Tools Overview
