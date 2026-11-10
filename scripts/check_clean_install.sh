@@ -16,6 +16,7 @@
 #          PARAM_REF       git ref of facebookresearch/param to install (default: pinned below)
 #          TRACE_SETS      space-separated fixture sets to run (default: every directory in the fixture)
 #          KEEP_WORKDIR=1  do not delete the temporary work directory on exit (default: 0)
+#          FAILURE_ARTIFACTS_DIR  if the run fails, copy the logs and trace outputs into this directory
 
 set -euo pipefail
 
@@ -36,14 +37,26 @@ TOOLS=(
 INVALID_GRAPH_MSG="Critical path analysis encountered an invalid graph structure"
 
 WORK="$(mktemp -d)"
-if [[ "${KEEP_WORKDIR:-0}" == "1" ]]; then
-    echo "Work directory kept at ${WORK}"
-else
-    trap 'rm -rf "${WORK}"' EXIT
-fi
-
 LOGS="${WORK}/logs"
 mkdir -p "${LOGS}"
+
+# On exit: if the run failed and FAILURE_ARTIFACTS_DIR is set, copy the logs and the trace sets (linked JSON, .et,
+# debug.log and input traces) there so CI can upload them; then delete the work directory unless KEEP_WORKDIR=1.
+cleanup() {
+    local rc=$?
+    if [[ ${rc} -ne 0 && -n "${FAILURE_ARTIFACTS_DIR:-}" ]]; then
+        mkdir -p "${FAILURE_ARTIFACTS_DIR}"
+        cp -r "${LOGS}" "${FAILURE_ARTIFACTS_DIR}/" 2>/dev/null || true
+        [[ -d "${WORK}/trace" ]] && cp -r "${WORK}/trace" "${FAILURE_ARTIFACTS_DIR}/" 2>/dev/null || true
+        echo "Logs and traces of the failed run copied to ${FAILURE_ARTIFACTS_DIR}" >&2
+    fi
+    if [[ "${KEEP_WORKDIR:-0}" == "1" ]]; then
+        echo "Work directory kept at ${WORK}"
+    else
+        rm -rf "${WORK}"
+    fi
+}
+trap cleanup EXIT
 TOTAL_WARNINGS=0
 
 step() { printf '\n==> %s\n' "$*"; }
