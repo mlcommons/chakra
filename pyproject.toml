@@ -2,7 +2,7 @@
 requires = [ "setuptools>=61",
   "wheel",
   "setuptools-grpc",
-  "grpcio-tools"]
+  "grpcio-tools==1.80.0"] # emits protobuf gencode 6.31.1; keep in sync with the protobuf lower bound below
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -15,7 +15,7 @@ authors = [
     {name = "MLCommons", email = "chakra@mlcommons.org"},
 ]
 dependencies = [
-    "protobuf",
+    "protobuf>=6.31.1,<8", # runtime must not be older than the gencode emitted by grpcio-tools (see build-system)
     "graphviz",
     "networkx!=3.6.0", # 3.6.0 breaks DiGraph subclasses with extra __init__ args (hta CPGraph); fixed in 3.6.1
     "pydot",

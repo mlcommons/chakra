@@ -33,3 +33,12 @@ jobs:
     - name: Run Unit Tests
       run: |
         python -m pytest -vv tests
+
+    # The generated *_pb2.py checks the protobuf runtime on import. Import with the latest runtime pip picked, then
+    # again with the lowest one pyproject.toml allows, to catch a gencode newer than the declared protobuf lower bound.
+    - name: Protobuf Gencode/Runtime Smoke Test
+      run: |
+        python -c "import chakra.schema.protobuf.et_def_pb2, chakra.schema.protobuf.storage_pb2"
+        floor=$(python -c "import re; from importlib.metadata import requires; print(next(re.search(r'>=([0-9.]+)', r).group(1) for r in requires('mlc-chakra') if r.startswith('protobuf')))")
+        pip install "protobuf==$floor"
+        python -c "import chakra.schema.protobuf.et_def_pb2, chakra.schema.protobuf.storage_pb2"
