@@ -39,6 +39,6 @@ jobs:
     - name: Protobuf Gencode/Runtime Smoke Test
       run: |
         python -c "import chakra.schema.protobuf.et_def_pb2, chakra.schema.protobuf.storage_pb2"
-        floor=$(python -c "import re; from importlib.metadata import requires; print(next(re.search(r'>=([0-9.]+)', r).group(1) for r in requires('chakra') if r.startswith('protobuf')))")
+        floor=$(python -c "import re; from importlib.metadata import requires; print(next(re.search(r'>=([0-9.]+)', r).group(1) for r in requires('mlc-chakra') if r.startswith('protobuf')))")
         pip install "protobuf==$floor"
         python -c "import chakra.schema.protobuf.et_def_pb2, chakra.schema.protobuf.storage_pb2"
