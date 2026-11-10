@@ -1,5 +1,5 @@
 import json
-from typing import Dict
+from typing import Dict, Optional
 from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
@@ -154,7 +154,7 @@ def test_convert_ctrl_dep_to_data_dep(sample_pytorch_data: Dict) -> None:
     assert root_node.data_deps == []
 
 
-def linked_node(node_id: int, name: str, parent: int, ts: int, **fields) -> Dict:
+def linked_node(node_id: int, name: str, parent: Optional[int], ts: int, **fields) -> Dict:
     empty = {"values": [], "shapes": [], "types": []}
     attrs = [{"name": attr, "type": "uint64", "value": 0} for attr in ("rf_id", "fw_parent", "scope", "tid", "fw_tid")]
     attrs += [{"name": "seq_id", "type": "int64", "value": -1}, {"name": "op_schema", "type": "string", "value": ""}]

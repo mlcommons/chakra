@@ -401,26 +401,30 @@ class TraceLinker:
         """
         stream_ops: Dict[int, List[KinetoOperator]] = {}
         for gpu_op in sorted(kineto_gpu_ops, key=lambda op: op.correlation):
-            stream_ops.setdefault(gpu_op.stream, []).append(gpu_op)
+            if gpu_op.stream is not None:
+                stream_ops.setdefault(gpu_op.stream, []).append(gpu_op)
         stream_correlations = {stream: [op.correlation for op in ops] for stream, ops in stream_ops.items()}
 
         for ops in kineto_tid_ops_map.values():
             for wait in ops:
                 record_correlation = wait.wait_on_event_record_correlation
+                src_stream, dst_stream = wait.wait_on_stream, wait.stream
                 if (
                     not wait.is_stream_wait_event()
-                    or wait.wait_on_stream == wait.stream
+                    or src_stream is None
+                    or dst_stream is None
+                    or src_stream == dst_stream
                     or record_correlation is None
                     or record_correlation < 0  # The event was recorded before the trace started.
                 ):
                     continue
-                src_index = bisect.bisect_left(stream_correlations.get(wait.wait_on_stream, []), record_correlation) - 1
-                dst_index = bisect.bisect_right(stream_correlations.get(wait.stream, []), wait.correlation)
-                if src_index < 0 or dst_index >= len(stream_ops.get(wait.stream, [])):
+                src_index = bisect.bisect_left(stream_correlations.get(src_stream, []), record_correlation) - 1
+                dst_index = bisect.bisect_right(stream_correlations.get(dst_stream, []), wait.correlation)
+                if src_index < 0 or dst_index >= len(stream_ops.get(dst_stream, [])):
                     logging.debug(f"No GPU operators found for stream wait event: {wait}")
                     continue
 
-                src, dst = stream_ops[wait.wait_on_stream][src_index], stream_ops[wait.stream][dst_index]
+                src, dst = stream_ops[src_stream][src_index], stream_ops[dst_stream][dst_index]
                 if src not in dst.stream_wait_dep:
                     dst.stream_wait_dep.append(src)
                     logging.debug(f"Stream wait dependency: {src.name} (stream {src.stream}) -> {dst.name}")
