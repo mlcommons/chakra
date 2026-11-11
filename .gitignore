@@ -12,3 +12,6 @@ __pycache__/
 
 trace_collection/post_execution/traces
 
+# uv
+.venv/
+uv.lock

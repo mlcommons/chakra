@@ -92,3 +92,29 @@ reportAttributeAccessIssue = false
 [tool.vulture]
 ignore_names = ["mock_process_thread"]
 min_confidence = 100
+
+# Developer environment for uv (`uv sync`). These pins equal requirements-dev.txt until that file is retired.
+[dependency-groups]
+dev = [
+    "pyright==1.1.359",
+    "pytest==8.1.1",
+    "ruff==0.3.7",
+    "vulture==2.11",
+    "build==1.6.1",
+    "twine==7.0.0",
+]
+# Temporary. PARAM (et_replay) from git. Delete this group and the source below when issue #237 is merged.
+param = ["et-replay"]
+
+[tool.uv]
+default-groups = ["dev", "param"]
+# Rebuild the package, and so the generated *_pb2.py files, when a .proto file changes. The default keys miss it.
+cache-keys = [
+    { file = "pyproject.toml" },
+    { file = "setup.py" },
+    { file = "setup.cfg" },
+    { file = "schema/protobuf/*.proto" },
+]
+
+[tool.uv.sources]
+et-replay = { git = "https://github.com/facebookresearch/param.git", rev = "7b19f586dd8b267333114992833a0d7e0d601630", subdirectory = "et_replay" }
