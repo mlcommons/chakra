@@ -25,6 +25,30 @@ def _pyproject() -> dict:
     return tomllib.loads((ROOT / "pyproject.toml").read_text())
 
 
+def _recipes() -> dict[str, list[str]]:
+    """Return the justfile recipes as {name: [dependencies]}."""
+    recipes = {}
+    for line in (ROOT / "justfile").read_text().splitlines():
+        match = re.match(r"[A-Za-z][\w-]*", line)
+        if match and ":" in line and ":=" not in line and not line.startswith("set "):
+            recipes[match.group(0)] = line.rsplit(":", 1)[1].split()
+    return recipes
+
+
+def _recipe_body(name: str) -> str:
+    """Return the command lines of one justfile recipe."""
+    body: list[str] = []
+    inside = False
+    for line in (ROOT / "justfile").read_text().splitlines():
+        if inside and (line.startswith("    ") or not line.strip()):
+            body.append(line.strip())
+        elif inside:
+            break
+        elif re.match(rf"{re.escape(name)}(\s[^:\n]*)?:", line):
+            inside = True
+    return "\n".join(body).strip()
+
+
 def _workflow_texts() -> dict[str, str]:
     return {p.name: p.read_text() for p in sorted((ROOT / ".github" / "workflows").glob("*.yml"))}
 
@@ -71,6 +95,21 @@ def test_dev_group_pins_equal_requirements_dev() -> None:
     assert pins == _requirements_dev()
 
 
+@COUPLED
+def test_uv_python_matches_ci_and_requires_python() -> None:
+    # `just` runs uv with this Python. CI uses the same one.
+    match = re.search(r'^export UV_PYTHON := "([0-9.]+)"', (ROOT / "justfile").read_text(), re.MULTILINE)
+    assert match is not None
+    version = match.group(1)
+    ci_versions = {
+        v for text in _workflow_texts().values() for v in re.findall(r"python-version:\s*['\"]?([0-9.]+)", text)
+    }
+    assert ci_versions == {version}
+    floor = re.search(r">=\s*([0-9.]+)", _pyproject()["project"]["requires-python"])
+    assert floor is not None
+    assert tuple(map(int, floor.group(1).split("."))) <= tuple(map(int, version.split(".")))
+
+
 def test_python_version_file_is_not_shipped_yet() -> None:
     # pyenv, mise and asdf read a .python-version file. It would reach people who do not use uv, and could stop
     # their `python` command. `just` pins Python with UV_PYTHON instead. Add the file when the pip setup is retired,
@@ -98,11 +137,122 @@ def test_param_pin_in_pyproject_equals_the_one_in_ci() -> None:
     assert ci_commits, "CI no longer pins PARAM: delete the param group and this test"
 
 
+REQUIRED_RECIPES = {
+    "setup",
+    "fmt",
+    "lint",
+    "types",
+    "test",
+    "gate",
+    "cpp-fmt-check",
+    "lint-scripts",
+    "wheel-check",
+    "ci-github-lint",
+}
+
+
+def test_justfile_has_the_required_recipes() -> None:
+    assert set(_recipes()) >= REQUIRED_RECIPES
+
+
+def test_gate_runs_every_check() -> None:
+    assert {"lint", "lint-scripts", "types", "test", "cpp-fmt-check"} <= set(_recipes()["gate"])
+
+
+def test_every_recipe_has_a_comment() -> None:
+    lines = (ROOT / "justfile").read_text().splitlines()
+    for index, line in enumerate(lines):
+        if (
+            re.match(r"[A-Za-z][\w-]*", line)
+            and ":" in line
+            and ":=" not in line
+            and not line.startswith(("set ", "default"))
+        ):
+            assert index > 0
+            above = index - 1
+            while lines[above].startswith("["):  # an attribute such as [positional-arguments]
+                above -= 1
+            assert lines[above].startswith("#"), f"recipe has no comment: {line}"
+
+
+def test_test_recipe_uses_python_dash_m_pytest() -> None:
+    # Three test files import `src.*`. Plain pytest cannot find it: it needs the repo root on sys.path.
+    assert "python -m pytest" in _recipe_body("test")
+
+
+def test_lint_recipe_checks_formatting() -> None:
+    # CI runs `ruff format .` without --check, so formatting never fails there. The justfile must check it.
+    assert "ruff format --check" in _recipe_body("lint")
+
+
+@COUPLED
+def test_justfile_runs_the_commands_that_ci_runs() -> None:
+    ci = "\n".join(_workflow_texts().values())
+    recipe_for = {
+        "ruff check .": "lint",
+        "vulture src/ tests/": "lint",
+        "pyright": "types",
+        "python -m pytest -vv tests": "test",
+    }
+    for command, recipe in recipe_for.items():
+        assert command in ci, f"CI no longer runs: {command}"
+        assert command in _recipe_body(recipe), f"just {recipe} does not run: {command}"
+    version = re.search(r"clangFormatVersion:\s*(\d+)", ci)
+    assert version is not None
+    assert f"clang-format=={version.group(1)}" in _recipe_body("cpp-fmt-check")
+
+
+def test_types_recipe_matches_ci_and_skips_the_venv() -> None:
+    # CI runs pyright where only the dev tools exist. With the project installed, pyright also reports issues that CI
+    # never sees. A full-environment check belongs to the later hardening work, not to this gate.
+    # Pyright must also not scan the project's .venv (thousands of files, over a minute): give it the tracked files.
+    body = _recipe_body("types")
+    assert "--only-group dev" in body
+    assert "scripts/run_on_git_files.sh '*.py' --" in body
+
+
+def test_file_list_recipes_use_the_git_files_script() -> None:
+    # The script includes new files that git does not track yet, and stops on an empty list (tests/test_scripts.py).
+    for name in ("types", "cpp-fmt-check"):
+        assert "scripts/run_on_git_files.sh" in _recipe_body(name)
+
+
+def test_test_recipe_passes_arguments_with_spaces_through() -> None:
+    justfile = (ROOT / "justfile").read_text()
+    assert "[positional-arguments]" in justfile
+    assert '"$@"' in _recipe_body("test")
+
+
+def test_gate_includes_the_editable_install_and_protobuf_checks() -> None:
+    # The gate checks both ways to install the package: editable (what `uv sync` does) and the built wheel (what
+    # `pip install .` and CI use).
+    assert {"test-slow", "proto-smoke", "wheel-check"} <= set(_recipes()["gate"])
+    assert "test_editable_install_builds_and_imports" in _recipe_body("test-slow")
+    assert "test_wheel_check_catches_a_file_that_is_missing_from_the_wheel" in _recipe_body("test-slow")
+    assert _recipe_body("proto-smoke") == "scripts/proto_smoke.sh"
+    assert _recipe_body("wheel-check") == "scripts/wheel_check.sh"
+
+
+def test_lint_scripts_recipe_runs_shellcheck_on_every_script() -> None:
+    assert "shellcheck-py==0.11.0.1 shellcheck scripts/*.sh" in _recipe_body("lint-scripts")
+
+
+def test_justfile_comments_point_only_to_files_that_exist() -> None:
+    # A comment must not point to a file that is not in the repository (a doc that is not written yet, local notes).
+    comments = "\n".join(line for line in (ROOT / "justfile").read_text().splitlines() if line.lstrip().startswith("#"))
+    for path in re.findall(r"\b(?:docs?|tasks|scripts)/[\w./-]+", comments):
+        assert (ROOT / path).exists(), f"justfile comment points to a missing file: {path}"
+
+
 def test_uv_rebuilds_the_package_when_a_proto_file_changes() -> None:
     # The generated *_pb2.py files are built into the source tree. By default uv rebuilds the package only when
     # pyproject.toml, setup.py or setup.cfg change, so after an edit of a .proto file the generated code stays old.
     keys = [key.get("file") for key in _pyproject()["tool"]["uv"]["cache-keys"]]
     assert "schema/protobuf/*.proto" in keys
+
+
+def test_test_recipe_enables_the_tooling_tests() -> None:
+    assert "CHAKRA_TOOLING_TESTS=1" in _recipe_body("test")
 
 
 def test_gitignore_covers_generated_protobuf_code() -> None:
