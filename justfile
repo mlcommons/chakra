@@ -61,3 +61,8 @@ gate: lint lint-scripts types test test-slow proto-smoke wheel-check cpp-fmt-che
 # Lint the GitHub workflow files with actionlint (needs Docker)
 ci-github-lint:
     docker run --rm -v "$PWD":/repo -w /repo rhysd/actionlint:1.7.7 -color
+
+# Needs Docker and act (`brew install act`). It removes the shared act cache volume and the act containers that use it.
+# It does not replace the real check on GitHub. Run one workflow in Docker with act, for example `just act python_tests.yml`
+act workflow="python_lint.yml":
+    scripts/act.sh {{quote(workflow)}}
