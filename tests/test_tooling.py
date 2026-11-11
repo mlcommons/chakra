@@ -268,6 +268,85 @@ def test_justfile_comments_point_only_to_files_that_exist() -> None:
         assert (ROOT / path).exists(), f"justfile comment points to a missing file: {path}"
 
 
+def _section(text: str, heading: str) -> str:
+    """Return the text under a markdown heading, up to the next heading of the same or a higher level."""
+    level = len(heading) - len(heading.lstrip("#"))
+    lines = text.splitlines()
+    start = next((i for i, line in enumerate(lines) if line.strip() == heading), None)
+    assert start is not None, f"no section {heading!r}"
+    body: list[str] = []
+    in_code = False
+    for line in lines[start + 1 :]:
+        if line.startswith("```"):
+            in_code = not in_code
+        elif not in_code and re.match(rf"#{{1,{level}}} ", line):
+            break
+        body.append(line)
+    return "\n".join(body) + "\n"
+
+
+def _prose_sentences(text: str) -> list[str]:
+    """Return the sentences of a markdown text, without code blocks, tables, diagrams, links and inline code."""
+    text = re.sub(r"```.*?```", "", text, flags=re.DOTALL)
+    text = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", text)
+    text = re.sub(r"`[^`]*`", "code", text)
+    lines = [
+        line.strip(" -*") for line in text.splitlines() if line.strip() and not line.lstrip().startswith(("|", "#"))
+    ]
+    return [s.strip() for s in re.split(r"(?<=[.!?:])\s+", " ".join(lines)) if s.strip()]
+
+
+def test_readme_has_a_short_development_section() -> None:
+    # The README stays short. It gives the quick start and points to the guide.
+    readme = (ROOT / "README.md").read_text()
+    section = _section(readme, "## Development")
+    assert len(section.strip().splitlines()) <= 15
+    assert "just setup" in section
+    assert "just gate" in section
+    assert "(doc/DEVELOPMENT.md)" in section
+    assert "pip setup still works" in section  # nobody has to move to uv
+
+
+def test_relative_links_in_the_docs_resolve() -> None:
+    for name in ("README.md", "USER_GUIDE.md", "doc/DEVELOPMENT.md"):
+        text = (ROOT / name).read_text()
+        for target in re.findall(r"\]\(([^)#\s]+)(?:#[^)]*)?\)", text):
+            if not target.startswith(("http://", "https://", "mailto:")):
+                assert (ROOT / Path(name).parent / target).exists(), f"{name} links to a missing file: {target}"
+
+
+def test_docs_name_only_recipes_that_exist() -> None:
+    recipes = set(_recipes())
+    for name in ("README.md", "USER_GUIDE.md", "doc/DEVELOPMENT.md"):
+        text = (ROOT / name).read_text()
+        for recipe in re.findall(r"(?:^|`|\$ )just ([a-z][\w-]*)", text, re.MULTILINE):
+            assert recipe in recipes, f"{name} names a recipe that does not exist: just {recipe}"
+
+
+def test_new_docs_use_short_sentences() -> None:
+    # A simple check for Simplified Technical English: at most 25 words in a sentence.
+    readme = (ROOT / "README.md").read_text()
+    user_guide = (ROOT / "USER_GUIDE.md").read_text()
+    texts = {
+        "doc/DEVELOPMENT.md": (ROOT / "doc/DEVELOPMENT.md").read_text(),
+        "README.md Development": _section(readme, "## Development"),
+        "USER_GUIDE.md uv": _section(user_guide, "### Alternative: install with uv"),
+    }
+    for name, text in texts.items():
+        for sentence in _prose_sentences(text):
+            assert len(sentence.split()) <= 25, f"{name}: sentence has {len(sentence.split())} words: {sentence}"
+
+
+@COUPLED
+def test_docs_use_the_same_param_commit_as_pyproject() -> None:
+    commit = _pyproject()["tool"]["uv"]["sources"]["et-replay"]["rev"]
+    user_guide = _section((ROOT / "USER_GUIDE.md").read_text(), "### Alternative: install with uv")
+    for command in ("uv venv", "uv pip install mlc-chakra"):
+        assert command in user_guide
+    assert commit in user_guide
+    assert commit in _section((ROOT / "doc" / "DEVELOPMENT.md").read_text(), "## The classic setup")
+
+
 def test_uv_rebuilds_the_package_when_a_proto_file_changes() -> None:
     # The generated *_pb2.py files are built into the source tree. By default uv rebuilds the package only when
     # pyproject.toml, setup.py or setup.cfg change, so after an edit of a .proto file the generated code stays old.
@@ -279,8 +358,51 @@ def test_test_recipe_enables_the_tooling_tests() -> None:
     assert "CHAKRA_TOOLING_TESTS=1" in _recipe_body("test")
 
 
+def test_developer_guide_lists_every_recipe() -> None:
+    guide = (ROOT / "doc" / "DEVELOPMENT.md").read_text()
+    for recipe in set(_recipes()) - {"default"}:
+        assert f"`just {recipe}`" in guide, f"doc/DEVELOPMENT.md does not list: just {recipe}"
+
+
+def test_developer_guide_describes_the_shell_scripts() -> None:
+    section = _section((ROOT / "doc" / "DEVELOPMENT.md").read_text(), "## Shell scripts")
+    for text in ("scripts/", "just lint-scripts", "tests/test_scripts.py"):
+        assert text in section
+
+
 def test_gitignore_covers_generated_protobuf_code() -> None:
     # The C++ feeder build runs protoc into schema/protobuf. The file lists include untracked files (as CI does), so
     # this generated code must be ignored, or `just cpp-fmt-check` checks files that CI never sees.
     lines = {line.strip() for line in (ROOT / ".gitignore").read_text().splitlines()}
     assert {"*.pb.cc", "*.pb.h"} <= lines
+
+
+def test_section_ignores_comment_lines_in_code_blocks() -> None:
+    text = "## A\n\n```bash\n# a comment\ncommand\n```\n\nafter the block\n\n## B\n\nother\n"
+    section = _section(text, "## A")
+    assert "after the block" in section
+    assert "other" not in section
+
+
+def test_classic_setup_installs_param_before_it_runs_the_tests() -> None:
+    # The tests import et_replay (PARAM). Without it, pytest cannot collect them. The setup also uses Python 3.11 and
+    # runs the lint commands that the Python Lint workflow runs.
+    section = _section((ROOT / "doc" / "DEVELOPMENT.md").read_text(), "## The classic setup")
+    assert section.index("facebookresearch/param") < section.index("python -m pytest")
+    assert "python3.11 -m venv" in section
+    for command in ("ruff check .", "pyright", "vulture src/ tests/"):
+        assert command in section
+
+
+def test_docs_do_not_promise_the_end_of_the_pip_setup() -> None:
+    # The owner decides when the pip setup ends, and says so in the repository. A guide must not announce it.
+    for name in ("README.md", "doc/DEVELOPMENT.md"):
+        assert "retire" not in (ROOT / name).read_text().lower(), f"{name} announces the end of the pip setup"
+
+
+def test_developer_guide_uses_one_word_for_one_meaning() -> None:
+    # "workflow" is a file in .github/workflows/. The daily steps are not a workflow.
+    guide = (ROOT / "doc" / "DEVELOPMENT.md").read_text()
+    assert "## Daily steps" in guide
+    assert "Daily workflow" not in guide
+    assert "daily workflow" not in (ROOT / "README.md").read_text()

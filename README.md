@@ -26,6 +26,17 @@ url={https://arxiv.org/abs/2605.11333}
 
 Check out [`USER_GUIDE`](USER_GUIDE.md) for details.
 
+## Development
+
+Set up with [uv](https://docs.astral.sh/uv/) and [just](https://just.systems/):
+
+```bash
+just setup   # Python 3.11, development tools, PARAM
+just gate    # lint, types, tests and more
+```
+
+The pip setup still works. The [development guide](doc/DEVELOPMENT.md) explains both setups, the daily steps, and how to run the CI workflows on your computer.
+
 ## License
 
 Chakra is released under the Apache License 2.0. Please see the [`LICENSE.md`](LICENSE.md) file for more information.
