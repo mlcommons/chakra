@@ -342,6 +342,13 @@ def test_contributing_points_to_the_developer_guide() -> None:
     assert "(doc/DEVELOPMENT.md)" in (ROOT / "CONTRIBUTING.md").read_text()
 
 
+def test_developer_guide_says_what_to_use_on_windows() -> None:
+    # The recipes and scripts need bash. The guide must say so and name the way to run them on Windows.
+    section = _section((ROOT / "doc/DEVELOPMENT.md").read_text(), "## Windows")
+    assert "WSL2" in section
+    assert "bash" in section
+
+
 @COUPLED
 def test_docs_use_the_same_param_commit_as_pyproject() -> None:
     commit = _pyproject()["tool"]["uv"]["sources"]["et-replay"]["rev"]
