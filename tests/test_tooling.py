@@ -103,3 +103,10 @@ def test_uv_rebuilds_the_package_when_a_proto_file_changes() -> None:
     # pyproject.toml, setup.py or setup.cfg change, so after an edit of a .proto file the generated code stays old.
     keys = [key.get("file") for key in _pyproject()["tool"]["uv"]["cache-keys"]]
     assert "schema/protobuf/*.proto" in keys
+
+
+def test_gitignore_covers_generated_protobuf_code() -> None:
+    # The C++ feeder build runs protoc into schema/protobuf. The file lists include untracked files (as CI does), so
+    # this generated code must be ignored, or `just cpp-fmt-check` checks files that CI never sees.
+    lines = {line.strip() for line in (ROOT / ".gitignore").read_text().splitlines()}
+    assert {"*.pb.cc", "*.pb.h"} <= lines

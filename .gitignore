@@ -15,3 +15,7 @@ trace_collection/post_execution/traces
 # uv
 .venv/
 uv.lock
+
+# protoc output of the C++ feeder build
+*.pb.cc
+*.pb.h
