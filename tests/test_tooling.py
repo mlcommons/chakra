@@ -211,6 +211,26 @@ def test_types_recipe_matches_ci_and_skips_the_venv() -> None:
     assert "scripts/run_on_git_files.sh '*.py' --" in body
 
 
+def test_actrc_maps_ubuntu_latest_and_stays_portable() -> None:
+    text = (ROOT / ".actrc").read_text()
+    assert "-P ubuntu-latest=catthehacker/ubuntu:act-24.04" in text
+    # The CPU type and the Docker socket differ between engineers. scripts/act.sh finds them at run time.
+    assert "--container-architecture" not in text
+    assert "DOCKER_HOST" not in text
+
+
+def test_act_recipe_default_workflow_exists() -> None:
+    match = re.search(r'^act workflow="([^"]+)":', (ROOT / "justfile").read_text(), re.MULTILINE)
+    assert match is not None
+    assert (ROOT / ".github" / "workflows" / match.group(1)).is_file()
+
+
+def test_gitignore_covers_act_secrets() -> None:
+    # `act --secret-file .secrets` reads secrets from this file. It must never be committed.
+    lines = {line.strip() for line in (ROOT / ".gitignore").read_text().splitlines()}
+    assert {".secrets", ".env", ".vars"} <= lines
+
+
 def test_file_list_recipes_use_the_git_files_script() -> None:
     # The script includes new files that git does not track yet, and stops on an empty list (tests/test_scripts.py).
     for name in ("types", "cpp-fmt-check"):
@@ -235,6 +255,10 @@ def test_gate_includes_the_editable_install_and_protobuf_checks() -> None:
 
 def test_lint_scripts_recipe_runs_shellcheck_on_every_script() -> None:
     assert "shellcheck-py==0.11.0.1 shellcheck scripts/*.sh" in _recipe_body("lint-scripts")
+
+
+def test_act_recipe_calls_the_script() -> None:
+    assert _recipe_body("act") == "scripts/act.sh {{quote(workflow)}}"  # quoted: no shell injection
 
 
 def test_justfile_comments_point_only_to_files_that_exist() -> None:

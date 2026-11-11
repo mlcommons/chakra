@@ -194,3 +194,120 @@ def test_wheel_check_stops_with_a_clear_message_outside_a_git_checkout(tmp_path:
     )
     assert result.returncode != 0
     assert "git checkout" in result.stderr
+
+
+DOCKER_STUB = """case "$*" in
+    "context inspect"*) [ -z "${STUB_CONTEXT_FAILS:-}" ] || exit 1; echo unix:///stub.sock ;;
+    "ps -aq"*) [ -z "${STUB_STALE:-}" ] || printf '%s\\n' $STUB_STALE ;;
+esac
+true"""
+
+
+ACT_STUBS = {
+    "pgrep": 'exit "${STUB_PGREP:-1}"',
+    "uname": 'echo "${STUB_ARCH:-arm64}"',
+    "docker": DOCKER_STUB,
+    "act": 'echo "DOCKER_HOST=$DOCKER_HOST" >> "$STUB_LOG"',
+}
+
+
+ACT_COMMAND = "act pull_request -W .github/workflows/{} --container-architecture linux/{} --container-daemon-socket -"
+
+
+def _no_cleanup_and_no_act(calls: list[str]) -> bool:
+    return not any(c.startswith(("act ", "docker rm", "docker volume")) for c in calls)
+
+
+def test_act_runs_act_with_the_expected_arguments(tmp_path: Path) -> None:
+    result, calls = _run("act.sh", [], tmp_path, ACT_STUBS)
+    assert result.returncode == 0, result.stderr
+    assert ACT_COMMAND.format("python_lint.yml", "arm64") in calls
+    assert "pgrep -x act" in calls  # not `pgrep act`: that also matches the script act.sh
+
+
+def test_act_takes_the_workflow_file_from_the_argument(tmp_path: Path) -> None:
+    result, calls = _run("act.sh", ["python_tests.yml"], tmp_path, ACT_STUBS)
+    assert result.returncode == 0, result.stderr
+    assert ACT_COMMAND.format("python_tests.yml", "arm64") in calls
+
+
+@pytest.mark.parametrize(("machine", "arch"), [("x86_64", "amd64"), ("arm64", "arm64"), ("aarch64", "arm64")])
+def test_act_maps_the_cpu_type_to_the_container_architecture(tmp_path: Path, machine: str, arch: str) -> None:
+    result, calls = _run("act.sh", [], tmp_path, ACT_STUBS, {"STUB_ARCH": machine})
+    assert result.returncode == 0, result.stderr
+    assert ACT_COMMAND.format("python_lint.yml", arch) in calls
+
+
+def test_act_stops_on_an_unknown_cpu_type_before_it_removes_anything(tmp_path: Path) -> None:
+    result, calls = _run("act.sh", [], tmp_path, ACT_STUBS, {"STUB_ARCH": "riscv64"})
+    assert result.returncode != 0
+    assert "unsupported CPU type" in result.stderr
+    assert _no_cleanup_and_no_act(calls)
+
+
+def test_act_stops_on_an_unknown_workflow_file_before_it_removes_anything(tmp_path: Path) -> None:
+    result, calls = _run("act.sh", ["no_such_workflow.yml"], tmp_path, ACT_STUBS)
+    assert result.returncode != 0
+    assert "no_such_workflow.yml" in result.stderr
+    assert _no_cleanup_and_no_act(calls)
+
+
+def test_act_refuses_to_start_while_another_act_run_is_active(tmp_path: Path) -> None:
+    # The cleanup would remove the containers of the run that is active.
+    result, calls = _run("act.sh", [], tmp_path, ACT_STUBS, {"STUB_PGREP": "0"})
+    assert result.returncode != 0
+    assert "another act run is active" in result.stderr
+    assert _no_cleanup_and_no_act(calls)
+
+
+def test_act_stops_when_pgrep_is_missing(tmp_path: Path) -> None:
+    # Without pgrep the check for another act run cannot work, and a missing command must not count as "none running".
+    stubs = {name: body for name, body in ACT_STUBS.items() if name != "pgrep"}
+    result, calls = _run("act.sh", [], tmp_path, stubs, only_tools=("bash", "dirname"))
+    assert result.returncode != 0
+    assert "pgrep" in result.stderr
+    assert _no_cleanup_and_no_act(calls)
+
+
+def test_act_removes_stale_containers_then_the_volume_then_runs_act(tmp_path: Path) -> None:
+    result, calls = _run("act.sh", [], tmp_path, ACT_STUBS, {"STUB_STALE": "abc123 def456"})
+    assert result.returncode == 0, result.stderr
+    steps = [c for c in calls if c.startswith(("docker rm", "docker volume", "act "))]
+    assert steps == [
+        "docker rm -f abc123",
+        "docker rm -f def456",
+        "docker volume rm -f act-toolcache",
+        ACT_COMMAND.format("python_lint.yml", "arm64"),
+    ]
+
+
+def test_act_removes_only_the_volume_when_no_container_is_stale(tmp_path: Path) -> None:
+    result, calls = _run("act.sh", [], tmp_path, ACT_STUBS)
+    assert result.returncode == 0, result.stderr
+    assert not any(c.startswith("docker rm") for c in calls)
+    assert "docker volume rm -f act-toolcache" in calls
+
+
+def test_act_says_what_it_removes(tmp_path: Path) -> None:
+    result, _ = _run("act.sh", [], tmp_path, ACT_STUBS, {"STUB_STALE": "abc123 def456"})
+    assert "act-toolcache" in result.stderr
+    assert "abc123 def456" in result.stderr  # on one line
+
+
+def test_act_asks_the_docker_context_for_the_socket(tmp_path: Path) -> None:
+    result, calls = _run("act.sh", [], tmp_path, ACT_STUBS)
+    assert result.returncode == 0, result.stderr
+    assert "DOCKER_HOST=unix:///stub.sock" in calls
+
+
+def test_act_keeps_a_docker_host_that_is_already_set(tmp_path: Path) -> None:
+    result, calls = _run("act.sh", [], tmp_path, ACT_STUBS, {"DOCKER_HOST": "unix:///mine.sock"})
+    assert result.returncode == 0, result.stderr
+    assert "DOCKER_HOST=unix:///mine.sock" in calls
+    assert not any(c.startswith("docker context") for c in calls)
+
+
+def test_act_stops_when_the_docker_context_cannot_be_read(tmp_path: Path) -> None:
+    result, calls = _run("act.sh", [], tmp_path, ACT_STUBS, {"STUB_CONTEXT_FAILS": "1"})
+    assert result.returncode != 0
+    assert _no_cleanup_and_no_act(calls)

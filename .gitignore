@@ -19,3 +19,8 @@ uv.lock
 # protoc output of the C++ feeder build
 *.pb.cc
 *.pb.h
+
+# act reads these files. They can hold secrets: never commit them.
+.secrets
+.env
+.vars
