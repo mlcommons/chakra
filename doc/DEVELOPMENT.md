@@ -24,6 +24,12 @@ If you only want to use Chakra, read the [User Guide](../USER_GUIDE.md).
 
 On Linux, see the install page of each tool.
 
+## Windows
+
+The recipes and the scripts in `scripts/` need bash. On Windows, use WSL2 with Ubuntu. Then follow the steps for Linux in this guide.
+
+Native Windows is not supported. We tested these steps only on macOS. If a step fails on Windows, tell us which step and the first error.
+
 ## Set up
 
 Run these commands in the repository folder.
