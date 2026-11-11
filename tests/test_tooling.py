@@ -308,7 +308,7 @@ def test_readme_has_a_short_development_section() -> None:
 
 
 def test_relative_links_in_the_docs_resolve() -> None:
-    for name in ("README.md", "USER_GUIDE.md", "doc/DEVELOPMENT.md"):
+    for name in ("README.md", "USER_GUIDE.md", "CONTRIBUTING.md", "doc/DEVELOPMENT.md"):
         text = (ROOT / name).read_text()
         for target in re.findall(r"\]\(([^)#\s]+)(?:#[^)]*)?\)", text):
             if not target.startswith(("http://", "https://", "mailto:")):
@@ -335,6 +335,11 @@ def test_new_docs_use_short_sentences() -> None:
     for name, text in texts.items():
         for sentence in _prose_sentences(text):
             assert len(sentence.split()) <= 25, f"{name}: sentence has {len(sentence.split())} words: {sentence}"
+
+
+@COUPLED
+def test_contributing_points_to_the_developer_guide() -> None:
+    assert "(doc/DEVELOPMENT.md)" in (ROOT / "CONTRIBUTING.md").read_text()
 
 
 @COUPLED
