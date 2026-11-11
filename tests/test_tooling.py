@@ -347,6 +347,8 @@ def test_developer_guide_says_what_to_use_on_windows() -> None:
     section = _section((ROOT / "doc/DEVELOPMENT.md").read_text(), "## Windows")
     assert "WSL2" in section
     assert "bash" in section
+    assert "tested these steps on macOS and in a WSL instance of Debian 13 (trixie)" in section  # what a tester ran
+    assert "Ubuntu" not in section  # nobody tested Ubuntu
 
 
 @COUPLED

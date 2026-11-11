@@ -26,9 +26,9 @@ On Linux, see the install page of each tool.
 
 ## Windows
 
-The recipes and the scripts in `scripts/` need bash. On Windows, use WSL2 with Ubuntu. Then follow the steps for Linux in this guide.
+The recipes and the scripts in `scripts/` need bash. On Windows, use WSL2. Then follow the steps for Linux in this guide.
 
-Native Windows is not supported. We tested these steps only on macOS. If a step fails on Windows, tell us which step and the first error.
+Native Windows is not supported. We tested these steps on macOS and in a WSL instance of Debian 13 (trixie). If a step fails on Windows, tell us which step and the first error.
 
 ## Set up
 
