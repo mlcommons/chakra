@@ -46,6 +46,18 @@ $ pip uninstall mlc-chakra
 # If you installed a pre-rename build, also: pip uninstall chakra
 ```
 
+### Alternative: install with uv
+[uv](https://docs.astral.sh/uv/) can replace `venv` and `pip`. The steps are the same as above.
+
+```bash
+$ uv venv --python 3.11
+$ source .venv/bin/activate
+$ uv pip install mlc-chakra
+$ uv pip install "git+https://github.com/facebookresearch/param.git@7b19f586dd8b267333114992833a0d7e0d601630#subdirectory=et_replay"
+```
+
+To uninstall Chakra, run `uv pip uninstall mlc-chakra`.
+
 ## Tools Overview
 ### Execution Trace Link (chakra_trace_link)
 Merge Chakra host execution trace and Chakra device execution trace to encode GPU operators into the output execution trace.
