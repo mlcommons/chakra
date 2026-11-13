@@ -56,6 +56,11 @@ class PyTorchConverter:
         protobuf_node_map = {}
         self.convert_json_to_protobuf_nodes(json_node_map, protobuf_node_map)
         root_node_list = [node for node in protobuf_node_map.values() if self.is_root_node(node.name)]
+        if not root_node_list:
+            logging.warning(
+                f"{input_filename}: no thread root (a node named {THREAD_ANNOTATION}). The conversion starts from the "
+                "thread roots, so no node gets a dependency and the .et will contain no nodes."
+            )
         for root_node in root_node_list:
             self.convert_ctrl_dep_to_data_dep(json_node_map, protobuf_node_map, root_node)
 

@@ -43,7 +43,8 @@ class TraceLinker:
             chakra_device_trace (str): Path to the Kineto trace file.
             output_file (str): Path for the output nyTorch execution trace plus file.
         """
-        host_ops = self.chakra_host_trace_loader.load(chakra_host_trace)
+        host_trace = self.chakra_host_trace_loader.load_trace(chakra_host_trace)
+        host_ops = host_trace.linker_ops()
 
         (
             kineto_cpu_ops,
@@ -74,7 +75,7 @@ class TraceLinker:
         )
 
         chakra_execution_trace_plus_data = self.link_traces(
-            chakra_host_trace,
+            host_trace.raw,
             host_ops,
             kineto_cpu_ops,
             sorted_kineto_cpu_ops,
@@ -379,7 +380,7 @@ class TraceLinker:
 
     def link_traces(
         self,
-        chakra_host_trace: str,
+        chakra_host_trace_data: Dict,
         host_ops: List[HostNode],
         kineto_cpu_ops: List[KinetoOperator],
         sorted_kineto_cpu_ops: List[KinetoOperator],
@@ -396,7 +397,8 @@ class TraceLinker:
         Link Chakra Host ET and Chakra Device ET to produce an enhanced Chakra ET (ET +).
 
         Args:
-            chakra_host_trace (str): Path to the Chakra host execution trace file.
+            chakra_host_trace_data (Dict): The Chakra host execution trace as read (HostTrace.raw). The ET+ is built
+                in it, so it is modified.
             host_ops (List[HostNode]): List of Chakra host operators.
             kineto_cpu_ops (List[KinetoOperator]): List of Kineto CPU operators.
             sorted_kineto_cpu_ops (List[KinetoOperator]): Sorted list of Kineto CPU operators.
@@ -445,7 +447,7 @@ class TraceLinker:
             kineto_external_id_to_kineto_op_map,
         )
         chakra_execution_trace_plus_data = self.construct_et_plus_data(
-            chakra_host_trace,
+            chakra_host_trace_data,
             host_op_id_to_kineto_ops_map,
             host_op_id_to_inclusive_dur_map,
             host_op_id_to_exclusive_dur_map,
@@ -810,7 +812,7 @@ class TraceLinker:
 
     def construct_et_plus_data(
         self,
-        chakra_host_trace: str,
+        chakra_host_trace_data: Dict,
         host_op_id_to_kineto_ops_map: Dict[int, List[KinetoOperator]],
         host_op_id_to_inclusive_dur_map: Dict[int, int],
         host_op_id_to_exclusive_dur_map: Dict[int, int],
@@ -824,7 +826,8 @@ class TraceLinker:
         offering a comprehensive view of the execution.
 
         Args:
-            chakra_host_trace (str): Path to the Chakra host execution trace file.
+            chakra_host_trace_data (Dict): The Chakra host execution trace as read (HostTrace.raw). The ET+ is built
+                in it, so it is modified.
             host_op_id_to_kineto_ops_map (Dict[int, List[KinetoOperator]]): Map from Chakra host op IDs to Kineto
                 GPU ops.
             host_op_id_to_inclusive_dur_map (Dict[int, int]): Inclusive duration map for Chakra host ops.
@@ -837,8 +840,7 @@ class TraceLinker:
             Dict: The constructed ET+ data.
         """
         logging.debug("Constructing ET+ data.")
-        with open(chakra_host_trace, "r") as file:
-            pytorch_et_data = json.load(file)
+        pytorch_et_data = chakra_host_trace_data
 
         sorted_nodes = sorted(pytorch_et_data["nodes"], key=lambda x: x["id"])
         gpu_ops = []

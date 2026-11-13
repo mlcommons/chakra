@@ -25,8 +25,8 @@ class HostTrace:
         raw (Dict[str, Any]): The JSON as read. The parser never modifies it.
         source (str): Where the trace was read from, used in messages.
         schema (versions.Schema): The parsed schema; schema.text is the string as written in the trace.
-        nodes (Dict[int, HostNode]): Every node by id, in file order. A later node with the same id replaces an
-            earlier one.
+        nodes (Dict[int, HostNode]): Every node by id, in file order. Ids are unique: PyTorch assigns them from a
+            counter, so a duplicate means a broken file and is an error.
     """
 
     def __init__(self, raw: Dict[str, Any], source: str = "host trace") -> None:
@@ -42,6 +42,11 @@ class HostTrace:
         self.nodes: Dict[int, HostNode] = {}
         for node_data in raw["nodes"]:
             node = HostNode(self.schema.text, node_data, source)
+            if node.id in self.nodes:
+                raise HostTraceError(
+                    f"{source}: duplicate node id {node.id} ({self.nodes[node.id].name} and {node.name}); "
+                    "node ids must be unique"
+                )
             self.nodes[node.id] = node
         attach_children(self.nodes)
 

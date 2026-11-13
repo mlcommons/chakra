@@ -25,6 +25,21 @@ class ChakraHostTraceLoader:
 
         return chakra_host_ops
 
+    def load_trace(self, chakra_host_trace_file: str) -> HostTrace:
+        """
+        Read and parse a Chakra host execution trace once (plain or gzip-compressed JSON).
+
+        The linker takes its host ops from the result (linker_ops) and builds its output from the same parse (raw).
+
+        Args:
+            chakra_host_trace_file (str): Path to the PyTorch execution trace file.
+
+        Returns:
+            HostTrace: The parsed trace.
+        """
+        logging.debug(f"Starting to load Chakra host execution trace from file: {chakra_host_trace_file}.")
+        return HostTrace.from_file(chakra_host_trace_file)
+
     def extract_chakra_host_ops(self, node: HostNode) -> List[HostNode]:
         """
         Extract the node and every node under it, sorted by id.

@@ -39,7 +39,7 @@ def test_link_traces(mock_map_ops, mock_add_annotations, mock_construct_et_plus,
     kineto_external_id_to_kineto_op_map = {1: MagicMock(spec=KinetoOperator)}
 
     trace_linker.link_traces(
-        "pytorch_et_file",
+        {"nodes": []},
         host_ops,
         kineto_cpu_ops,
         sorted_kineto_cpu_ops,
@@ -578,10 +578,8 @@ def test_link_gpu_ops(trace_linker):
 
 
 @patch("chakra.src.trace_link.trace_linker.TraceLinker.process_op_and_dependents")
-@patch("builtins.open", new_callable=MagicMock)
-@patch("json.load")
-def test_construct_et_plus_data(mock_json_load, mock_open, mock_process_op_and_dependents, trace_linker):
-    mock_json_load.return_value = {"nodes": [{"id": 1}, {"id": 2}]}
+def test_construct_et_plus_data(mock_process_op_and_dependents, trace_linker):
+    host_trace_data = {"nodes": [{"id": 1}, {"id": 2}]}
     mock_process_op_and_dependents.side_effect = lambda x, *args: [{"id": x["id"] + 2}]
 
     host_op_id_to_kineto_ops_map = {1: [], 2: []}
@@ -591,7 +589,7 @@ def test_construct_et_plus_data(mock_json_load, mock_open, mock_process_op_and_d
     host_op_id_to_inter_thread_dep_map = {1: None, 2: None}
 
     pytorch_et_plus_data = trace_linker.construct_et_plus_data(
-        "path/to/pytorch_et_file",
+        host_trace_data,
         host_op_id_to_kineto_ops_map,
         host_op_id_to_inclusive_dur_map,
         host_op_id_to_exclusive_dur_map,
