@@ -39,7 +39,7 @@ just setup
 just gate
 ```
 
-`just setup` installs Python 3.11, the development tools, and PARAM. `just gate` must pass before you start to change code.
+`just setup` installs Python 3.11 and the development tools. `just gate` must pass before you start to change code.
 
 ## Daily steps
 
@@ -110,13 +110,12 @@ The `pip` setup still works. Use Python 3.11, the version that CI uses.
 python3.11 -m venv .venv
 source .venv/bin/activate
 pip install .
-pip install "git+https://github.com/facebookresearch/param.git@7b19f586dd8b267333114992833a0d7e0d601630#subdirectory=et_replay"
 pip install -r requirements-dev.txt
 python -m pytest tests
 ruff format --check . && ruff check . && pyright && vulture src/ tests/
 ```
 
-The second `pip install` line installs PARAM, which Chakra needs. `pip install .` is not an editable install. Run it again after you change code.
+`pip install .` is not an editable install. Run it again after you change code.
 
 ## Python version
 

@@ -46,7 +46,6 @@ $ pip uninstall mlc-chakra
 $ uv venv --python 3.11
 $ source .venv/bin/activate
 $ uv pip install mlc-chakra
-$ uv pip install "git+https://github.com/facebookresearch/param.git@7b19f586dd8b267333114992833a0d7e0d601630#subdirectory=et_replay"
 ```
 
 To uninstall Chakra, run `uv pip uninstall mlc-chakra`.

@@ -31,7 +31,7 @@ A detailed description of the original motivation and guiding principles can be 
 Set up with [uv](https://docs.astral.sh/uv/) and [just](https://just.systems/):
 
 ```bash
-just setup   # Python 3.11, development tools, PARAM
+just setup   # Python 3.11, development tools
 just gate    # lint, types, tests and more
 ```
 

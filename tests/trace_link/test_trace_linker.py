@@ -1,11 +1,8 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
-from chakra.src.third_party.et_replay.execution_trace import (
-    EXECUTION_TRACE_PROCESS_ANNOTATION,
-    EXECUTION_TRACE_THREAD_ANNOTATION,
-)
-from chakra.src.third_party.et_replay.execution_trace import Node as PyTorchOperator
+from chakra.src.host_trace.names import PROCESS_ANNOTATION, THREAD_ANNOTATION
+from chakra.src.host_trace.node import HostNode
 from chakra.src.trace_link.kineto_operator import KinetoOperator
 from chakra.src.trace_link.trace_linker import TraceLinker
 from chakra.src.trace_link.unique_id_assigner import UniqueIdAssigner
@@ -29,7 +26,7 @@ def test_link_traces(mock_map_ops, mock_add_annotations, mock_construct_et_plus,
     mock_map_ops.return_value = ({}, {}, {}, {}, {})
     mock_construct_et_plus.return_value = {}
 
-    host_ops = [MagicMock(spec=PyTorchOperator)]
+    host_ops = [MagicMock(spec=HostNode)]
     kineto_cpu_ops = [MagicMock(spec=KinetoOperator)]
     sorted_kineto_cpu_ops = [MagicMock(spec=KinetoOperator)]
     sorted_kineto_cpu_op_ts = [100]
@@ -352,9 +349,9 @@ def test_add_thread_and_process_annotations(trace_linker):
     )
 
     assert len(kineto_cpu_ops) == 3
-    assert kineto_cpu_ops[0].name == EXECUTION_TRACE_PROCESS_ANNOTATION
-    assert kineto_cpu_ops[1].name == EXECUTION_TRACE_THREAD_ANNOTATION
-    assert kineto_cpu_ops[2].name == EXECUTION_TRACE_THREAD_ANNOTATION
+    assert kineto_cpu_ops[0].name == PROCESS_ANNOTATION
+    assert kineto_cpu_ops[1].name == THREAD_ANNOTATION
+    assert kineto_cpu_ops[2].name == THREAD_ANNOTATION
 
     assert len(sorted_kineto_cpu_ops) == 3
     assert sorted_kineto_cpu_ops[0].timestamp == kineto_cpu_ops[0].timestamp
@@ -442,7 +439,7 @@ def test_find_parent_cpu_op(mock_find_closest_op, trace_linker):
     "expected_timestamp, expected_inter_thread_dep",
     [
         (
-            MagicMock(spec=PyTorchOperator, id=1),
+            MagicMock(spec=HostNode, id=1),
             MagicMock(
                 spec=KinetoOperator,
                 external_id="1",
@@ -458,7 +455,7 @@ def test_find_parent_cpu_op(mock_find_closest_op, trace_linker):
             None,
         ),
         (
-            MagicMock(spec=PyTorchOperator, id=2),
+            MagicMock(spec=HostNode, id=2),
             MagicMock(
                 spec=KinetoOperator,
                 external_id="2",
@@ -517,7 +514,7 @@ def test_link_ops(
 
 
 def test_link_ops_with_no_gpu_ops(trace_linker):
-    host_op = MagicMock(spec=PyTorchOperator, id=1)
+    host_op = MagicMock(spec=HostNode, id=1)
     kineto_op = MagicMock(
         spec=KinetoOperator,
         external_id="1",
@@ -568,7 +565,7 @@ def test_get_inter_thread_dep_none(trace_linker):
 
 def test_link_gpu_ops(trace_linker):
     # Create a mock PyTorch operator
-    host_op = MagicMock(spec=PyTorchOperator)
+    host_op = MagicMock(spec=HostNode)
     host_op.id = 123
 
     # Create mock Kineto GPU operators

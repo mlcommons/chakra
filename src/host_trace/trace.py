@@ -1,143 +1,149 @@
 import logging
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List
 
+from . import versions
+from .errors import HostTraceError
+from .names import PROCESS_ANNOTATION, THREAD_ANNOTATION
 from .node import HostNode
+from .reader import read_trace_json
+
+logger = logging.getLogger(__name__)
+
+# Top-level keys the converter writes into the .et metadata.
+METADATA_KEYS = ("schema", "pid", "time", "start_ts", "finish_ts")
 
 
-def parse_json_trace(json_trace: Dict) -> Tuple[Dict, Dict[int, HostNode]]:
+class HostTrace:
     """
-    Parse and instantiate PyTorch nodes from execution trace data.
+    A Chakra host trace (raw from PyTorch, or linked by chakra_trace_link), parsed once and shared by both tools.
 
-    Args:
-        json_trace (Dict): The execution trace data.
+    Reading a trace: the schema is checked (versions.py), every node becomes a HostNode, and each node is attached to
+    its parent. Each tool then takes its own view: the linker the ops under the process root (linker_ops), the
+    converter all nodes, the thread roots and the metadata.
 
-    Extract node information, sort nodes by timestamp, and establish parent-child relationships among them.
-
-    Returns:
-        Tuple: A tuple containing JSON metadata and dictionary of PyTorch node objects.
+    Attributes
+        raw (Dict[str, Any]): The JSON as read. The parser never modifies it.
+        source (str): Where the trace was read from, used in messages.
+        schema (versions.Schema): The parsed schema; schema.text is the string as written in the trace.
+        nodes (Dict[int, HostNode]): Every node by id, in file order. A later node with the same id replaces an
+            earlier one.
     """
-    logging.debug("Extracting and processing node data from execution trace.")
 
-    json_metadata = {
-        "schema": json_trace["schema"],
-        "pid": json_trace["pid"],
-        "time": json_trace["time"],
-        "start_ts": json_trace["start_ts"],
-        "finish_ts": json_trace["finish_ts"],
-    }
+    def __init__(self, raw: Dict[str, Any], source: str = "host trace") -> None:
+        self.raw = raw
+        self.source = source
+        for key in ("schema", "nodes"):
+            if key not in raw:
+                raise HostTraceError(f"{source}: missing top-level key {key!r}; is this a host trace?")
+        self.schema = versions.parse_schema(raw["schema"], source)
+        versions.check_supported(self.schema, source)
+        self._check_layout(raw["nodes"])
 
-    logging.debug(f"Parsed JSON metadata: {json_metadata}")
+        self.nodes: Dict[int, HostNode] = {}
+        for node_data in raw["nodes"]:
+            node = HostNode(self.schema.text, node_data, source)
+            self.nodes[node.id] = node
+        attach_children(self.nodes)
 
-    json_nodes = json_trace["nodes"]
-    node_count = len(json_nodes)
-    logging.debug(f"Number of nodes in JSON trace: {node_count}")
+    @classmethod
+    def from_file(cls, path: str) -> "HostTrace":
+        """Read and parse a host trace file (plain or gzip-compressed JSON)."""
+        return cls(read_trace_json(path), str(path))
 
-    json_node_map = {node_data["id"]: HostNode(json_trace["schema"], node_data) for node_data in json_nodes}
-    json_node_root_nids = []
-    json_node_map = establish_parent_child_relationships(json_node_map, json_node_root_nids)
-    return json_metadata, json_node_map
+    def _check_layout(self, nodes: List[Dict[str, Any]]) -> None:
+        """Warn once if nodes lack keys of their schema version (PyTorch changed the format once without a bump)."""
+        attrs, tensor_keys = versions.expected_keys(self.schema)
+        mismatched, first = 0, ""
+        for node in nodes:
+            names = {attr.get("name") for attr in node.get("attrs", []) if isinstance(attr, dict)}
+            lacking = [a for a in attrs if a not in names]
+            for side in ("inputs", "outputs"):
+                value = node.get(side)
+                if isinstance(value, dict):
+                    lacking += [f"{side}.{k}" for k in tensor_keys if k not in value]
+            if lacking:
+                mismatched += 1
+                first = first or f"node {node.get('id')} lacks {', '.join(lacking)}"
+        if mismatched:
+            logger.warning(
+                f"{self.source}: {mismatched} of {len(nodes)} nodes do not have every key of schema {self.schema.text} "
+                f"(first: {first}); reading them anyway"
+            )
+
+    def metadata(self) -> Dict[str, Any]:
+        """Return the five top-level keys the converter writes into the .et. Raise HostTraceError if one is missing."""
+        missing = [key for key in METADATA_KEYS if key not in self.raw]
+        if missing:
+            raise HostTraceError(
+                f"{self.source}: missing top-level key(s) {', '.join(missing)}, which chakra_converter writes into "
+                "the .et metadata"
+            )
+        return {key: self.raw[key] for key in METADATA_KEYS}
+
+    def process_root(self) -> HostNode:
+        """
+        Return the root of the whole trace: the node named PROCESS_ANNOTATION whose only parent is itself.
+
+        It is found by name, never by id: PyTorch gives it id 1, but chakra_trace_link renumbers ids from 0.
+        """
+        roots = [
+            n
+            for n in self.nodes.values()
+            if n.name == PROCESS_ANNOTATION and (n.parent == n.id or n.parent not in self.nodes)
+        ]
+        if len(roots) != 1:
+            found = "none" if not roots else f"{len(roots)} (ids {', '.join(str(n.id) for n in roots)})"
+            raise HostTraceError(f"{self.source}: expected one process root named {PROCESS_ANNOTATION}, found {found}")
+        return roots[0]
+
+    def thread_roots(self) -> List[HostNode]:
+        """Return the root of each thread: the nodes named THREAD_ANNOTATION, in file order."""
+        return [n for n in self.nodes.values() if n.name == THREAD_ANNOTATION]
+
+    def linker_ops(self) -> List[HostNode]:
+        """
+        Return the host ops chakra_trace_link links: the process root and every node under it, sorted by id.
+
+        Raise HostTraceError if there is not exactly one process root, or if an op has no rf_id (the linker matches
+        host ops to Kineto ops by rf_id).
+        """
+        ops = ops_reachable_from(self.process_root())
+        for op in ops:
+            if op.rf_id is None:
+                raise HostTraceError(
+                    f"{op.where()}rf_id is missing or null; chakra_trace_link matches host ops to Kineto ops by rf_id"
+                )
+        return ops
 
 
-def establish_parent_child_relationships(
-    json_node_map: Dict[int, HostNode], json_node_root_nids: List[int]
-) -> Dict[int, HostNode]:
+def attach_children(nodes: Dict[int, HostNode]) -> None:
     """
-    Establish parent-child relationships among JSON nodes and count the node types.
+    Attach every node to its parent, if the parent is in the trace and is not the node itself. Sort children by id.
 
-    In Chakra host execution traces, the parent-child relationship is represented in the ctrl dep or parent field.
-    The name of the field is determined by the schema version of the Chakra host execution traces. When a function
-    calls multiple functions, the callee functions appear as children nodes in the control dependency. This method
-    is responsible for reading such dependencies and updating the field accordingly.
-
-    Args:
-        json_node_map (Dict[int, HostNode]): Dictionary of JSON node objects.
-        json_node_root_nids (List[int]): List to store root node IDs.
-
-    Returns:
-        Dict[int, HostNode]: Dictionary of JSON nodes with established relationships.
+    The process root is its own parent, so it is not its own child.
     """
-    node_type_counts = {
-        "total_op": 0,
-        "cpu_op": 0,
-        "gpu_op": 0,
-        "record_param_comms_op": 0,
-        "nccl_op": 0,
-        "root_op": 0,
-    }
-
-    for json_node in json_node_map.values():
-        parent_id = json_node.parent
-        if parent_id in json_node_map:
-            process_parent_child_relationships(json_node_map, json_node, parent_id)
-
-        if is_root_node(json_node.name):
-            json_node_root_nids.append(json_node.id)
-            node_type_counts["root_op"] += 1
-
-        node_type_counts["total_op"] += 1
-        if json_node.is_cpu_op():
-            node_type_counts["cpu_op"] += 1
-        if json_node.is_gpu_op():
-            node_type_counts["gpu_op"] += 1
-        if json_node.is_record_param_comms_op():
-            node_type_counts["record_param_comms_op"] += 1
-        if json_node.is_nccl_op():
-            node_type_counts["nccl_op"] += 1
-
-    for node_type, count in node_type_counts.items():
-        logging.debug(f"{node_type}: {count}")
-
-    return json_node_map
+    for node in nodes.values():
+        if node.parent in nodes and node.parent != node.id:
+            nodes[node.parent].add_child(node)
+    for node in nodes.values():
+        node.children.sort(key=lambda child: child.id)
 
 
-def is_root_node(node_name: str) -> bool:
+def ops_reachable_from(root: Any) -> List[Any]:
     """
-    Check if a given node name corresponds to a root node in the Chakra host execution trace.
+    Return the node and every node under it, sorted by id.
 
-    In the context of Chakra host execution traces, root nodes are the starting points of execution traces.
-    These nodes typically do not have parent nodes and act as the original sources of execution flow.
-    The execution trace has a call-stack-like structure in the ctrl-dep field (or parent field), and root
-    nodes should be identified during the process of conversion.
-
-    Chakra host execution traces may have multiple root nodes. These root nodes can be identified with specific
-    keywords as shown in this method. Identifying root nodes is essential for correctly converting and representing
-    the execution trace in the Chakra protobuf format.
-
-    Args:
-        node_name (str): The name of the node to check.
-
-    Returns:
-        bool: True if the node name corresponds to a root node, False otherwise.
+    The walk is iterative and visits each id once, so deep traces need no recursion limit, and a parent cycle cannot
+    make it loop forever. Nodes in a cycle are not under the root, and are left out like orphans.
     """
-    return node_name in [
-        "[pytorch|profiler|execution_graph|thread]",
-        "[pytorch|profiler|execution_trace|thread]",
-    ]
-
-
-def process_parent_child_relationships(json_node_map: Dict[int, HostNode], json_node: HostNode, parent_id: int) -> None:
-    """
-    Process the parent-child relationships for Chakra JSON nodes.
-
-    Args:
-        json_node_map (Dict[int, HostNode]): Dictionary of JSON node objects.
-        json_node (HostNode): The current JSON node being processed.
-        parent_id (int): The ID of the parent node.
-    """
-    parent_node = json_node_map[parent_id]
-    parent_node.add_child(json_node)
-
-    if json_node.is_gpu_op():
-        parent_node.add_gpu_child(json_node)
-
-    if json_node.is_record_param_comms_op():
-        # Add the record_param_comms node to the parent.
-        # These operators act as metadata operators between the launcher and the actual communication operator.
-        # This registration allows the converter to easily identify the communication operator to use.
-        parent_node.record_param_comms_node = json_node
-
-    if json_node.is_nccl_op():
-        # Add the NCCL node to the parent.
-        # NCCL operators are actual communication operators.
-        # This registration allows the converter to easily identify the communication operator to use.
-        parent_node.nccl_node = json_node
+    seen = set()
+    found = []
+    stack = [root]
+    while stack:
+        node = stack.pop()
+        if node.id in seen:
+            continue
+        seen.add(node.id)
+        found.append(node)
+        stack.extend(node.children)
+    return sorted(found, key=lambda n: n.id)

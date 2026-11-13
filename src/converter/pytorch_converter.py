@@ -16,10 +16,16 @@ from ...schema.protobuf.et_def_pb2 import (
 )
 from ...schema.protobuf.et_def_pb2 import AttributeProto as ChakraAttr
 from ...schema.protobuf.et_def_pb2 import Node as ChakraNode
-from ..host_trace import reader as host_trace_reader
-from ..host_trace import trace as host_trace
+from ..host_trace.names import THREAD_ANNOTATION
 from ..host_trace.node import HostNode, HostNodeType
+from ..host_trace.reader import read_trace_json
+from ..host_trace.trace import HostTrace, attach_children
 from ..third_party.utils.protolib import encodeMessage as encode_message
+
+# Node attributes the converter writes into every converted node.
+CONVERTER_ATTRS = ("rf_id", "fw_parent", "seq_id", "scope", "tid", "fw_tid", "op_schema")
+# Keys of a node's inputs and outputs the converter writes into every converted node.
+CONVERTER_TENSOR_KEYS = ("values", "shapes", "types")
 
 
 class PyTorchConverter:
@@ -42,8 +48,10 @@ class PyTorchConverter:
             simulate (bool): Flag to indicate whether to simulate the execution of the converted trace. If True,
                 the method will simulate the execution after writing the protobuf trace to the output file.
         """
-        json_trace = self.load_json_execution_traces(input_filename)
-        json_metadata, json_node_map = self.parse_json_trace(json_trace)
+        trace = HostTrace.from_file(input_filename)
+        json_metadata = trace.metadata()
+        json_node_map = trace.nodes
+        self.register_converter_links(json_node_map)
 
         protobuf_node_map = {}
         self.convert_json_to_protobuf_nodes(json_node_map, protobuf_node_map)
@@ -62,31 +70,109 @@ class PyTorchConverter:
         if simulate:
             self.simulate_execution(json_node_map, protobuf_node_map, parent_to_children_map)
 
-    # Host-trace parsing lives in host_trace. These methods delegate to it, so the converter keeps its interface.
+    def register_converter_links(self, json_node_map: Dict[int, HostNode]) -> None:
+        """
+        Register on each parent the children the conversion looks up: GPU children, record_param_comms and NCCL nodes.
+
+        The tree itself (children) is built by host_trace when the trace is read; this adds the converter's own links on
+        top of it, with the same rule: a node is linked to its parent if the parent is in the trace and is not itself.
+
+        Args:
+            json_node_map (Dict[int, HostNode]): The trace's nodes by id, with the tree built.
+        """
+        node_type_counts = {
+            "total_op": 0,
+            "cpu_op": 0,
+            "gpu_op": 0,
+            "record_param_comms_op": 0,
+            "nccl_op": 0,
+            "root_op": 0,
+        }
+
+        for json_node in json_node_map.values():
+            parent_id = json_node.parent
+            if parent_id in json_node_map and parent_id != json_node.id:
+                self.register_child(json_node_map[parent_id], json_node)
+
+            if self.is_root_node(json_node.name):
+                node_type_counts["root_op"] += 1
+            node_type_counts["total_op"] += 1
+            if json_node.is_cpu_op():
+                node_type_counts["cpu_op"] += 1
+            if json_node.is_gpu_op():
+                node_type_counts["gpu_op"] += 1
+            if json_node.is_record_param_comms_op():
+                node_type_counts["record_param_comms_op"] += 1
+            if json_node.is_nccl_op():
+                node_type_counts["nccl_op"] += 1
+
+        for node_type, count in node_type_counts.items():
+            logging.debug(f"{node_type}: {count}")
+
+    def register_child(self, parent_node: HostNode, json_node: HostNode) -> None:
+        """
+        Register one child on its parent, if it is a node the conversion looks up through the parent.
+
+        Args:
+            parent_node (HostNode): The parent node.
+            json_node (HostNode): Its child.
+        """
+        if json_node.is_gpu_op():
+            parent_node.add_gpu_child(json_node)
+
+        if json_node.is_record_param_comms_op():
+            # Add the record_param_comms node to the parent.
+            # These operators act as metadata operators between the launcher and the actual communication operator.
+            # This registration allows the converter to easily identify the communication operator to use.
+            parent_node.record_param_comms_node = json_node
+
+        if json_node.is_nccl_op():
+            # Add the NCCL node to the parent.
+            # NCCL operators are actual communication operators.
+            # This registration allows the converter to easily identify the communication operator to use.
+            parent_node.nccl_node = json_node
+
+    def is_root_node(self, node_name: str) -> bool:
+        """
+        Check if a node name is the name of a thread root, the node the converter starts each thread's conversion from.
+
+        Args:
+            node_name (str): The name of the node to check.
+
+        Returns:
+            bool: True if the node name is a thread root's name, False otherwise.
+        """
+        return node_name == THREAD_ANNOTATION
+
+    # The methods below keep the converter's earlier interface for existing callers until the clean-up. The reading,
+    # parsing and tree building they did is now in host_trace.
 
     def load_json_execution_traces(self, input_filename: str) -> Dict:
-        """Load a host trace from a JSON file. See host_trace.reader.load_json_execution_traces."""
-        return host_trace_reader.load_json_execution_traces(input_filename)
+        """Read a host trace file as JSON (plain or gzip-compressed)."""
+        return read_trace_json(input_filename)
 
     def parse_json_trace(self, json_trace: Dict) -> Tuple[Dict, Dict[int, HostNode]]:
-        """Parse the trace's metadata and nodes, and build the tree. See host_trace.trace.parse_json_trace."""
-        return host_trace.parse_json_trace(json_trace)
+        """Parse a host trace: its metadata, and its nodes with the tree and the converter's links built."""
+        trace = HostTrace(json_trace)
+        self.register_converter_links(trace.nodes)
+        return trace.metadata(), trace.nodes
 
     def establish_parent_child_relationships(
         self, json_node_map: Dict[int, HostNode], json_node_root_nids: List[int]
     ) -> Dict[int, HostNode]:
-        """Attach each node to its parent. See host_trace.trace.establish_parent_child_relationships."""
-        return host_trace.establish_parent_child_relationships(json_node_map, json_node_root_nids)
-
-    def is_root_node(self, node_name: str) -> bool:
-        """Whether a node name is a thread root. See host_trace.trace.is_root_node."""
-        return host_trace.is_root_node(node_name)
+        """Build the tree and the converter's links on nodes created directly, and collect the thread roots' ids."""
+        attach_children(json_node_map)
+        self.register_converter_links(json_node_map)
+        json_node_root_nids.extend(n.id for n in json_node_map.values() if self.is_root_node(n.name))
+        return json_node_map
 
     def process_parent_child_relationships(
         self, json_node_map: Dict[int, HostNode], json_node: HostNode, parent_id: int
     ) -> None:
-        """Attach one node to its parent. See host_trace.trace.process_parent_child_relationships."""
-        host_trace.process_parent_child_relationships(json_node_map, json_node, parent_id)
+        """Attach one node to its parent and register it there."""
+        parent_node = json_node_map[parent_id]
+        parent_node.add_child(json_node)
+        self.register_child(parent_node, json_node)
 
     def convert_json_to_protobuf_nodes(
         self, json_node_map: Dict[int, HostNode], protobuf_node_map: Dict[int, ChakraNode]
@@ -166,6 +252,8 @@ class PyTorchConverter:
             ChakraNode: The converted protobuf node.
         """
         logging.debug(f"Converting JSON node ID {json_node.id} to protobuf node.")
+        json_node.require_attrs(CONVERTER_ATTRS, "chakra_converter")
+        json_node.require_tensor_keys(CONVERTER_TENSOR_KEYS, "chakra_converter")
 
         protobuf_node = ChakraNode()
         protobuf_node.id = json_node.id

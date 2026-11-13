@@ -1,13 +1,28 @@
 import traceback
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, Iterable, List, Optional
 
+from .errors import HostTraceError
 from .tensor import HostTensor
+
+# Keys every node must have, whatever the schema version.
+REQUIRED_KEYS = ("id", "name", "ctrl_deps", "inputs", "outputs")
+
+# Attributes (from a node's attrs list) that Chakra reads, with their conversion. Each is None when the node lacks it.
+TYPED_ATTRS: Dict[str, Callable[[Any], Any]] = {
+    "rf_id": int,
+    "fw_parent": int,
+    "seq_id": int,
+    "scope": int,
+    "tid": int,
+    "fw_tid": int,
+    "op_schema": str,
+}
 
 
 class HostNodeType(Enum):
     """
-    Enum representing the type of a PyTorch node in an execution trace.
+    Enum representing the type of a node in a Chakra host trace.
 
     Attributes
         CPU_OP (int): Represents a CPU operation.
@@ -24,46 +39,50 @@ class HostNodeType(Enum):
 
 class HostNode:
     """
-    Represents a node in a PyTorch execution trace, initialized based on a schema version.
+    Represents a node in a Chakra host trace (a PyTorch execution trace, raw or linked).
+
+    The node is read the same way for every supported schema version; the version is checked once for the whole
+    trace (see versions.py). Every entry of the node's attrs list is kept, unconverted, in the attrs dictionary. The
+    attributes Chakra reads are also set as fields, converted (TYPED_ATTRS), and None when missing: each tool checks
+    the ones it needs.
 
     Attributes
-        schema (str): Schema version used for initialization.
+        schema (str): Schema string of the trace the node belongs to (information only).
+        source (Optional[str]): File the node was read from, used in error messages.
         data_deps (List[HostNode]): List of data-dependent parent nodes.
-        children (List[HostNode]): List of child nodes.
-        gpu_children (List[HostNode]): List of GPU-specific child nodes.
-        record_param_comms_node (Optional[HostNode]): Corresponding record_param_comms node.
-        nccl_node (Optional[HostNode]): Corresponding NCCL node.
-        id (str): Identifier of the node.
+        children (List[HostNode]): List of child nodes, sorted by id once the trace's tree is built.
+        gpu_children (List[HostNode]): List of GPU-specific child nodes (registered by the converter).
+        record_param_comms_node (Optional[HostNode]): Corresponding record_param_comms node (converter-registered).
+        nccl_node (Optional[HostNode]): Corresponding NCCL node (converter-registered).
+        id (int): Identifier of the node.
         name (str): Name of the node.
-        parent (Any): Parent of the node.
-        inputs (Any): Inputs of the node.
-        outputs (Any): Outputs of the node.
+        parent (Any): Id of the parent node (ctrl_deps).
+        inputs (Dict): Inputs of the node (values, types, shapes and, from schema 1.1.1, strides).
+        outputs (Dict): Outputs of the node, like inputs.
+        attrs (Dict[str, Any]): Every attribute of the node, by name, unconverted.
+        rf_id, fw_parent, seq_id, scope, tid, fw_tid (Optional[int]): Attributes, converted to int.
+        op_schema (Optional[str]): Attribute, converted to str.
         inclusive_dur (Optional[float]): Inclusive duration of the node.
         exclusive_dur (float): Exclusive duration of the node.
         ts (Optional[float]): Timestamp of the node.
         inter_thread_dep (Any): Inter-thread dependency of the node.
+        sync_dep (Any): Synchronization dependencies of the node.
         cat (Any): Category of the node.
         stream (int): Stream associated with the node.
         pg_name (str): Process Group name for the inter-GPU communication.
     """
 
-    SUPPORTED_VERSIONS = [
-        "1.0.2-chakra.0.0.4",
-        "1.0.3-chakra.0.0.4",
-        "1.1.0-chakra.0.0.4",
-        "1.1.1-chakra.0.0.4",
-        "1.1.1-chakra.1.0.0",
-    ]
-
-    def __init__(self, schema: str, node_data: Dict[str, Any]) -> None:
+    def __init__(self, schema: str, node_data: Dict[str, Any], source: Optional[str] = None) -> None:
         """
-        Initialize a HostNode object using the node data and schema version provided.
+        Initialize a HostNode object from the node data.
 
         Args:
-            schema (str): The schema version based on which the node will be initialized.
-            node_data (Dict[str, Any]): Dictionary containing the data of the PyTorch node.
+            schema (str): The schema string of the trace (kept as information; parsing does not depend on it).
+            node_data (Dict[str, Any]): Dictionary containing the data of the node.
+            source (Optional[str]): File the node comes from, used in error messages.
         """
         self.schema = schema
+        self.source = source
         self.data_deps: List["HostNode"] = []
         self.children: List["HostNode"] = []
         self.gpu_children: List["HostNode"] = []
@@ -86,27 +105,19 @@ class HostNode:
 
     def parse_data(self, node_data: Dict[str, Any]) -> None:
         """
-        Parse node data based on the provided schema version.
+        Parse the node data.
 
         Args:
             node_data (Dict[str, Any]): The node data to be parsed.
-        """
-        if self.schema in self.SUPPORTED_VERSIONS:
-            if self.schema in ["1.0.2-chakra.0.0.4", "1.0.3-chakra.0.0.4", "1.1.0-chakra.0.0.4", "1.1.1-chakra.0.0.4"]:
-                self._parse_data_1_0_3_chakra_0_0_4(node_data)
-        else:
-            raise ValueError(
-                f"Unsupported schema version '{self.schema}'. Please check if the schema version is in the list of "
-                f"supported versions: {self.SUPPORTED_VERSIONS}. The schema version of the trace is not supported by "
-                f"the converter. The schema version is determined by the PyTorch version used to collect Chakra host "
-                f"execution traces. Please consider changing the PyTorch version you are using. For more details, you "
-                f"can follow the git history of the relevant file: "
-                f"https://github.com/pytorch/pytorch/blob/7cd48df2dae7e2194438b162968c47d1f05bf20e/torch/csrc/"
-                f"profiler/standalone/execution_trace_observer.cpp#L308. Check which PyTorch versions generate Chakra "
-                f"host traces that are supported by the converter."
-            )
 
-    def _parse_data_1_0_3_chakra_0_0_4(self, node_data: Dict[str, Any]) -> None:
+        Raises:
+            HostTraceError: If a required key is missing, or a read attribute cannot be converted.
+        """
+        missing = [key for key in REQUIRED_KEYS if key not in node_data]
+        if missing:
+            where = f"{self.source}: " if self.source else ""
+            raise HostTraceError(f"{where}node {node_data.get('id', '(no id)')}: missing key(s) {', '.join(missing)}")
+
         self.id = node_data["id"]
         self.name = node_data["name"]
         self.parent = node_data["ctrl_deps"]
@@ -119,13 +130,41 @@ class HostNode:
         self.sync_dep = node_data.get("sync_dep")
         self.cat = node_data.get("cat")
         self.stream = node_data.get("stream", 0)
-        # In Colletive comms nodes, pg_name is in node_data if exists.
-        # In SendRecv nodes, pg_name is in the attrs if exists.
-        # Otherwise, pg_name is not present.
-        self.pg_name = node_data.get("pg_name", "")
 
-        for attr in node_data.get("attrs", []):
-            setattr(self, attr["name"], attr["value"])
+        self.attrs: Dict[str, Any] = {attr["name"]: attr["value"] for attr in node_data.get("attrs", [])}
+        for name, convert in TYPED_ATTRS.items():
+            setattr(self, name, self._converted(name, convert))
+        # pg_name is a top-level key on collective kernels (from Kineto) and an attribute on record_param_comms nodes.
+        # The attribute takes precedence when both exist.
+        self.pg_name = self.attrs["pg_name"] if "pg_name" in self.attrs else node_data.get("pg_name", "")
+
+    def _converted(self, name: str, convert: Callable[[Any], Any]) -> Any:
+        value = self.attrs.get(name)
+        if value is None:
+            return None
+        try:
+            return convert(value)
+        except (TypeError, ValueError) as e:
+            raise HostTraceError(f"{self.where()}attribute {name!r} has the value {value!r} ({e})") from None
+
+    def where(self) -> str:
+        """Return the start of an error message about this node: its file (if known), id and name."""
+        return f"{self.source + ': ' if self.source else ''}node {self.id} ({self.name}): "
+
+    def require_attrs(self, names: Iterable[str], tool: str) -> None:
+        """Raise HostTraceError naming the node if any of these attributes is missing from its attrs list."""
+        missing = [name for name in names if name not in self.attrs]
+        if missing:
+            raise HostTraceError(f"{self.where()}missing attribute(s) {', '.join(missing)}, which {tool} needs")
+
+    def require_tensor_keys(self, keys: Iterable[str], tool: str) -> None:
+        """Raise HostTraceError naming the node if its inputs or outputs lack any of these keys."""
+        keys = list(keys)
+        for side in ("inputs", "outputs"):
+            value = getattr(self, side)
+            missing = [key for key in keys if not isinstance(value, dict) or key not in value]
+            if missing:
+                raise HostTraceError(f"{self.where()}{side} has no {', '.join(missing)}, which {tool} needs")
 
     def get_op_type(self) -> HostNodeType:
         """

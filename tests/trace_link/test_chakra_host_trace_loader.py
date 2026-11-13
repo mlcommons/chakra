@@ -1,7 +1,7 @@
 from unittest.mock import MagicMock
 
 import pytest
-from chakra.src.third_party.et_replay.execution_trace import Node as PyTorchOperator
+from chakra.src.host_trace.node import HostNode
 from chakra.src.trace_link.chakra_host_trace_loader import ChakraHostTraceLoader
 
 
@@ -9,9 +9,9 @@ from chakra.src.trace_link.chakra_host_trace_loader import ChakraHostTraceLoader
 def mock_trace():
     """Fixture to create a mock trace with a specific structure."""
     # Create a mock trace node structure
-    root_node = MagicMock(spec=PyTorchOperator)
-    child_node1 = MagicMock(spec=PyTorchOperator)
-    child_node2 = MagicMock(spec=PyTorchOperator)
+    root_node = MagicMock(spec=HostNode)
+    child_node1 = MagicMock(spec=HostNode)
+    child_node2 = MagicMock(spec=HostNode)
 
     # Setup mock hierarchy
     root_node.children = [child_node1, child_node2]

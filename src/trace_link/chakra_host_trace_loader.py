@@ -1,18 +1,14 @@
 import logging
-import sys
 from typing import List
 
-from ..third_party.et_replay.execution_trace import Node as PyTorchOperator
-from ..third_party.et_replay.utils import load_execution_trace_file
-
-# Increase the recursion limit for deep Chakra host execution traces.
-sys.setrecursionlimit(10**6)
+from ..host_trace.node import HostNode
+from ..host_trace.trace import HostTrace, ops_reachable_from
 
 
 class ChakraHostTraceLoader:
     """Loads Chakra host traces."""
 
-    def load(self, chakra_host_trace_file: str) -> List[PyTorchOperator]:
+    def load(self, chakra_host_trace_file: str) -> List[HostNode]:
         """
         Load and process the Chakra Host Execution Trace.
 
@@ -20,38 +16,25 @@ class ChakraHostTraceLoader:
             chakra_host_trace_file (str): Path to the PyTorch execution trace file.
 
         Returns:
-            List[PyTorchOperator]: List of PyTorch operators.
+            List[HostNode]: The host ops under the process root, sorted by id.
         """
         logging.debug(f"Starting to load Chakra host execution trace from file: {chakra_host_trace_file}.")
-        chakra_host_trace = load_execution_trace_file(chakra_host_trace_file)
-
-        root_node = chakra_host_trace.get_nodes()[1]  # Root node is usually 1-based
-        chakra_host_ops = self.extract_chakra_host_ops(root_node)
+        chakra_host_ops = HostTrace.from_file(chakra_host_trace_file).linker_ops()
         logging.debug(f"Extracted {len(chakra_host_ops)} operators from Chakra host execution trace.")
         logging.debug("Chakra host execution trace has been loaded and processed successfully.")
 
         return chakra_host_ops
 
-    def extract_chakra_host_ops(self, node: PyTorchOperator) -> List[PyTorchOperator]:
+    def extract_chakra_host_ops(self, node: HostNode) -> List[HostNode]:
         """
-        Extract and sort nodes from the PyTorch execution trace recursively.
-
-        This method traverses the execution trace starting from the provided node, extracting all the operator nodes
-        recursively, and then returns them sorted by their identifiers.
+        Extract the node and every node under it, sorted by id.
 
         Args:
-            node (PyTorchOperator): Starting node for extraction.
+            node (HostNode): Starting node for extraction.
 
         Returns:
-            List[PyTorchOperator]: Sorted list of extracted PyTorchOperator nodes.
+            List[HostNode]: Sorted list of the extracted nodes.
         """
-        nodes = []
-
-        def traverse(node: PyTorchOperator):
-            nodes.append(node)
-            for child in node.children:
-                traverse(child)
-
-        traverse(node)
+        nodes = ops_reachable_from(node)
         logging.debug(f"Traversed {len(nodes)} nodes from root node ID: {node.id}")
-        return sorted(nodes, key=lambda x: x.id)
+        return nodes

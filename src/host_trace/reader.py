@@ -1,18 +1,23 @@
+import gzip
 import json
 import logging
-from typing import Dict
+from typing import Any, Dict
+
+logger = logging.getLogger(__name__)
 
 
-def load_json_execution_traces(input_filename: str) -> Dict:
+def read_trace_json(path: str) -> Dict[str, Any]:
     """
-    Load Chakra host + device execution traces in JSON format from a file.
+    Read a trace file (host, linked or Kineto device trace) as JSON.
+
+    A path ending in "gz" is read as gzip-compressed JSON, any other path as plain JSON text.
 
     Args:
-        input_filename (str): Input Chakra host + device execution trace in the JSON format.
+        path (str): Path of the trace file.
 
     Returns:
-        Dict: The loaded Chakra host + device execution trace data.
+        Dict[str, Any]: The parsed JSON.
     """
-    logging.debug(f"Loading Chakra host + device execution traces in JSON format from file: {input_filename}")
-    with open(input_filename, "r") as json_file:
-        return json.load(json_file)
+    logger.debug(f"Reading trace JSON from {path}")
+    with gzip.open(path, "rb") if str(path).endswith("gz") else open(path, "r") as f:
+        return json.load(f)

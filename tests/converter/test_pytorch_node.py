@@ -5,6 +5,7 @@ from typing import Any, Dict
 
 import pytest
 from chakra.src.converter.pytorch_node import PyTorchNode
+from chakra.src.host_trace.trace import HostTrace
 
 
 @pytest.fixture
@@ -148,7 +149,20 @@ def test_pytorch_node_parsing_1_0_3_chakra_0_0_4(sample_node_data_1_0_3_chakra_0
     assert node.exclusive_dur == 30
 
 
-def test_pytorch_node_unsupported_schema(sample_node_data_unsupported_schema) -> None:
+def test_unknown_schema_with_a_valid_layout_is_parsed_with_a_warning(
+    sample_node_data_unsupported_schema, caplog: pytest.LogCaptureFixture
+) -> None:
+    # The schema is checked once per trace, against the released format versions. A newer one is read with the newest
+    # known rules, after a warning.
     schema = "9999.9999.9999-chakra.0.0.4"
-    with pytest.raises(ValueError, match=f"Unsupported schema version '{schema}'"):
-        PyTorchNode(schema, sample_node_data_unsupported_schema)
+    trace = HostTrace({"schema": schema, "nodes": [sample_node_data_unsupported_schema]})
+    assert trace.nodes[4].name == sample_node_data_unsupported_schema["name"]
+    assert trace.schema.text == schema
+    assert f"schema {schema} is newer than the newest known format" in caplog.text
+
+
+def test_unrecognised_layout_is_rejected(sample_node_data_unsupported_schema) -> None:
+    node_data = dict(sample_node_data_unsupported_schema)
+    node_data["parent"] = node_data.pop("ctrl_deps")  # the PyTorch 2.0/2.1 key
+    with pytest.raises(ValueError, match="node 4: missing key"):
+        PyTorchNode("1.1.1-chakra.0.0.4", node_data)

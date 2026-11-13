@@ -1,4 +1,4 @@
-from src.converter.pytorch_tensor import PyTorchTensor, list_to_pytorch_tensor
+from chakra.src.converter.pytorch_tensor import PyTorchTensor, list_to_pytorch_tensor
 
 
 def test_pytorch_tensor_initialization():
