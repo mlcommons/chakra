@@ -13,13 +13,13 @@ from ...schema.protobuf.et_def_pb2 import (
     METADATA_NODE,
     REDUCE_SCATTER,
     GlobalMetadata,
+    NodeType,
 )
 from ...schema.protobuf.et_def_pb2 import AttributeProto as ChakraAttr
 from ...schema.protobuf.et_def_pb2 import Node as ChakraNode
 from ..host_trace.names import THREAD_ANNOTATION
 from ..host_trace.node import HostNode, HostNodeType
-from ..host_trace.reader import read_trace_json
-from ..host_trace.trace import HostTrace, attach_children
+from ..host_trace.trace import HostTrace
 from ..third_party.utils.protolib import encodeMessage as encode_message
 
 # Node attributes the converter writes into every converted node.
@@ -149,36 +149,6 @@ class PyTorchConverter:
         """
         return node_name == THREAD_ANNOTATION
 
-    # The methods below keep the converter's earlier interface for existing callers until the clean-up. The reading,
-    # parsing and tree building they did is now in host_trace.
-
-    def load_json_execution_traces(self, input_filename: str) -> Dict:
-        """Read a host trace file as JSON (plain or gzip-compressed)."""
-        return read_trace_json(input_filename)
-
-    def parse_json_trace(self, json_trace: Dict) -> Tuple[Dict, Dict[int, HostNode]]:
-        """Parse a host trace: its metadata, and its nodes with the tree and the converter's links built."""
-        trace = HostTrace(json_trace)
-        self.register_converter_links(trace.nodes)
-        return trace.metadata(), trace.nodes
-
-    def establish_parent_child_relationships(
-        self, json_node_map: Dict[int, HostNode], json_node_root_nids: List[int]
-    ) -> Dict[int, HostNode]:
-        """Build the tree and the converter's links on nodes created directly, and collect the thread roots' ids."""
-        attach_children(json_node_map)
-        self.register_converter_links(json_node_map)
-        json_node_root_nids.extend(n.id for n in json_node_map.values() if self.is_root_node(n.name))
-        return json_node_map
-
-    def process_parent_child_relationships(
-        self, json_node_map: Dict[int, HostNode], json_node: HostNode, parent_id: int
-    ) -> None:
-        """Attach one node to its parent and register it there."""
-        parent_node = json_node_map[parent_id]
-        parent_node.add_child(json_node)
-        self.register_child(parent_node, json_node)
-
     def convert_json_to_protobuf_nodes(
         self, json_node_map: Dict[int, HostNode], protobuf_node_map: Dict[int, ChakraNode]
     ) -> None:
@@ -295,7 +265,9 @@ class PyTorchConverter:
 
         return protobuf_node
 
-    def get_protobuf_node_type_from_json_node(self, json_node_map: Dict[int, HostNode], json_node: HostNode) -> int:
+    def get_protobuf_node_type_from_json_node(
+        self, json_node_map: Dict[int, HostNode], json_node: HostNode
+    ) -> NodeType:
         """
         Determine the Protobuf node type from a Chakra node.
 
@@ -304,7 +276,7 @@ class PyTorchConverter:
             json_node (HostNode): The JSON node to determine the type of.
 
         Returns:
-            int: The corresponding Chakra node type.
+            NodeType: The corresponding Chakra node type.
         """
         if json_node.is_metadata_op():
             return METADATA_NODE

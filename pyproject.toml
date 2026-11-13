@@ -88,7 +88,6 @@ exclude = [
     "src/third_party/utils/protolib.py",
 ]
 reportMissingImports = false
-reportAttributeAccessIssue = false
 
 [tool.vulture]
 ignore_names = ["mock_process_thread"]

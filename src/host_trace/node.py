@@ -8,17 +8,6 @@ from .tensor import HostTensor
 # Keys every node must have, whatever the schema version.
 REQUIRED_KEYS = ("id", "name", "ctrl_deps", "inputs", "outputs")
 
-# Attributes (from a node's attrs list) that Chakra reads, with their conversion. Each is None when the node lacks it.
-TYPED_ATTRS: Dict[str, Callable[[Any], Any]] = {
-    "rf_id": int,
-    "fw_parent": int,
-    "seq_id": int,
-    "scope": int,
-    "tid": int,
-    "fw_tid": int,
-    "op_schema": str,
-}
-
 
 class HostNodeType(Enum):
     """
@@ -27,7 +16,8 @@ class HostNodeType(Enum):
     Attributes
         CPU_OP (int): Represents a CPU operation.
         GPU_OP (int): Represents a GPU operation.
-        LABEL (int): Represents a non-operator node (e.g., labels).
+        LABEL (int): Represents a non-operator node (e.g., labels). Never produced at present: see
+            HostNode.get_op_type.
         METADATA (int): Represents a metadata node (e.g., process group initialization).
     """
 
@@ -43,8 +33,8 @@ class HostNode:
 
     The node is read the same way for every supported schema version; the version is checked once for the whole
     trace (see versions.py). Every entry of the node's attrs list is kept, unconverted, in the attrs dictionary. The
-    attributes Chakra reads are also set as fields, converted (TYPED_ATTRS), and None when missing: each tool checks
-    the ones it needs.
+    attributes Chakra reads are also set as fields, converted (int, or str for op_schema), and None when missing: each
+    tool checks the ones it needs.
 
     Attributes
         schema (str): Schema string of the trace the node belongs to (information only).
@@ -132,8 +122,14 @@ class HostNode:
         self.stream = node_data.get("stream", 0)
 
         self.attrs: Dict[str, Any] = {attr["name"]: attr["value"] for attr in node_data.get("attrs", [])}
-        for name, convert in TYPED_ATTRS.items():
-            setattr(self, name, self._converted(name, convert))
+        # The attributes Chakra reads, converted. Each is None when the node lacks it.
+        self.rf_id: Optional[int] = self._converted("rf_id", int)
+        self.fw_parent: Optional[int] = self._converted("fw_parent", int)
+        self.seq_id: Optional[int] = self._converted("seq_id", int)
+        self.scope: Optional[int] = self._converted("scope", int)
+        self.tid: Optional[int] = self._converted("tid", int)
+        self.fw_tid: Optional[int] = self._converted("fw_tid", int)
+        self.op_schema: Optional[str] = self._converted("op_schema", str)
         # pg_name is a top-level key on collective kernels (from Kineto) and an attribute on record_param_comms nodes.
         # The attribute takes precedence when both exist.
         self.pg_name = self.attrs["pg_name"] if "pg_name" in self.attrs else node_data.get("pg_name", "")
@@ -169,6 +165,10 @@ class HostNode:
     def get_op_type(self) -> HostNodeType:
         """
         Determine the type of PyTorch operation.
+
+        LABEL is never returned: every node has outputs (a required key) and an op_schema field (None when the
+        attribute is missing), so a node that is neither METADATA nor GPU_OP is a CPU_OP. That is how Chakra has
+        always typed nodes, and the .et output depends on it; a rule for LABEL is a separate decision.
 
         Returns
             HostNodeType: The type of the PyTorch operation.

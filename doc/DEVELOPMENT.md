@@ -77,6 +77,8 @@ Run `just` to see the list.
 | Change a `.proto` file | `just test` rebuilds the generated code. With pip, run `pip install .` again. |
 | Add a runtime dependency | Add it to `dependencies` in `pyproject.toml`. |
 | Add or change a development tool | Change `[dependency-groups]` in `pyproject.toml` and `requirements-dev.txt`. `just test` fails when they differ. |
+| Read a host trace in Python | Use `HostTrace.from_file` in `src/host_trace/trace.py`. `chakra_trace_link` and `chakra_converter` both use it. |
+| Support a new PyTorch trace format | Add an entry to `FORMAT_CHANGES` in `src/host_trace/versions.py`: the version, the PyTorch release and the keys that each node gains. A new schema number without a format change needs no change. |
 
 ## Run the CI workflows on your computer
 

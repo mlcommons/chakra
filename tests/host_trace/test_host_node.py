@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 import pytest
-from chakra.src.converter.pytorch_node import PyTorchNode
+from chakra.src.host_trace.node import HostNode
 from chakra.src.host_trace.trace import HostTrace
 
 
@@ -43,9 +43,9 @@ def load_pytorch_execution_traces(file_path: str) -> Dict[str, Any]:
         return json.load(pytorch_et)
 
 
-def test_pytorch_node_parsing(extract_tar_gz_file: Path) -> None:
+def test_host_node_parsing(extract_tar_gz_file: Path) -> None:
     """
-    Test to check if PyTorchNode can parse nodes properly from the extracted data.
+    Test to check if HostNode can parse nodes properly from the extracted data.
 
     Args:
         extract_tar_gz_file (Path): Path to the extracted directory containing
@@ -58,7 +58,7 @@ def test_pytorch_node_parsing(extract_tar_gz_file: Path) -> None:
     pytorch_nodes = pytorch_et_data["nodes"]
 
     for node_data in pytorch_nodes:
-        node = PyTorchNode(pytorch_schema, node_data)
+        node = HostNode(pytorch_schema, node_data)
         assert node is not None  # Check if node is instantiated properly
 
 
@@ -129,9 +129,9 @@ def sample_node_data_unsupported_schema() -> Dict:
     }
 
 
-def test_pytorch_node_parsing_1_0_2_chakra_0_0_4(sample_node_data_1_0_2_chakra_0_0_4) -> None:
+def test_host_node_parsing_1_0_2_chakra_0_0_4(sample_node_data_1_0_2_chakra_0_0_4) -> None:
     schema = "1.0.2-chakra.0.0.4"
-    node = PyTorchNode(schema, sample_node_data_1_0_2_chakra_0_0_4)
+    node = HostNode(schema, sample_node_data_1_0_2_chakra_0_0_4)
     assert node is not None
     assert node.schema == schema
     assert isinstance(node.id, int)
@@ -139,9 +139,9 @@ def test_pytorch_node_parsing_1_0_2_chakra_0_0_4(sample_node_data_1_0_2_chakra_0
     assert node.exclusive_dur == 50
 
 
-def test_pytorch_node_parsing_1_0_3_chakra_0_0_4(sample_node_data_1_0_3_chakra_0_0_4) -> None:
+def test_host_node_parsing_1_0_3_chakra_0_0_4(sample_node_data_1_0_3_chakra_0_0_4) -> None:
     schema = "1.0.3-chakra.0.0.4"
-    node = PyTorchNode(schema, sample_node_data_1_0_3_chakra_0_0_4)
+    node = HostNode(schema, sample_node_data_1_0_3_chakra_0_0_4)
     assert node is not None
     assert node.schema == schema
     assert isinstance(node.id, int)
@@ -165,4 +165,4 @@ def test_unrecognised_layout_is_rejected(sample_node_data_unsupported_schema) ->
     node_data = dict(sample_node_data_unsupported_schema)
     node_data["parent"] = node_data.pop("ctrl_deps")  # the PyTorch 2.0/2.1 key
     with pytest.raises(ValueError, match="node 4: missing key"):
-        PyTorchNode("1.1.1-chakra.0.0.4", node_data)
+        HostNode("1.1.1-chakra.0.0.4", node_data)
