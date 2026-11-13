@@ -66,7 +66,7 @@ def one_metadata_node_all_types(num_npus: int) -> None:
     for npu_id in range(num_npus):
         output_filename = f"one_metadata_node_all_types.{npu_id}.et"
         with open(output_filename, "wb") as et:
-            encode_message(et, GlobalMetadata(version="0.0.4"))
+            encode_message(et, GlobalMetadata(version="1.0.0"))
 
             node = get_node("METADATA_NODE", METADATA_NODE)
             node.attr.extend(
@@ -115,7 +115,7 @@ def one_remote_mem_load_node(num_npus: int, tensor_size: int) -> None:
     for npu_id in range(num_npus):
         output_filename = f"one_remote_mem_load_node.{npu_id}.et"
         with open(output_filename, "wb") as et:
-            encode_message(et, GlobalMetadata(version="0.0.4"))
+            encode_message(et, GlobalMetadata(version="1.0.0"))
 
             node = get_node("MEM_LOAD_NODE", MEM_LOAD_NODE)
             node.attr.append(ChakraAttr(name="is_cpu_op", bool_val=False))
@@ -128,7 +128,7 @@ def one_remote_mem_store_node(num_npus: int, tensor_size: int) -> None:
     for npu_id in range(num_npus):
         output_filename = f"one_remote_mem_store_node.{npu_id}.et"
         with open(output_filename, "wb") as et:
-            encode_message(et, GlobalMetadata(version="0.0.4"))
+            encode_message(et, GlobalMetadata(version="1.0.0"))
 
             node = get_node("MEM_STORE_NODE", MEM_STORE_NODE)
             node.attr.append(ChakraAttr(name="is_cpu_op", bool_val=False))
@@ -141,7 +141,7 @@ def one_comp_node(num_npus: int, runtime: int) -> None:
     for npu_id in range(num_npus):
         output_filename = f"one_comp_node.{npu_id}.et"
         with open(output_filename, "wb") as et:
-            encode_message(et, GlobalMetadata(version="0.0.4"))
+            encode_message(et, GlobalMetadata(version="1.0.0"))
 
             node = get_node("COMP_NODE", COMP_NODE)
             node.attr.append(ChakraAttr(name="is_cpu_op", bool_val=False))
@@ -154,7 +154,7 @@ def two_comp_nodes_independent(num_npus: int, runtime: int) -> None:
     for npu_id in range(num_npus):
         output_filename = f"two_comp_nodes_independent.{npu_id}.et"
         with open(output_filename, "wb") as et:
-            encode_message(et, GlobalMetadata(version="0.0.4"))
+            encode_message(et, GlobalMetadata(version="1.0.0"))
 
             for _ in range(2):
                 node = get_node("COMP_NODE", COMP_NODE)
@@ -168,7 +168,7 @@ def two_comp_nodes_dependent(num_npus: int, runtime: int) -> None:
     for npu_id in range(num_npus):
         output_filename = f"two_comp_nodes_dependent.{npu_id}.et"
         with open(output_filename, "wb") as et:
-            encode_message(et, GlobalMetadata(version="0.0.4"))
+            encode_message(et, GlobalMetadata(version="1.0.0"))
 
             parent_node = get_node("COMP_NODE", COMP_NODE)
             parent_node.attr.append(ChakraAttr(name="is_cpu_op", bool_val=False))
@@ -187,7 +187,7 @@ def generate_comm_coll_node(num_npus: int, comm_size: int, comm_type: int, node_
     for npu_id in range(num_npus):
         output_filename = f"{node_name}.{npu_id}.et"
         with open(output_filename, "wb") as et:
-            encode_message(et, GlobalMetadata(version="0.0.4"))
+            encode_message(et, GlobalMetadata(version="1.0.0"))
 
             node = get_node(node_name, COMM_COLL_NODE)
             node.attr.append(ChakraAttr(name="is_cpu_op", bool_val=False))
@@ -230,7 +230,7 @@ def one_comm_send_node(num_npus: int, tensor_size: int) -> None:
     for npu_id in range(num_npus):
         output_filename = f"one_comm_send_node.{npu_id}.et"
         with open(output_filename, "wb") as et:
-            encode_message(et, GlobalMetadata(version="0.0.4"))
+            encode_message(et, GlobalMetadata(version="1.0.0"))
 
             node = get_node("COMM_SEND_NODE", COMM_SEND_NODE)
             node.attr.append(ChakraAttr(name="is_cpu_op", bool_val=False))
@@ -243,7 +243,7 @@ def one_comm_recv_node(num_npus: int, tensor_size: int) -> None:
     for npu_id in range(num_npus):
         output_filename = f"one_comm_recv_node.{npu_id}.et"
         with open(output_filename, "wb") as et:
-            encode_message(et, GlobalMetadata(version="0.0.4"))
+            encode_message(et, GlobalMetadata(version="1.0.0"))
 
             node = get_node("COMM_RECV_NODE", COMM_RECV_NODE)
             node.attr.append(ChakraAttr(name="is_cpu_op", bool_val=False))

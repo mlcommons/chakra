@@ -9,3 +9,18 @@ __pycache__/
 .pyre
 *et_def.pb.cc
 *et_def.pb.h
+
+trace_collection/post_execution/traces
+
+# uv
+.venv/
+uv.lock
+
+# protoc output of the C++ feeder build
+*.pb.cc
+*.pb.h
+
+# act reads these files. They can hold secrets: never commit them.
+.secrets
+.env
+.vars

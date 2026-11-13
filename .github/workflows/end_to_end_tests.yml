@@ -13,7 +13,7 @@ jobs:
     - name: Setup Python Environment
       uses: actions/setup-python@v2
       with:
-        python-version: '3.10.14'
+        python-version: '3.11'
 
     - name: Install Chakra
       run: |
@@ -25,15 +25,6 @@ jobs:
         cd param/et_replay
         git checkout 7b19f586dd8b267333114992833a0d7e0d601630
         pip install .
-
-    - name: Install HTA
-      run: |
-        git clone https://github.com/facebookresearch/HolisticTraceAnalysis.git
-        cd HolisticTraceAnalysis
-        git checkout d731cc2e2249976c97129d409a83bd53d93051f6
-        git submodule update --init
-        pip install -r requirements.txt
-        pip install -e .
 
     - name: Test chakra_trace_link Without Arguments
       run: |

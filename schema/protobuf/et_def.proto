@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package ChakraProtoMsg;
 
+import "storage.proto";
+
 message AttributeProto {
   string name = 1;
   string doc_string = 2;
@@ -114,6 +116,15 @@ enum NodeType {
   COMM_SEND_NODE = 5;
   COMM_RECV_NODE = 6;
   COMM_COLL_NODE = 7;
+  STORAGE_NODE = 8;
+  DATA_OP_NODE = 9;
+}
+
+enum DataOpType {
+  DATA_OP_UNKNOWN     = 0;
+  DATA_OP_DATALOADER  = 1;
+  DATA_OP_CHECKPOINT  = 2;
+  DATA_OP_KV_TRANSFER = 3;
 }
 
 enum CollectiveCommType {
@@ -145,6 +156,12 @@ message Node {
   IOInfo inputs = 8;
   IOInfo outputs = 9;
   repeated AttributeProto attr = 10;
+
+  // Type-specific info.
+  oneof op_info {
+    StorageInfo storage = 11;  // type == STORAGE_NODE
+    DataOpType  data_op = 12;  // type == DATA_OP_NODE
+  }
 }
 
 message IOInfo {

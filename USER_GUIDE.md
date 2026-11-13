@@ -1,7 +1,7 @@
 # Chakra User Guide
 ## Installation
 ### Step 1: Set up a Virtual Environment
-It's advisable to create a virtual environment using Python 3.10.2.
+It's advisable to create a virtual environment using Python 3.11 or later.
 
 ```bash
 # Create a virtual environment
@@ -14,7 +14,13 @@ $ source chakra_env/bin/activate
 ### Step 2: Install Chakra
 With the virtual environment activated, install the Chakra package using pip.
 
+**Note:** If you previously installed Chakra from source, run `pip uninstall chakra` first.
+The distribution is now named `mlc-chakra` but still provides the `chakra` import package,
+so having both installed leaves two distributions owning the same files.
 ```bash
+# Install package from PyPI
+$ pip install mlc-chakra
+
 # Install package from source
 $ pip install .
 
@@ -29,30 +35,28 @@ $ pip install https://github.com/mlcommons/chakra/archive/ae7c671db702eb1384015b
 Installing PARAM is necessary for Chakra to function properly as it imports essential components from it.
 
 ```bash
-$ git clone git@github.com:facebookresearch/param.git
-$ cd param/et_replay
-$ git checkout 7b19f586dd8b267333114992833a0d7e0d601630
-$ pip install .
+$ pip install "git+https://github.com/facebookresearch/param.git@7b19f586dd8b267333114992833a0d7e0d601630#subdirectory=et_replay"
 ```
 
-### Step 4: Install Holistic Trace Analysis
-Installing Holistic Trace Analysis is necessary for Trace link.
-
-```bash
-$ git clone https://github.com/facebookresearch/HolisticTraceAnalysis.git
-$ cd HolisticTraceAnalysis
-$ git checkout d731cc2e2249976c97129d409a83bd53d93051f6
-$ git submodule update --init
-$ pip install -r requirements.txt
-$ pip install -e .
-```
-
-### Step 5: Uninstalling Chakra
+### Step 4: Uninstalling Chakra
 To uninstall Chakra, use the following command within the virtual environment.
 
 ```bash
-$ pip uninstall chakra
+$ pip uninstall mlc-chakra
+# If you installed a pre-rename build, also: pip uninstall chakra
 ```
+
+### Alternative: install with uv
+[uv](https://docs.astral.sh/uv/) can replace `venv` and `pip`. The steps are the same as above.
+
+```bash
+$ uv venv --python 3.11
+$ source .venv/bin/activate
+$ uv pip install mlc-chakra
+$ uv pip install "git+https://github.com/facebookresearch/param.git@7b19f586dd8b267333114992833a0d7e0d601630#subdirectory=et_replay"
+```
+
+To uninstall Chakra, run `uv pip uninstall mlc-chakra`.
 
 ## Tools Overview
 ### Execution Trace Link (chakra_trace_link)

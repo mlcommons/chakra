@@ -2,24 +2,24 @@
 requires = [ "setuptools>=61",
   "wheel",
   "setuptools-grpc",
-  "grpcio-tools"]
+  "grpcio-tools==1.80.0"] # emits protobuf gencode 6.31.1; keep in sync with the protobuf lower bound below
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "chakra"
-requires-python = ">=3.7"
-version = "0.0.4"
+name = "mlc-chakra"
+requires-python = ">=3.11"
+version = "1.0.0"
 readme = "README.md"
 license = {file = "LICENSE.md"}
 authors = [
     {name = "MLCommons", email = "chakra@mlcommons.org"},
 ]
 dependencies = [
-    "protobuf",
+    "protobuf>=6.31.1,<8", # runtime must not be older than the gencode emitted by grpcio-tools (see build-system)
     "graphviz",
-    "networkx",
+    "networkx!=3.6.0", # 3.6.0 breaks DiGraph subclasses with extra __init__ args (hta CPGraph); fixed in 3.6.1
     "pydot",
-    "HolisticTraceAnalysis @ git+https://github.com/facebookresearch/HolisticTraceAnalysis.git@d731cc2e2249976c97129d409a83bd53d93051f6"
+    "traceinsight>=0.6.1,<1.0" # HolisticTraceAnalysis (HTA) which was renamed on PyPI; still imports as hta
 ]
 
 [project.urls]
@@ -38,7 +38,7 @@ Repository = "https://github.com/mlcommons/chakra.git"
 "chakra.src.visualizer" = "src/visualizer"
 
 [tool.setuptools.package-data]
-"chakra.schema.protobuf" = ["et_def.proto"]
+"chakra.schema.protobuf" = ["et_def.proto", "storage.proto"]
 
 [project.scripts]
 chakra_converter = "chakra.src.converter.converter:main"
@@ -49,7 +49,7 @@ chakra_trace_link = "chakra.src.trace_link.trace_link:main"
 chakra_visualizer = "chakra.src.visualizer.visualizer:main"
 
 [tool.ruff]
-target-version = "py39"
+target-version = "py311"
 line-length = 120
 exclude = [
     "src/converter/text_converter.py",
@@ -92,3 +92,29 @@ reportAttributeAccessIssue = false
 [tool.vulture]
 ignore_names = ["mock_process_thread"]
 min_confidence = 100
+
+# Developer environment for uv (`uv sync`). These pins equal requirements-dev.txt until that file is retired.
+[dependency-groups]
+dev = [
+    "pyright==1.1.359",
+    "pytest==8.1.1",
+    "ruff==0.3.7",
+    "vulture==2.11",
+    "build==1.6.1",
+    "twine==7.0.0",
+]
+# Temporary. PARAM (et_replay) from git. Delete this group and the source below when issue #237 is merged.
+param = ["et-replay"]
+
+[tool.uv]
+default-groups = ["dev", "param"]
+# Rebuild the package, and so the generated *_pb2.py files, when a .proto file changes. The default keys miss it.
+cache-keys = [
+    { file = "pyproject.toml" },
+    { file = "setup.py" },
+    { file = "setup.cfg" },
+    { file = "schema/protobuf/*.proto" },
+]
+
+[tool.uv.sources]
+et-replay = { git = "https://github.com/facebookresearch/param.git", rev = "7b19f586dd8b267333114992833a0d7e0d601630", subdirectory = "et_replay" }

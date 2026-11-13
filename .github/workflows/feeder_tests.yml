@@ -24,14 +24,22 @@ jobs:
         SCRIPT_DIR=.
         BUILD_DIR="${SCRIPT_DIR:?}"/build
         CHAKRA_ET_DIR="${SCRIPT_DIR:?}"/schema/protobuf
-        protoc et_def.proto \
+        INCLUDES="-I src/third_party/utils -I schema/protobuf -I src/feeder"
+
+        protoc "${CHAKRA_ET_DIR:?}"/*.proto \
           --proto_path="${CHAKRA_ET_DIR:?}" \
           --cpp_out="${CHAKRA_ET_DIR:?}"
-        g++ -Wall -I src/third_party/utils -I schema/protobuf -I src/feeder -c schema/protobuf/et_def.pb.cc -o schema/protobuf/et_def.pb.o
-        g++ -Wall -I src/third_party/utils -I schema/protobuf -I src/feeder -c src/feeder/et_feeder.cpp -o src/feeder/et_feeder.o
-        g++ -Wall -I src/third_party/utils -I schema/protobuf -I src/feeder -c src/feeder/et_feeder_node.cpp -o src/feeder/et_feeder_node.o
-        g++ -Wall -I src/third_party/utils -I schema/protobuf -I src/feeder -c src/third_party/utils/protoio.cc -o src/third_party/utils/protoio.o
-        g++ -Wall -I src/third_party/utils -I schema/protobuf -I src/feeder -c tests/feeder/tests.cpp -o tests/feeder/tests.o
-        g++ -Wall -I src/third_party/utils -I schema/protobuf -I src/feeder -o feeder_tests schema/protobuf/et_def.pb.o src/feeder/et_feeder.o src/feeder/et_feeder_node.o src/third_party/utils/protoio.o tests/feeder/tests.o -lgtest -lgtest_main -lprotobuf -lpthread
+
+        PB_OBJECTS=""
+        for cc in "${CHAKRA_ET_DIR:?}"/*.pb.cc; do
+          obj="${cc%.cc}.o"
+          g++ -Wall ${INCLUDES} -c "${cc}" -o "${obj}"
+          PB_OBJECTS="${PB_OBJECTS} ${obj}"
+        done
+        g++ -Wall ${INCLUDES} -c src/feeder/et_feeder.cpp -o src/feeder/et_feeder.o
+        g++ -Wall ${INCLUDES} -c src/feeder/et_feeder_node.cpp -o src/feeder/et_feeder_node.o
+        g++ -Wall ${INCLUDES} -c src/third_party/utils/protoio.cc -o src/third_party/utils/protoio.o
+        g++ -Wall ${INCLUDES} -c tests/feeder/tests.cpp -o tests/feeder/tests.o
+        g++ -Wall ${INCLUDES} -o feeder_tests ${PB_OBJECTS} src/feeder/et_feeder.o src/feeder/et_feeder_node.o src/third_party/utils/protoio.o tests/feeder/tests.o -lgtest -lgtest_main -lprotobuf -lpthread
     - name: Run tests
       run: ./feeder_tests
