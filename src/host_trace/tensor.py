@@ -1,7 +1,7 @@
 from typing import List
 
 
-class PyTorchTensor:
+class HostTensor:
     """
     Represents a tensor with its associated properties.
 
@@ -17,7 +17,7 @@ class PyTorchTensor:
 
     def __init__(self, tensor_data: List[int]) -> None:
         """
-        Initialize a PyTorchTensor object with the provided tensor data.
+        Initialize a HostTensor object with the provided tensor data.
 
         Args:
             tensor_data (List[int]): Data of the tensor including tensor_id, storage_id, offset, number of elements,
@@ -98,15 +98,15 @@ class PyTorchTensor:
         return self.storage_id > 0
 
 
-def list_to_pytorch_tensor(tensor_list: List[int]) -> PyTorchTensor:
+def list_to_host_tensor(tensor_list: List[int]) -> HostTensor:
     """
-    Convert a list representation of a tensor into a PyTorchTensor object.
+    Convert a list representation of a tensor into a HostTensor object.
 
     Args:
         tensor_list (List[int]): Data representing a tensor, including tensor_id, storage_id, offset, num_elem,
             elem_bytes.
 
     Returns:
-        PyTorchTensor: The PyTorchTensor object created from the data.
+        HostTensor: The HostTensor object created from the data.
     """
-    return PyTorchTensor(tensor_list)
+    return HostTensor(tensor_list)

@@ -18,7 +18,7 @@ from ...schema.protobuf.et_def_pb2 import AttributeProto as ChakraAttr
 from ...schema.protobuf.et_def_pb2 import Node as ChakraNode
 from ..host_trace import reader as host_trace_reader
 from ..host_trace import trace as host_trace
-from ..host_trace.node import PyTorchNode, PyTorchNodeType
+from ..host_trace.node import HostNode, HostNodeType
 from ..third_party.utils.protolib import encodeMessage as encode_message
 
 
@@ -68,13 +68,13 @@ class PyTorchConverter:
         """Load a host trace from a JSON file. See host_trace.reader.load_json_execution_traces."""
         return host_trace_reader.load_json_execution_traces(input_filename)
 
-    def parse_json_trace(self, json_trace: Dict) -> Tuple[Dict, Dict[int, PyTorchNode]]:
+    def parse_json_trace(self, json_trace: Dict) -> Tuple[Dict, Dict[int, HostNode]]:
         """Parse the trace's metadata and nodes, and build the tree. See host_trace.trace.parse_json_trace."""
         return host_trace.parse_json_trace(json_trace)
 
     def establish_parent_child_relationships(
-        self, json_node_map: Dict[int, PyTorchNode], json_node_root_nids: List[int]
-    ) -> Dict[int, PyTorchNode]:
+        self, json_node_map: Dict[int, HostNode], json_node_root_nids: List[int]
+    ) -> Dict[int, HostNode]:
         """Attach each node to its parent. See host_trace.trace.establish_parent_child_relationships."""
         return host_trace.establish_parent_child_relationships(json_node_map, json_node_root_nids)
 
@@ -83,13 +83,13 @@ class PyTorchConverter:
         return host_trace.is_root_node(node_name)
 
     def process_parent_child_relationships(
-        self, json_node_map: Dict[int, PyTorchNode], json_node: PyTorchNode, parent_id: int
+        self, json_node_map: Dict[int, HostNode], json_node: HostNode, parent_id: int
     ) -> None:
         """Attach one node to its parent. See host_trace.trace.process_parent_child_relationships."""
         host_trace.process_parent_child_relationships(json_node_map, json_node, parent_id)
 
     def convert_json_to_protobuf_nodes(
-        self, json_node_map: Dict[int, PyTorchNode], protobuf_node_map: Dict[int, ChakraNode]
+        self, json_node_map: Dict[int, HostNode], protobuf_node_map: Dict[int, ChakraNode]
     ) -> None:
         """
         Convert JSON nodes to Protobuf nodes.
@@ -98,14 +98,14 @@ class PyTorchConverter:
         will be handled by the convert_ctrl_dep_to_data_dep method.
 
         Args:
-            json_node_map (Dict[int, PyTorchNode]): Dictionary of JSON nodes to be converted.
+            json_node_map (Dict[int, HostNode]): Dictionary of JSON nodes to be converted.
             protobuf_node_map (Dict[int, ChakraNode]): Dictionary where the converted Protobuf nodes will be stored.
         """
         for _, json_node in json_node_map.items():
             if (
-                (json_node.get_op_type() == PyTorchNodeType.CPU_OP)
-                or (json_node.get_op_type() == PyTorchNodeType.LABEL)
-                or (json_node.get_op_type() == PyTorchNodeType.METADATA)
+                (json_node.get_op_type() == HostNodeType.CPU_OP)
+                or (json_node.get_op_type() == HostNodeType.LABEL)
+                or (json_node.get_op_type() == HostNodeType.METADATA)
             ):
                 chakra_node = self.convert_json_to_protobuf_node(json_node_map, protobuf_node_map, json_node)
                 protobuf_node_map[chakra_node.id] = chakra_node
@@ -145,12 +145,12 @@ class PyTorchConverter:
 
     def convert_json_to_protobuf_node(
         self,
-        json_node_map: Dict[int, PyTorchNode],
+        json_node_map: Dict[int, HostNode],
         protobuf_node_map: Dict[int, ChakraNode],
-        json_node: PyTorchNode,
+        json_node: HostNode,
     ) -> ChakraNode:
         """
-        Convert a JSON node (PyTorchNode) to a protobuf node (ChakraNode).
+        Convert a JSON node (HostNode) to a protobuf node (ChakraNode).
 
         This method takes a JSON node from the Chakra host + device execution trace and converts it to a protobuf node.
         The conversion includes transferring attributes, types, and dependencies from the JSON node to the protobuf
@@ -158,9 +158,9 @@ class PyTorchConverter:
         to filter them out.
 
         Args:
-            json_node_map (Dict[int, PyTorchNode]): Dictionary of JSON nodes.
+            json_node_map (Dict[int, HostNode]): Dictionary of JSON nodes.
             protobuf_node_map (Dict[int, ChakraNode]): Dictionary of protobuf nodes.
-            json_node (PyTorchNode): The JSON node to convert.
+            json_node (HostNode): The JSON node to convert.
 
         Returns:
             ChakraNode: The converted protobuf node.
@@ -202,15 +202,13 @@ class PyTorchConverter:
 
         return protobuf_node
 
-    def get_protobuf_node_type_from_json_node(
-        self, json_node_map: Dict[int, PyTorchNode], json_node: PyTorchNode
-    ) -> int:
+    def get_protobuf_node_type_from_json_node(self, json_node_map: Dict[int, HostNode], json_node: HostNode) -> int:
         """
         Determine the Protobuf node type from a Chakra node.
 
         Args:
-            json_node_map (Dict[int, PyTorchNode]): Dictionary of JSON nodes.
-            json_node (PyTorchNode): The JSON node to determine the type of.
+            json_node_map (Dict[int, HostNode]): Dictionary of JSON nodes.
+            json_node (HostNode): The JSON node to determine the type of.
 
         Returns:
             int: The corresponding Chakra node type.
@@ -280,7 +278,7 @@ class PyTorchConverter:
 
     def convert_ctrl_dep_to_data_dep(
         self,
-        json_node_map: Dict[int, PyTorchNode],
+        json_node_map: Dict[int, HostNode],
         protobuf_node_map: Dict[int, ChakraNode],
         chakra_node: ChakraNode,
     ) -> None:
@@ -301,7 +299,7 @@ class PyTorchConverter:
         ensure that the execution flow across multiple threads is correctly represented.
 
         Args:
-            json_node_map (Dict[int, PyTorchNode]): Dictionary of PyTorch nodes.
+            json_node_map (Dict[int, HostNode]): Dictionary of PyTorch nodes.
             protobuf_node_map (Dict[int, ChakraNode]): Dictionary of Chakra nodes.
             chakra_node (ChakraNode): The starting node for the traversal and dependency processing.
         """
@@ -322,7 +320,7 @@ class PyTorchConverter:
 
             node_op_type = json_node.get_op_type()
 
-            if node_op_type == PyTorchNodeType.GPU_OP:
+            if node_op_type == HostNodeType.GPU_OP:
                 if last_visited_any and last_visited_any.id not in current_node.data_deps:
                     current_node.data_deps.append(last_visited_any.id)
                     logging.debug(
@@ -552,7 +550,7 @@ class PyTorchConverter:
     # ruff: noqa: C901
     def simulate_execution(
         self,
-        json_node_map: Dict[int, PyTorchNode],
+        json_node_map: Dict[int, HostNode],
         protobuf_node_map: Dict[int, ChakraNode],
         parent_to_children_map: Dict[int, List[int]],
     ) -> None:
@@ -563,7 +561,7 @@ class PyTorchConverter:
         by dependency resolution. A simplistic global clock is used to model the execution time.
 
         Args:
-            json_node_map (Dict[int, PyTorchNode]): The PyTorch nodes to reference for additional debugrmation.
+            json_node_map (Dict[int, HostNode]): The PyTorch nodes to reference for additional debugrmation.
             protobuf_node_map (Dict[int, ChakraNode]): The Chakra nodes to be simulated.
             parent_to_children_map (Dict[int, List[int]]): Mapping from parent node IDs to their child node IDs.
         """

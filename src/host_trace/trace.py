@@ -1,10 +1,10 @@
 import logging
 from typing import Dict, List, Tuple
 
-from .node import PyTorchNode
+from .node import HostNode
 
 
-def parse_json_trace(json_trace: Dict) -> Tuple[Dict, Dict[int, PyTorchNode]]:
+def parse_json_trace(json_trace: Dict) -> Tuple[Dict, Dict[int, HostNode]]:
     """
     Parse and instantiate PyTorch nodes from execution trace data.
 
@@ -32,15 +32,15 @@ def parse_json_trace(json_trace: Dict) -> Tuple[Dict, Dict[int, PyTorchNode]]:
     node_count = len(json_nodes)
     logging.debug(f"Number of nodes in JSON trace: {node_count}")
 
-    json_node_map = {node_data["id"]: PyTorchNode(json_trace["schema"], node_data) for node_data in json_nodes}
+    json_node_map = {node_data["id"]: HostNode(json_trace["schema"], node_data) for node_data in json_nodes}
     json_node_root_nids = []
     json_node_map = establish_parent_child_relationships(json_node_map, json_node_root_nids)
     return json_metadata, json_node_map
 
 
 def establish_parent_child_relationships(
-    json_node_map: Dict[int, PyTorchNode], json_node_root_nids: List[int]
-) -> Dict[int, PyTorchNode]:
+    json_node_map: Dict[int, HostNode], json_node_root_nids: List[int]
+) -> Dict[int, HostNode]:
     """
     Establish parent-child relationships among JSON nodes and count the node types.
 
@@ -50,11 +50,11 @@ def establish_parent_child_relationships(
     is responsible for reading such dependencies and updating the field accordingly.
 
     Args:
-        json_node_map (Dict[int, PyTorchNode]): Dictionary of JSON node objects.
+        json_node_map (Dict[int, HostNode]): Dictionary of JSON node objects.
         json_node_root_nids (List[int]): List to store root node IDs.
 
     Returns:
-        Dict[int, PyTorchNode]: Dictionary of JSON nodes with established relationships.
+        Dict[int, HostNode]: Dictionary of JSON nodes with established relationships.
     """
     node_type_counts = {
         "total_op": 0,
@@ -115,15 +115,13 @@ def is_root_node(node_name: str) -> bool:
     ]
 
 
-def process_parent_child_relationships(
-    json_node_map: Dict[int, PyTorchNode], json_node: PyTorchNode, parent_id: int
-) -> None:
+def process_parent_child_relationships(json_node_map: Dict[int, HostNode], json_node: HostNode, parent_id: int) -> None:
     """
     Process the parent-child relationships for Chakra JSON nodes.
 
     Args:
-        json_node_map (Dict[int, PyTorchNode]): Dictionary of JSON node objects.
-        json_node (PyTorchNode): The current JSON node being processed.
+        json_node_map (Dict[int, HostNode]): Dictionary of JSON node objects.
+        json_node (HostNode): The current JSON node being processed.
         parent_id (int): The ID of the parent node.
     """
     parent_node = json_node_map[parent_id]

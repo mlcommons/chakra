@@ -2,10 +2,10 @@ import traceback
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from .tensor import PyTorchTensor
+from .tensor import HostTensor
 
 
-class PyTorchNodeType(Enum):
+class HostNodeType(Enum):
     """
     Enum representing the type of a PyTorch node in an execution trace.
 
@@ -22,17 +22,17 @@ class PyTorchNodeType(Enum):
     METADATA = 4  # Metadata nodes
 
 
-class PyTorchNode:
+class HostNode:
     """
     Represents a node in a PyTorch execution trace, initialized based on a schema version.
 
     Attributes
         schema (str): Schema version used for initialization.
-        data_deps (List[PyTorchNode]): List of data-dependent parent nodes.
-        children (List[PyTorchNode]): List of child nodes.
-        gpu_children (List[PyTorchNode]): List of GPU-specific child nodes.
-        record_param_comms_node (Optional[PyTorchNode]): Corresponding record_param_comms node.
-        nccl_node (Optional[PyTorchNode]): Corresponding NCCL node.
+        data_deps (List[HostNode]): List of data-dependent parent nodes.
+        children (List[HostNode]): List of child nodes.
+        gpu_children (List[HostNode]): List of GPU-specific child nodes.
+        record_param_comms_node (Optional[HostNode]): Corresponding record_param_comms node.
+        nccl_node (Optional[HostNode]): Corresponding NCCL node.
         id (str): Identifier of the node.
         name (str): Name of the node.
         parent (Any): Parent of the node.
@@ -57,30 +57,30 @@ class PyTorchNode:
 
     def __init__(self, schema: str, node_data: Dict[str, Any]) -> None:
         """
-        Initialize a PyTorchNode object using the node data and schema version provided.
+        Initialize a HostNode object using the node data and schema version provided.
 
         Args:
             schema (str): The schema version based on which the node will be initialized.
             node_data (Dict[str, Any]): Dictionary containing the data of the PyTorch node.
         """
         self.schema = schema
-        self.data_deps: List["PyTorchNode"] = []
-        self.children: List["PyTorchNode"] = []
-        self.gpu_children: List["PyTorchNode"] = []
-        self.record_param_comms_node: Optional["PyTorchNode"] = None
-        self.nccl_node: Optional["PyTorchNode"] = None
+        self.data_deps: List["HostNode"] = []
+        self.children: List["HostNode"] = []
+        self.gpu_children: List["HostNode"] = []
+        self.record_param_comms_node: Optional["HostNode"] = None
+        self.nccl_node: Optional["HostNode"] = None
 
         self.parse_data(node_data)
 
     def __repr__(self) -> str:
         """
-        Provide a string representation of the PyTorchNode.
+        Provide a string representation of the HostNode.
 
         Returns
             str: String representation of the node.
         """
         return (
-            f"PyTorchNode(id={self.id}, name={self.name}, op_type={self.get_op_type()}, timestamp={self.ts}, "
+            f"HostNode(id={self.id}, name={self.name}, op_type={self.get_op_type()}, timestamp={self.ts}, "
             f"inclusive_duration={self.inclusive_dur}, exclusive_duration={self.exclusive_dur})"
         )
 
@@ -127,21 +127,21 @@ class PyTorchNode:
         for attr in node_data.get("attrs", []):
             setattr(self, attr["name"], attr["value"])
 
-    def get_op_type(self) -> PyTorchNodeType:
+    def get_op_type(self) -> HostNodeType:
         """
         Determine the type of PyTorch operation.
 
         Returns
-            PyTorchNodeType: The type of the PyTorch operation.
+            HostNodeType: The type of the PyTorch operation.
         """
         if "process_group:init" in self.name:
-            return PyTorchNodeType.METADATA
+            return HostNodeType.METADATA
         elif self.is_gpu_op():
-            return PyTorchNodeType.GPU_OP
+            return HostNodeType.GPU_OP
         elif hasattr(self, "op_schema") or hasattr(self, "outputs"):
-            return PyTorchNodeType.CPU_OP
+            return HostNodeType.CPU_OP
         else:
-            return PyTorchNodeType.LABEL
+            return HostNodeType.LABEL
 
     def is_metadata_op(self) -> bool:
         """
@@ -150,7 +150,7 @@ class PyTorchNode:
         Returns
             bool: True if the node is a METADATA operator, False otherwise.
         """
-        return self.get_op_type() == PyTorchNodeType.METADATA
+        return self.get_op_type() == HostNodeType.METADATA
 
     def is_cpu_op(self) -> bool:
         """
@@ -159,7 +159,7 @@ class PyTorchNode:
         Returns
             bool: True if the node is a CPU operator, False otherwise.
         """
-        return self.get_op_type() == PyTorchNodeType.CPU_OP
+        return self.get_op_type() == HostNodeType.CPU_OP
 
     def is_gpu_op(self) -> bool:
         """
@@ -170,30 +170,30 @@ class PyTorchNode:
         """
         return self.cat is not None
 
-    def add_data_dep(self, parent_node: "PyTorchNode") -> None:
+    def add_data_dep(self, parent_node: "HostNode") -> None:
         """
         Add a data-dependent parent node to this node.
 
         Args:
-            parent_node (PyTorchNode): The parent node to be added.
+            parent_node (HostNode): The parent node to be added.
         """
         self.data_deps.append(parent_node)
 
-    def add_child(self, child_node: "PyTorchNode") -> None:
+    def add_child(self, child_node: "HostNode") -> None:
         """
         Add a child node to this node.
 
         Args:
-            child_node (PyTorchNode): The child node to be added.
+            child_node (HostNode): The child node to be added.
         """
         self.children.append(child_node)
 
-    def add_gpu_child(self, gpu_child_node: "PyTorchNode") -> None:
+    def add_gpu_child(self, gpu_child_node: "HostNode") -> None:
         """
         Add a child GPU node for this node.
 
         Args:
-            gpu_child_node (Optional[PyTorchNode]): The child GPU node to be added.
+            gpu_child_node (Optional[HostNode]): The child GPU node to be added.
         """
         self.gpu_children.append(gpu_child_node)
 
@@ -228,11 +228,11 @@ class PyTorchNode:
             if "Tensor" in input_type:
                 if input_type.startswith("GenericList[Tensor"):
                     for inner_value in input_value:
-                        tensor = PyTorchTensor(inner_value)
+                        tensor = HostTensor(inner_value)
                         input_size = tensor.num_elem * tensor.elem_bytes
                         comm_size += input_size
                 else:
-                    tensor = PyTorchTensor(input_value)
+                    tensor = HostTensor(input_value)
                     input_size = tensor.num_elem * tensor.elem_bytes
                     comm_size += input_size
         return comm_size
