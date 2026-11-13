@@ -6,25 +6,25 @@ This is a repository of Chakra schema and a complementary set of tools and capab
 
 Chakra is under active development as a [MLCommons](https://mlcommons.org/en)® research project. Please see [MLCommons Chakra Working Group](https://mlcommons.org/en/groups/research-chakratracebench/) for more details for participating in this effort.
 
-A detailed description of the motivation, guiding principles and current status can be found in Chakra's MLSys 2026 Paper [here](https://arxiv.org/abs/2605.11333). 
-Please cite this paper and repository to refer to the latest Chakra schema and tools.
-
-```
-@inproceedings{
-sridharan2026mlcommons,
-title={{MLC}ommons Chakra: Advancing Performance Benchmarking and Co-design using Standardized Execution Traces},
-author={Srinivas Sridharan and Andy Balogh and Bradford M. Beckmann and Brian Coutinho and Louis Feng and Sheng Fu and Sanshan Gao and Mehryar Garakani and Taekyung Heo and David Kanter and Josh Ladd and Ziwei Li and Winston Liu and Changhai Man and Dan Mihailescu and Spandan More and Joongun Park and Ashwin Ramachandran and Vinay Ramakrishnaiah and Saeed Rashidi and Vijay Reddi and Puneet Sharma and Phio Tian and William Won and Hanjiang Wu and Huan Xu and Jinsun Yoo and Tushar Krishna},
-booktitle={Ninth Conference on Machine Learning and Systems},
-year={2026},
-location={Bellevue, WA, USA},
-series={MLSys '26},
-url={https://arxiv.org/abs/2605.11333}
-}
-```
-
 ## Installation
 
 Check out [`USER_GUIDE`](USER_GUIDE.md) for details.
+
+## Resources
+
+Please find the following useful resources about Chakra:
+- [Chakra Wiki](https://github.com/mlcommons/chakra/wiki)
+- [Chakra Traces Library](https://github.com/mlcommons/chakra/wiki/Chakra-Trace-Library)
+
+A detailed description of the original motivation and guiding principles can be found [here](https://arxiv.org/abs/2605.11333). The paper was published prior to Chakra becoming a MLCommons project. Please cite the following paper when referring to the latest Chakra schema and tools.
+```bibtex
+@inproceedings{sridharan2026mlcommonschakra,
+  title     = {MLCommons Chakra: Advancing Performance Benchmarking and Co-design using Standardized Execution Traces},
+  author    = {Sridharan, Srinivas and Balogh, Andy and Beckmann, Bradford M. and Coutinho, Brian and Feng, Louis and Fu, Sheng and Gao, Sanshan and Garakani, Mehryar and Heo, Taekyung and Kanter, David and Ladd, Josh and Li, Ziwei and Liu, Winston and Man, Changhai and Mihailescu, Dan and More, Spandan and Park, Joongun and Ramachandran, Ashwin and Ramakrishnaiah, Vinay and Rashidi, Saeed and Reddi, Vijay Janapa and Sharma, Puneet and Tian, Phio and Won, William and Wu, Hanjiang and Xu, Huan and Yoo, Jinsun and Krishna, Tushar},
+  booktitle = {Proceedings of the Ninth Annual Conference on Machine Learning and Systems},
+  year      = {2026}
+}
+```
 
 ## Development
 
