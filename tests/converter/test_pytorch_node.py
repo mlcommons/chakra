@@ -152,3 +152,23 @@ def test_pytorch_node_unsupported_schema(sample_node_data_unsupported_schema) ->
     schema = "9999.9999.9999-chakra.0.0.4"
     with pytest.raises(ValueError, match=f"Unsupported schema version '{schema}'"):
         PyTorchNode(schema, sample_node_data_unsupported_schema)
+
+
+def test_pytorch_node_parsing_1_1_1_chakra_1_0_0(sample_node_data_1_0_3_chakra_0_0_4) -> None:
+    # Regression: "1.1.1-chakra.1.0.0" is a supported version whose node layout matches the other 1.1.1 traces.
+    # It was being accepted without being routed to a parser, so the node's fields were left unset.
+    schema = "1.1.1-chakra.1.0.0"
+    node = PyTorchNode(schema, sample_node_data_1_0_3_chakra_0_0_4)
+    assert node.schema == schema
+    assert isinstance(node.id, int)
+    assert isinstance(node.name, str)
+    assert node.exclusive_dur == 30
+
+
+def test_every_supported_version_populates_node_fields(sample_node_data_1_0_3_chakra_0_0_4) -> None:
+    # Drift guard: accepting a version in SUPPORTED_VERSIONS without parsing it leaves the node empty and
+    # triggers an opaque AttributeError downstream. Every supported version must populate the node's fields.
+    for schema in PyTorchNode.SUPPORTED_VERSIONS:
+        node = PyTorchNode(schema, dict(sample_node_data_1_0_3_chakra_0_0_4))
+        assert node.id == 2, f"schema {schema} left node.id unset"
+        assert node.name == "node2", f"schema {schema} left node.name unset"
