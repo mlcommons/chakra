@@ -7,8 +7,8 @@ __pycache__/
 *.et
 *.dot
 .pyre
-*et_def.pb.cc
-*et_def.pb.h
+*.pb.cc
+*.pb.h
 
 trace_collection/post_execution/traces
 
