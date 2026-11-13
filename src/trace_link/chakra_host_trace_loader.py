@@ -2,8 +2,8 @@ import logging
 import sys
 from typing import List
 
-from et_replay.execution_trace import Node as PyTorchOperator
-from et_replay.utils import load_execution_trace_file
+from ..third_party.et_replay.execution_trace import Node as PyTorchOperator
+from ..third_party.et_replay.utils import load_execution_trace_file
 
 # Increase the recursion limit for deep Chakra host execution traces.
 sys.setrecursionlimit(10**6)

@@ -39,6 +39,7 @@ Repository = "https://github.com/mlcommons/chakra.git"
 
 [tool.setuptools.package-data]
 "chakra.schema.protobuf" = ["et_def.proto", "storage.proto"]
+"chakra.src.third_party.et_replay" = ["LICENSE"]
 
 [project.scripts]
 chakra_converter = "chakra.src.converter.converter:main"
@@ -54,6 +55,7 @@ line-length = 120
 exclude = [
     "src/converter/text_converter.py",
     "src/third_party/utils/protolib.py",
+    "src/third_party/et_replay",
 ]
 
 [tool.ruff.lint]
@@ -84,7 +86,8 @@ exclude = [
     "**/__pycache__",
     "**/build/",
     "setup.py",
-    "src/third_party/utils/protolib.py"
+    "src/third_party/utils/protolib.py",
+    "src/third_party/et_replay"
 ]
 reportMissingImports = false
 reportAttributeAccessIssue = false

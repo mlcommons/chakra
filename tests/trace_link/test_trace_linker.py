@@ -1,14 +1,14 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
-from chakra.src.trace_link.kineto_operator import KinetoOperator
-from chakra.src.trace_link.trace_linker import TraceLinker
-from chakra.src.trace_link.unique_id_assigner import UniqueIdAssigner
-from et_replay.execution_trace import (
+from chakra.src.third_party.et_replay.execution_trace import (
     EXECUTION_TRACE_PROCESS_ANNOTATION,
     EXECUTION_TRACE_THREAD_ANNOTATION,
 )
-from et_replay.execution_trace import Node as PyTorchOperator
+from chakra.src.third_party.et_replay.execution_trace import Node as PyTorchOperator
+from chakra.src.trace_link.kineto_operator import KinetoOperator
+from chakra.src.trace_link.trace_linker import TraceLinker
+from chakra.src.trace_link.unique_id_assigner import UniqueIdAssigner
 from hta.analyzers.critical_path_analysis import CPEdgeType, CPGraph
 
 
