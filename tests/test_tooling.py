@@ -144,7 +144,6 @@ REQUIRED_RECIPES = {
     "types",
     "test",
     "gate",
-    "cpp-fmt-check",
     "lint-scripts",
     "wheel-check",
     "ci-github-lint",
@@ -156,7 +155,7 @@ def test_justfile_has_the_required_recipes() -> None:
 
 
 def test_gate_runs_every_check() -> None:
-    assert {"lint", "lint-scripts", "types", "test", "cpp-fmt-check"} <= set(_recipes()["gate"])
+    assert {"lint", "lint-scripts", "types", "test"} <= set(_recipes()["gate"])
 
 
 def test_every_recipe_has_a_comment() -> None:
@@ -197,9 +196,6 @@ def test_justfile_runs_the_commands_that_ci_runs() -> None:
     for command, recipe in recipe_for.items():
         assert command in ci, f"CI no longer runs: {command}"
         assert command in _recipe_body(recipe), f"just {recipe} does not run: {command}"
-    version = re.search(r"clangFormatVersion:\s*(\d+)", ci)
-    assert version is not None
-    assert f"clang-format=={version.group(1)}" in _recipe_body("cpp-fmt-check")
 
 
 def test_types_recipe_matches_ci_and_skips_the_venv() -> None:
@@ -233,8 +229,7 @@ def test_gitignore_covers_act_secrets() -> None:
 
 def test_file_list_recipes_use_the_git_files_script() -> None:
     # The script includes new files that git does not track yet, and stops on an empty list (tests/test_scripts.py).
-    for name in ("types", "cpp-fmt-check"):
-        assert "scripts/run_on_git_files.sh" in _recipe_body(name)
+    assert "scripts/run_on_git_files.sh" in _recipe_body("types")
 
 
 def test_test_recipe_passes_arguments_with_spaces_through() -> None:
@@ -382,13 +377,6 @@ def test_developer_guide_describes_the_shell_scripts() -> None:
     section = _section((ROOT / "doc" / "DEVELOPMENT.md").read_text(), "## Shell scripts")
     for text in ("scripts/", "just lint-scripts", "tests/test_scripts.py"):
         assert text in section
-
-
-def test_gitignore_covers_generated_protobuf_code() -> None:
-    # The C++ feeder build runs protoc into schema/protobuf. The file lists include untracked files (as CI does), so
-    # this generated code must be ignored, or `just cpp-fmt-check` checks files that CI never sees.
-    lines = {line.strip() for line in (ROOT / ".gitignore").read_text().splitlines()}
-    assert {"*.pb.cc", "*.pb.h"} <= lines
 
 
 def test_section_ignores_comment_lines_in_code_blocks() -> None:

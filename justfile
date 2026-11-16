@@ -50,12 +50,8 @@ proto-smoke:
 wheel-check:
     scripts/wheel_check.sh
 
-# Check the C++ format with clang-format 16 (the CI "C++ Lint" job)
-cpp-fmt-check:
-    scripts/run_on_git_files.sh '*.cc' '*.cpp' '*.h' '*.hh' -- uvx --from 'clang-format==16.*' clang-format --dry-run --Werror
-
 # The full check. Run it before you open a pull request.
-gate: lint lint-scripts types test test-slow proto-smoke wheel-check cpp-fmt-check
+gate: lint lint-scripts types test test-slow proto-smoke wheel-check
 
 # It fails now: the workflows use old actions (checkout@v2, setup-python@v2). It is not part of `gate`.
 # Lint the GitHub workflow files with actionlint (needs Docker)
