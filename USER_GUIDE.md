@@ -81,6 +81,13 @@ $ chakra_converter PyTorch \
 * --output: Path to the output file where the converted Chakra trace will be saved in protobuf format.
 * --simulate: (Optional) Enable simulation of operators after the conversion for validation and debugging purposes. This option allows simulation of traces without running them through a simulator. Users can validate the converter or simulator against actual measured values using tools like chrome://tracing or https://perfetto.dev/. Read the duration of the timeline and compare the total execution time against the final simulation time of a trace. Disabled by default because it takes a long time.
 
+### Running Execution Traces on ASTRA-sim
+Chakra execution traces in the protobuf format can be run on ASTRA-sim, which reads them with its own built-in feeder.
+* ASTRA-sim repository: https://github.com/astra-sim/astra-sim
+* ASTRA-sim setup instructions: https://astra-sim.github.io/astra-sim-docs/getting-started/setup.html
+
+The C++ feeder that was previously part of this repository has been removed.
+
 ### Execution Trace Visualizer (chakra_visualizer)
 This tool visualizes execution traces in various formats. Here is an example command:
 
