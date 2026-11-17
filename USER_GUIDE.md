@@ -94,6 +94,8 @@ Changes from earlier versions of Chakra:
 * The converter reads schemas `1.0.4` and `1.1.1-chakra.1.0.0`, and newer schemas with a warning. `chakra_trace_link` rejects PyTorch 2.0 and 2.1 traces, as the converter already did.
 * `chakra_trace_link` no longer rejects a trace that lacks node attributes it does not use (such as `tid`), and no longer hangs on a node that is its own ancestor.
 * A trace with two nodes of the same id is rejected; before, the later node silently replaced the earlier one.
+* The PyTorch 2.0 thread-root name `[pytorch|profiler|execution_graph|thread]` is no longer recognised; such traces (schema 1.0.1) are rejected anyway.
+* A trace file is read as gzip when its name ends in `gz`. A name that doesn't match the content is an error that says so.
 * For valid traces, the output of both tools is unchanged.
 
 ### Execution Trace Feeder (et_feeder)

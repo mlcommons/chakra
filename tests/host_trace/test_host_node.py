@@ -166,3 +166,13 @@ def test_unrecognised_layout_is_rejected(sample_node_data_unsupported_schema) ->
     node_data["parent"] = node_data.pop("ctrl_deps")  # the PyTorch 2.0/2.1 key
     with pytest.raises(ValueError, match="node 4: missing key"):
         HostNode("1.1.1-chakra.0.0.4", node_data)
+
+
+def test_host_node_has_a_field_for_every_core_attribute(sample_node_data_1_0_2_chakra_0_0_4) -> None:
+    # names.CORE_ATTRS is the one list of the attributes Chakra reads; HostNode sets each as an explicit field.
+    from chakra.src.host_trace.names import CORE_ATTRS
+
+    node = HostNode("1.0.2-chakra.0.0.4", sample_node_data_1_0_2_chakra_0_0_4)
+    for name in CORE_ATTRS:
+        assert hasattr(node, name), f"HostNode has no field for {name}"
+        assert getattr(node, name) is not None, f"{name} was not read from attrs"

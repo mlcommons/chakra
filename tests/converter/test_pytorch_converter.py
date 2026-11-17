@@ -13,8 +13,8 @@ from chakra.schema.protobuf.et_def_pb2 import (
     REDUCE_SCATTER,
 )
 from chakra.schema.protobuf.et_def_pb2 import Node as ChakraNode
+from chakra.src.converter.converter_node import ConverterNode
 from chakra.src.converter.pytorch_converter import PyTorchConverter
-from chakra.src.host_trace.node import HostNode
 from chakra.src.host_trace.trace import HostTrace
 
 
@@ -74,11 +74,12 @@ def mock_chakra_node() -> ChakraNode:
     return node
 
 
-def load_for_conversion(data: Dict) -> Tuple[Dict, Dict[int, HostNode]]:
+def load_for_conversion(data: Dict) -> Tuple[Dict, Dict[int, ConverterNode]]:
     """Parse a host trace and add the converter's links, as PyTorchConverter.convert does."""
-    trace = HostTrace(data)
-    PyTorchConverter().register_converter_links(trace.nodes)
-    return trace.metadata(), trace.nodes
+    converter = PyTorchConverter()
+    trace = HostTrace(data, node_class=ConverterNode)
+    converter.register_converter_links(trace.nodes)
+    return converter.read_metadata(trace), trace.nodes
 
 
 def test_host_trace_metadata_and_nodes(sample_pytorch_data: Dict) -> None:
@@ -135,13 +136,13 @@ def test_write_chakra_et(mock_file: MagicMock, sample_pytorch_data: Dict) -> Non
     ],
 )
 def test_get_protobuf_node_type_from_json_node(pytorch_node_data: Dict, expected_type: int) -> None:
-    # Create a mock HostNode with the required attributes
-    pytorch_node = MagicMock(spec=HostNode)
+    # Create a mock ConverterNode with the required attributes
+    pytorch_node = MagicMock(spec=ConverterNode)
     pytorch_node.name = pytorch_node_data["name"]
     pytorch_node.is_gpu_op = MagicMock(return_value=pytorch_node_data["is_gpu_op"])
     pytorch_node.is_metadata_op = MagicMock(return_value=pytorch_node_data["is_metadata_op"])
 
-    # Create a mock json_node_map dictionary with actual HostNode instances
+    # Create a mock json_node_map dictionary with actual ConverterNode instances
     mock_pytorch_node_data = {
         "id": 0,
         "name": "mock_node",
@@ -151,7 +152,7 @@ def test_get_protobuf_node_type_from_json_node(pytorch_node_data: Dict, expected
         "outputs": {"values": [], "shapes": [], "types": []},
         "attrs": [],
     }
-    mock_pytorch_node = HostNode("1.0.2-chakra.0.0.4", mock_pytorch_node_data)
+    mock_pytorch_node = ConverterNode("1.0.2-chakra.0.0.4", mock_pytorch_node_data)
     json_node_map = {0: mock_pytorch_node, 1: pytorch_node}
 
     converter = PyTorchConverter()

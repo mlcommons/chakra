@@ -96,17 +96,3 @@ class HostTensor:
             bool: True if the storage ID is greater than 0, False otherwise.
         """
         return self.storage_id > 0
-
-
-def list_to_host_tensor(tensor_list: List[int]) -> HostTensor:
-    """
-    Convert a list representation of a tensor into a HostTensor object.
-
-    Args:
-        tensor_list (List[int]): Data representing a tensor, including tensor_id, storage_id, offset, num_elem,
-            elem_bytes.
-
-    Returns:
-        HostTensor: The HostTensor object created from the data.
-    """
-    return HostTensor(tensor_list)

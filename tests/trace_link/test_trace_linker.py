@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from chakra.src.host_trace.names import PROCESS_ANNOTATION, THREAD_ANNOTATION
 from chakra.src.host_trace.node import HostNode
+from chakra.src.host_trace.trace import HostTrace
 from chakra.src.trace_link.kineto_operator import KinetoOperator
 from chakra.src.trace_link.trace_linker import TraceLinker
 from chakra.src.trace_link.unique_id_assigner import UniqueIdAssigner
@@ -704,3 +705,29 @@ def test_dump_chakra_execution_trace_plus(mock_json_dump, mock_open, trace_linke
     mock_json_dump.assert_called_once_with(
         {"nodes": [{"id": 1}, {"id": 2}]}, mock_open.return_value.__enter__(), indent=4
     )
+
+
+def _host_node(node_id: int, name: str, parent: int) -> dict:
+    io = {"values": [], "shapes": [], "types": []}
+    return {
+        "id": node_id,
+        "name": name,
+        "ctrl_deps": parent,
+        "inputs": io,
+        "outputs": io,
+        "attrs": [{"name": "rf_id", "type": "uint64", "value": node_id}],
+    }
+
+
+def test_collect_host_ops_are_the_nodes_under_the_process_root_sorted_by_id(trace_linker) -> None:
+    nodes = [
+        _host_node(3, "op_b", 2),
+        _host_node(1, PROCESS_ANNOTATION, 1),
+        _host_node(2, THREAD_ANNOTATION, 1),
+        _host_node(4, "op_a", 2),
+    ]
+    trace = HostTrace({"schema": "1.0.2-chakra.0.0.4", "nodes": nodes})
+
+    result = trace_linker.collect_host_ops(trace)
+
+    assert [op.id for op in result] == [1, 2, 3, 4]

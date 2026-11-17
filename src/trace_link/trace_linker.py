@@ -9,10 +9,11 @@ from typing import Dict, List, Optional, Tuple
 from hta.analyzers.critical_path_analysis import CPEdgeType
 from hta.trace_analysis import TraceAnalysis
 
+from ..host_trace.errors import HostTraceError
 from ..host_trace.names import PROCESS_ANNOTATION, THREAD_ANNOTATION
 from ..host_trace.node import HostNode
+from ..host_trace.trace import HostTrace
 from .chakra_device_trace_loader import ChakraDeviceTraceLoader
-from .chakra_host_trace_loader import ChakraHostTraceLoader
 from .kineto_operator import KinetoOperator
 from .unique_id_assigner import UniqueIdAssigner
 
@@ -22,14 +23,12 @@ class TraceLinker:
     Links Chakra host execution traces (ET) and Chakra device ET to generate Chakra host + device ET.
 
     Attributes
-        chakra_host_trace_loader (ChakraHostTraceLoader): Loader for Chakra host execution traces.
         chakra_device_trace_loader (ChakraDeviceTraceLoader): Loader for Chakra device execution traces.
         id_assigner (UniqueIdAssigner): Assigns unique IDs to operators.
     """
 
     def __init__(self) -> None:
         """Initialize the TraceLinker with a log level."""
-        self.chakra_host_trace_loader = ChakraHostTraceLoader()
         self.chakra_device_trace_loader = ChakraDeviceTraceLoader()
         self.id_assigner = UniqueIdAssigner()
 
@@ -43,8 +42,8 @@ class TraceLinker:
             chakra_device_trace (str): Path to the Kineto trace file.
             output_file (str): Path for the output nyTorch execution trace plus file.
         """
-        host_trace = self.chakra_host_trace_loader.load_trace(chakra_host_trace)
-        host_ops = host_trace.linker_ops()
+        host_trace = HostTrace.from_file(chakra_host_trace)
+        host_ops = self.collect_host_ops(host_trace)
 
         (
             kineto_cpu_ops,
@@ -90,6 +89,41 @@ class TraceLinker:
         )
 
         self.dump_chakra_execution_trace_plus(chakra_execution_trace_plus_data, output_file)
+
+    def collect_host_ops(self, trace: HostTrace[HostNode]) -> List[HostNode]:
+        """
+        Return the host ops to link: the process root and every node under it, sorted by id.
+
+        These rules are the linker's, so they live here rather than in host_trace: the linker matches host ops to
+        Kineto ops by rf_id, so every op needs one. Nodes that are not under the process root (orphans, and nodes in a
+        parent cycle) get no Kineto data and no GPU nodes; one warning says how many there are. Their content is still
+        copied into the output.
+
+        Args:
+            trace (HostTrace[HostNode]): The parsed host trace.
+
+        Returns:
+            List[HostNode]: The host ops.
+
+        Raises:
+            HostTraceError: If there is not exactly one process root, or an op has no rf_id.
+        """
+        root = trace.process_root()
+        ops = trace.reachable_from(root)
+        for op in ops:
+            if op.rf_id is None:
+                raise HostTraceError(
+                    f"{op.where()}rf_id is missing or null; chakra_trace_link matches host ops to Kineto ops by rf_id"
+                )
+        left_out = trace.unreachable_from(root)
+        if left_out:
+            ids = ", ".join(str(n.id) for n in left_out[:5]) + (", ..." if len(left_out) > 5 else "")
+            logging.warning(
+                f"{trace.source}: {len(left_out)} of {len(trace.nodes)} nodes are not under the process root (orphans, "
+                f"or nodes in a parent cycle; ids {ids}). They get no Kineto durations and no GPU nodes."
+            )
+        logging.debug(f"Extracted {len(ops)} operators from Chakra host execution trace.")
+        return ops
 
     def load_sync_dependencies(
         self, rank: int, kineto_file: str, annotation: str = "ProfilerStep", instance_id: int = 0
@@ -397,8 +431,7 @@ class TraceLinker:
         Link Chakra Host ET and Chakra Device ET to produce an enhanced Chakra ET (ET +).
 
         Args:
-            chakra_host_trace_data (Dict): The Chakra host execution trace as read (HostTrace.raw). The ET+ is built
-                in it, so it is modified.
+            chakra_host_trace_data (Dict): The Chakra host execution trace as read (HostTrace.raw). Not modified.
             host_ops (List[HostNode]): List of Chakra host operators.
             kineto_cpu_ops (List[KinetoOperator]): List of Kineto CPU operators.
             sorted_kineto_cpu_ops (List[KinetoOperator]): Sorted list of Kineto CPU operators.
@@ -826,8 +859,7 @@ class TraceLinker:
         offering a comprehensive view of the execution.
 
         Args:
-            chakra_host_trace_data (Dict): The Chakra host execution trace as read (HostTrace.raw). The ET+ is built
-                in it, so it is modified.
+            chakra_host_trace_data (Dict): The Chakra host execution trace as read (HostTrace.raw). Not modified.
             host_op_id_to_kineto_ops_map (Dict[int, List[KinetoOperator]]): Map from Chakra host op IDs to Kineto
                 GPU ops.
             host_op_id_to_inclusive_dur_map (Dict[int, int]): Inclusive duration map for Chakra host ops.
@@ -840,7 +872,9 @@ class TraceLinker:
             Dict: The constructed ET+ data.
         """
         logging.debug("Constructing ET+ data.")
-        pytorch_et_data = chakra_host_trace_data
+        # The ET+ is built from a new top-level dict per node, so the parsed trace is never modified. Nested values
+        # (inputs, outputs, attrs, ...) are shared: nothing below writes into them, only top-level keys of a node.
+        pytorch_et_data = {**chakra_host_trace_data, "nodes": [dict(op) for op in chakra_host_trace_data["nodes"]]}
 
         sorted_nodes = sorted(pytorch_et_data["nodes"], key=lambda x: x["id"])
         gpu_ops = []

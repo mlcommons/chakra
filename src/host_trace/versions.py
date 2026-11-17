@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from typing import Optional, Tuple
 
 from .errors import HostTraceError
+from .names import CORE_ATTRS, KERNEL_ATTRS, STRIDES, TENSOR_KEYS
 
 logger = logging.getLogger(__name__)
 
@@ -36,11 +37,11 @@ FORMAT_CHANGES = (
         (1, 0, 2),
         "2.2",
         "the current layout: ctrl_deps, an attrs list, inputs and outputs as dictionaries",
-        attrs=("rf_id", "fw_parent", "seq_id", "scope", "tid", "fw_tid", "op_schema"),
-        tensor_keys=("values", "shapes", "types"),
+        attrs=CORE_ATTRS,
+        tensor_keys=TENSOR_KEYS,
     ),
-    FormatChange((1, 1, 0), "2.4", "kernel attributes", attrs=("kernel_backend", "kernel_file")),
-    FormatChange((1, 1, 1), "2.5", "strides in inputs and outputs", tensor_keys=("strides",)),
+    FormatChange((1, 1, 0), "2.4", "kernel attributes", attrs=KERNEL_ATTRS),
+    FormatChange((1, 1, 1), "2.5", "strides in inputs and outputs", tensor_keys=(STRIDES,)),
 )
 MIN_SUPPORTED = FORMAT_CHANGES[0].version
 NEWEST_KNOWN = FORMAT_CHANGES[-1].version

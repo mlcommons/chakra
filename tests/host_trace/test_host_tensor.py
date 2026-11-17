@@ -1,4 +1,4 @@
-from chakra.src.host_trace.tensor import HostTensor, list_to_host_tensor
+from chakra.src.host_trace.tensor import HostTensor
 
 
 def test_host_tensor_initialization():
@@ -48,12 +48,3 @@ def test_host_tensor_has_valid_storage_id():
 
     assert valid_tensor.has_valid_storage_id() is True
     assert invalid_tensor.has_valid_storage_id() is False
-
-
-def test_list_to_host_tensor():
-    """Test list_to_host_tensor function."""
-    tensor_data = [1, 2, 3, 4, 5, 6]
-    tensor = list_to_host_tensor(tensor_data)
-
-    assert isinstance(tensor, HostTensor)
-    assert tensor.tensor_data == tensor_data
