@@ -24,8 +24,11 @@ def extract_tar_gz_file(tmp_path: Path) -> Path:
     extracted_dir = tmp_path / "extracted"
     extracted_dir.mkdir()
 
+    # Read the one file the tests use, by name, so no path stored in the archive can write outside extracted_dir.
     with tarfile.open(tar_gz_file, "r:gz") as tar:
-        tar.extractall(path=extracted_dir)
+        member = tar.extractfile("1.0.2-chakra.0.0.4.json")
+        assert member is not None, f"1.0.2-chakra.0.0.4.json is not a file in {tar_gz_file}"
+        (extracted_dir / "1.0.2-chakra.0.0.4.json").write_bytes(member.read())
 
     return extracted_dir
 
