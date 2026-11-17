@@ -1,0 +1,352 @@
+name: Clean-install baseline
+
+on:
+  push:
+    branches:
+      - docs/issue-236-clean-install-baseline-before-dependency-changes
+    paths:
+      - .github/workflows/install_baseline.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # Main before #233 merge
+  BASELINE_COMMIT: 2ee864f3b6ada989ebcf78222789bb4e0336d0a3
+  CUTOFF: "2026-11-05T20:28:23Z"
+
+  # Latest pip version before #233 merge; --uploaded-prior-to needs pip >= 26.0
+  PIP_VERSION: "26.3"
+
+  # Commit hashes for PARAM and HTA, as specified in the USER_GUIDE.md before #233 merge
+  PARAM_COMMIT: 7b19f586dd8b267333114992833a0d7e0d601630
+  HTA_COMMIT: d731cc2e2249976c97129d409a83bd53d93051f6
+  
+  # Every pip call: no cache, no pip configuration of the runner
+  PIP_UPLOADED_PRIOR_TO: "2026-11-05T20:28:23Z"
+  PIP_NO_CACHE_DIR: "1"
+  PIP_CONFIG_FILE: /dev/null
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  PIP_NO_INPUT: "1"
+
+jobs:
+  measure:
+    name: measure (Python ${{ matrix.python-version }}, run ${{ matrix.run }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11.18", "3.13.18"]
+        run: [1, 2, 3]
+
+    env:
+      RUN_ID: py${{ matrix.python-version }}-run${{ matrix.run }}
+
+    steps:
+    - name: Checkout (full history, to reach the baseline commit)
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        persist-credentials: false
+
+    - name: Setup Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Record the environment and extract the baseline source
+      run: |
+        OUT="${RUNNER_TEMP}/results/${RUN_ID}"
+        WORK="${RUNNER_TEMP}/work"
+        mkdir -p "${OUT}" "${WORK}/chakra"
+        echo "OUT=${OUT}" >> "${GITHUB_ENV}"
+        echo "WORK=${WORK}" >> "${GITHUB_ENV}"
+        {
+            echo "run_id=${RUN_ID}"
+            echo "commit=${BASELINE_COMMIT}"
+            echo "param_commit=${PARAM_COMMIT}"
+            echo "hta_commit=${HTA_COMMIT}"
+            echo "cutoff=${CUTOFF}"
+            echo "date_utc=$(date -u +%FT%TZ)"
+            echo "runner_image=${ImageOS:-unknown} ${ImageVersion:-unknown}"
+            echo "os=$(. /etc/os-release; echo "${PRETTY_NAME}")"
+            echo "kernel=$(uname -r)"
+            echo "nproc=$(nproc)"
+            echo "python=$(python3 --version 2>&1) ($(command -v python3))"
+            echo "git=$(git --version)"
+        } > "${OUT}/env.txt"
+        cat "${OUT}/env.txt"
+        # The installed Chakra is the baseline commit, not this branch.
+        git archive --format=tar "${BASELINE_COMMIT}" | tar -xf - -C "${WORK}/chakra"
+
+    - name: "Step 1 (timed): python3 -m venv chakra_env, activate"
+      working-directory: ${{ runner.temp }}/work
+      run: |
+        rc=0
+        t0=$(date +%s.%N)
+        { python3 -m venv chakra_env && source chakra_env/bin/activate; } > "${OUT}/step1_venv.log" 2>&1 || rc=$?
+        t1=$(date +%s.%N)
+        echo "venv_rc=${rc}" >> "${OUT}/metrics.txt"
+        awk -v a="${t0}" -v b="${t1}" 'BEGIN { printf "venv_s=%.2f\n", b - a }' >> "${OUT}/metrics.txt"
+        cat "${OUT}/step1_venv.log"
+
+    - name: "Not timed: upgrade pip to ${{ env.PIP_VERSION }} (needed for the PyPI cutoff)"
+      working-directory: ${{ runner.temp }}/work
+      run: |
+        source chakra_env/bin/activate
+        rc=0
+        pip install "pip==${PIP_VERSION}" > "${OUT}/pip_upgrade.log" 2>&1 || rc=$?
+        echo "pip_upgrade_rc=${rc}" >> "${OUT}/metrics.txt"
+        echo "venv_pip=$(pip --version)" >> "${OUT}/env.txt"
+        cat "${OUT}/pip_upgrade.log"
+
+    - name: "Step 2 (timed): pip install . (Chakra)"
+      working-directory: ${{ runner.temp }}/work/chakra
+      run: |
+        source ../chakra_env/bin/activate
+        rc=0
+        t0=$(date +%s.%N)
+        pip install -v . > "${OUT}/step2_chakra.log" 2>&1 || rc=$?
+        t1=$(date +%s.%N)
+        echo "chakra_rc=${rc}" >> "${OUT}/metrics.txt"
+        awk -v a="${t0}" -v b="${t1}" 'BEGIN { printf "chakra_s=%.2f\n", b - a }' >> "${OUT}/metrics.txt"
+        pip freeze --all > "${OUT}/freeze_after_step2.txt" 2>&1 || true
+        tail -n 30 "${OUT}/step2_chakra.log"
+
+    - name: "Step 3 (timed): install PARAM"
+      working-directory: ${{ runner.temp }}/work
+      run: |
+        source chakra_env/bin/activate
+        rc=0
+        t0=$(date +%s.%N)
+        {
+            git clone https://github.com/facebookresearch/param.git \
+            && cd param/et_replay \
+            && git checkout "${PARAM_COMMIT}" \
+            && pip install -v .
+        } > "${OUT}/step3_param.log" 2>&1 || rc=$?
+        t1=$(date +%s.%N)
+        echo "param_rc=${rc}" >> "${OUT}/metrics.txt"
+        awk -v a="${t0}" -v b="${t1}" 'BEGIN { printf "param_s=%.2f\n", b - a }' >> "${OUT}/metrics.txt"
+        pip freeze --all > "${OUT}/freeze_after_step3.txt" 2>&1 || true
+        tail -n 30 "${OUT}/step3_param.log"
+
+    - name: "Step 4 (timed): install HTA"
+      working-directory: ${{ runner.temp }}/work
+      run: |
+        source chakra_env/bin/activate
+        rc=0
+        t0=$(date +%s.%N)
+        {
+            git clone https://github.com/facebookresearch/HolisticTraceAnalysis.git \
+            && cd HolisticTraceAnalysis \
+            && git checkout "${HTA_COMMIT}" \
+            && git submodule update --init \
+            && pip install -v -r requirements.txt \
+            && pip install -v -e .
+        } > "${OUT}/step4_hta.log" 2>&1 || rc=$?
+        t1=$(date +%s.%N)
+        echo "hta_rc=${rc}" >> "${OUT}/metrics.txt"
+        awk -v a="${t0}" -v b="${t1}" 'BEGIN { printf "hta_s=%.2f\n", b - a }' >> "${OUT}/metrics.txt"
+        pip freeze --all > "${OUT}/freeze.txt" 2>&1 || true
+        tail -n 30 "${OUT}/step4_hta.log"
+
+    - name: "Not timed: smoke checks and metrics"
+      run: |
+        source "${WORK}/chakra_env/bin/activate"
+        rc=0
+        (cd / && python -I -c 'import chakra.schema.protobuf.et_def_pb2, et_replay, hta; print("imports ok")') > "${OUT}/smoke.log" 2>&1 || rc=$?
+        echo "smoke_import_rc=${rc}" >> "${OUT}/metrics.txt"
+        rc=0
+        chakra_converter --help >> "${OUT}/smoke.log" 2>&1 || rc=$?
+        echo "smoke_converter_rc=${rc}" >> "${OUT}/metrics.txt"
+        rc=0
+        chakra_trace_link --help >> "${OUT}/smoke.log" 2>&1 || rc=$?
+        echo "smoke_trace_link_rc=${rc}" >> "${OUT}/metrics.txt"
+
+        # Downloads: distinct files in pip's "Downloading <file>" lines (-v also shows pip's build environment).
+        downloads() { { grep -hoE '^ *Downloading [^ ]+\.(whl|tar\.gz|zip)' "$@" || true; } | awk '{print $2}' | sed 's#.*/##' | sort -u; }
+        # Git clones: clones pip runs ("Running command git clone") plus git's own "Cloning into" (explicit clones, submodules).
+        clones() { cat "$@" | grep -cE "Running command git clone|^Cloning into '" || true; }
+        for step in step2_chakra step3_param step4_hta; do
+            downloads "${OUT}/${step}.log" > "${OUT}/downloads_${step}.txt"
+        done
+        downloads "${OUT}"/step*.log > "${OUT}/downloads.txt"
+        d2=$(wc -l < "${OUT}/downloads_step2_chakra.txt")
+        d3=$(wc -l < "${OUT}/downloads_step3_param.txt")
+        d4=$(wc -l < "${OUT}/downloads_step4_hta.txt")
+        {
+            echo "chakra_downloads=${d2}"
+            echo "param_downloads=${d3}"
+            echo "hta_downloads=${d4}"
+            # Total = what the steps downloaded together. With no cache, a file a later step needs again (for example
+            # setuptools for each build) is downloaded again, so it counts again. distinct_files counts it once.
+            echo "downloads=$((d2 + d3 + d4))"
+            echo "distinct_files=$(wc -l < "${OUT}/downloads.txt")"
+            echo "chakra_git_clones=$(clones "${OUT}/step2_chakra.log")"
+            echo "param_git_clones=$(clones "${OUT}/step3_param.log")"
+            echo "hta_git_clones=$(clones "${OUT}/step4_hta.log")"
+            echo "git_clones=$(clones "${OUT}"/step*.log)"
+            echo "network_retries=$(cat "${OUT}"/step*.log | grep -cE 'Retrying|Connection interrupted' || true)"
+        } >> "${OUT}/metrics.txt"
+        cat "${OUT}/smoke.log" "${OUT}/metrics.txt"
+
+    - name: "Not timed: check every download predates the cutoff"
+      run: |
+        rc=0
+        python3 -I - "${CUTOFF}" "${OUT}/downloads.txt" > "${OUT}/cutoff_check.txt" 2>&1 <<'EOF' || rc=$?
+        import json, re, sys, urllib.request
+        from datetime import datetime
+
+        cutoff = datetime.fromisoformat(sys.argv[1].replace("Z", "+00:00"))
+        files = sorted({l.strip() for p in sys.argv[2:] for l in open(p) if l.strip()})
+        uploads, bad, newest = {}, 0, ("", "")
+        for f in files:
+            stem = re.sub(r"\.(whl|tar\.gz|zip)$", "", f)
+            proj = re.sub(r"[-_.]+", "-", stem.split("-")[0] if f.endswith(".whl") else stem.rsplit("-", 1)[0]).lower()
+            if proj not in uploads:
+                with urllib.request.urlopen(f"https://pypi.org/pypi/{proj}/json") as r:
+                    data = json.load(r)
+                uploads[proj] = {u["filename"]: u["upload_time_iso_8601"] for rel in data["releases"].values() for u in rel}
+            t = uploads[proj].get(f)
+            if t is None or datetime.fromisoformat(t.replace("Z", "+00:00")) >= cutoff:
+                print("PROBLEM", t, f)
+                bad += 1
+            else:
+                newest = max(newest, (t, f))
+        print(f"{len(files)} files checked, {bad} problem(s); newest upload: {newest[0]} {newest[1]}")
+        sys.exit(1 if bad else 0)
+        EOF
+        echo "cutoff_rc=${rc}" >> "${OUT}/metrics.txt"
+        cat "${OUT}/cutoff_check.txt"
+
+    - name: Upload the results of this run
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: baseline-${{ env.RUN_ID }}
+        path: ${{ runner.temp }}/results/${{ env.RUN_ID }}
+        if-no-files-found: error
+        retention-days: 90
+
+    - name: Fail the job if a step of the measurement failed
+      run: |
+        cat "${OUT}/metrics.txt"
+        if grep -E '_rc=' "${OUT}/metrics.txt" | grep -vq '_rc=0$'; then
+            echo "::error::A step of the measurement failed; see metrics.txt and the logs in the artifact."
+            exit 1
+        fi
+
+  summarise:
+    name: summarise
+    needs: measure
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+    - name: Download the results of all runs
+      uses: actions/download-artifact@v4
+      with:
+        pattern: baseline-*
+        path: results
+
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.13.18"
+
+    - name: Write the results tables to the run summary
+      run: |
+        python -I - results >> "${GITHUB_STEP_SUMMARY}" <<'EOF'
+        import math, os, pathlib, statistics, sys
+
+        STEPS = ["venv", "chakra", "param", "hta"]  # USER_GUIDE.md steps 1-4; their sum is the wall time
+        LABELS = {
+            "venv": "step 1 (venv)", "pip_upgrade": "pip upgrade", "chakra": "step 2 (Chakra)", "param": "step 3 (PARAM)",
+            "hta": "step 4 (HTA)", "smoke_import": "import check", "smoke_converter": "chakra_converter check",
+            "smoke_trace_link": "chakra_trace_link check", "cutoff": "cutoff check",
+        }
+
+        def kv(path):
+            return dict(l.split("=", 1) for l in path.read_text().splitlines() if "=" in l)
+
+        def comparable(path):
+            # Drop the lines that name local folders (file:// URLs, editable installs); they are not package versions.
+            return "".join(l for l in path.read_text().splitlines(True) if "file://" not in l and not l.startswith("-e "))
+
+        def sec(value):
+            return "-" if math.isnan(value) else f"{value:.2f}"
+
+        def table(headers, aligns, rows):
+            # Markdown table padded to equal column widths, so it also lines up as plain text. aligns: l, c or r per
+            # column; headers follow the alignment of their column.
+            rows = [[str(c) for c in r] for r in rows]
+            widths = [max(3, len(h), *(len(r[i]) for r in rows)) for i, h in enumerate(headers)]
+            def pad(text, width, align):
+                return text.rjust(width) if align == "r" else text.center(width) if align == "c" else text.ljust(width)
+            def line(cells):
+                return "| " + " | ".join(cells) + " |"
+            rule = {"l": lambda w: ":" + "-" * (w - 1), "c": lambda w: ":" + "-" * (w - 2) + ":", "r": lambda w: "-" * (w - 1) + ":"}
+            out = [line(pad(h, w, a) for h, w, a in zip(headers, widths, aligns)), line(rule[a](w) for w, a in zip(widths, aligns))]
+            out += [line(pad(c, w, a) for c, w, a in zip(r, widths, aligns)) for r in rows]
+            return "\n".join(out)
+
+        runs = []
+        for d in sorted(pathlib.Path(sys.argv[1]).glob("baseline-*")):
+            m = kv(d / "metrics.txt")
+            py, run = d.name.removeprefix("baseline-py").split("-run")
+            failures = [LABELS.get(k[:-3], k[:-3]) for k, v in m.items() if k.endswith("_rc") and v != "0"]
+            retries = int(m.get("network_retries", "0") or 0)
+            if retries:
+                failures.append(f"network retries ({retries})")
+            runs.append({
+                "python": py, "run": run, "failures": failures, "counted": not failures,
+                "wall": sum(float(m.get(f"{s}_s", "nan")) for s in STEPS),
+                "downloads": m.get("downloads", "-"),
+                "image": kv(d / "env.txt").get("runner_image", "unknown"),
+                "same_key": ((d / "downloads.txt").read_text(), comparable(d / "freeze.txt")),
+            })
+
+        env = os.environ
+        print("## Clean-install baseline: main before #233\n")
+        print(table(["", ""], ["l", "l"], [
+            ["Chakra commit", f"`{env.get('BASELINE_COMMIT', '?')[:7]}` (main before #233)"],
+            ["Install", "`USER_GUIDE.md` steps 1-4: venv, Chakra, PARAM, HTA"],
+            ["PyPI cutoff", env.get("CUTOFF", "?")],
+            ["pip", f"{env.get('PIP_VERSION', '?')}, {'no cache' if env.get('PIP_NO_CACHE_DIR') == '1' else 'cache on'}"],
+            ["Runner image", ", ".join(sorted({r["image"] for r in runs})) or "unknown"],
+        ]))
+
+        print("\n### Runs\n")
+        print(table(
+            ["Python", "Run", "Wall time (s)", "Downloads", "Failures", "Counted"], ["l", "c", "r", "r", "l", "c"],
+            [[r["python"], r["run"], sec(r["wall"]), r["downloads"], ", ".join(r["failures"]) or "none",
+              "yes" if r["counted"] else "no"] for r in runs]))
+
+        rows = []
+        for py in sorted({r["python"] for r in runs}):
+            group = [r for r in runs if r["python"] == py]
+            walls = [r["wall"] for r in group if r["counted"]]
+            same = "yes" if len({r["same_key"] for r in group}) == 1 else "no"
+            if walls:
+                rows.append([py, len(walls), sec(statistics.median(walls)), sec(min(walls)), sec(max(walls)), same])
+            else:
+                rows.append([py, 0, "-", "-", "-", same])
+        print("\n### Per Python version\n")
+        print(table(["Python", "Counted runs", "Median (s)", "Min (s)", "Max (s)", "Same packages in all runs"],
+                    ["l", "c", "r", "r", "r", "c"], rows))
+
+        print("\n<details>\n<summary>Definitions</summary>\n")
+        print("- **Wall time**: steps 1-4 back to back. The pip upgrade between steps 1 and 2 is not timed.")
+        print("- **Downloads**: files pip downloaded. With no cache, a file a later step needs again (setuptools for each "
+              "build) is downloaded again and counts again.")
+        print("- **Counted**: every step exited with 0 and pip made no network retries.")
+        print("- **Same packages**: all runs of the version downloaded the same files and installed the same versions.")
+        print("- The time of each step is in `metrics.txt` in each run's artifact.")
+        print("\n</details>")
+        EOF
+        cat "${GITHUB_STEP_SUMMARY}"
