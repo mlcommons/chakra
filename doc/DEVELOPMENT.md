@@ -7,7 +7,7 @@ If you only want to use Chakra, read the [User Guide](../USER_GUIDE.md).
 
 | Term | Meaning |
 |---|---|
-| gate | The full set of local checks. `just gate` runs it. It has the Python checks and the C++ format check of CI, and more. It does not build or test the C++ feeder. |
+| gate | The full set of local checks. `just gate` runs it. It has the Python checks of CI, and more. |
 | recipe | One task in the `justfile`, for example `just lint`. |
 | virtual environment | The Python 3.11 install in `.venv/` that `uv` makes. |
 | workflow | One file in `.github/workflows/`. GitHub Actions runs it. |
@@ -66,7 +66,6 @@ Run `just` to see the list.
 | `just test-slow` | Runs the slow tests. They need a network. They build the package as an editable install, and as a wheel that has a file left out. | - |
 | `just proto-smoke` | Imports the generated protobuf modules with the newest and the oldest allowed protobuf. | `python_tests.yml` |
 | `just wheel-check` | Builds the wheel from a clean copy and installs it (not editable) in a new temporary virtual environment. Checks the wheel files, imports the protobuf modules with two protobuf versions, and starts the commands. The other checks use the editable install. | `python_tests.yml`, `end_to_end_tests.yml` |
-| `just cpp-fmt-check` | Checks the C++ format with clang-format 16. | `cpp_lint.yml` |
 | `just gate` | Runs all the checks above. | - |
 | `just act` | Runs one workflow in Docker. Add a file name from `.github/workflows/`. The default is `python_lint.yml`. | - |
 | `just ci-github-lint` | Lints the workflow files with actionlint in Docker. It fails today, because the workflows use old actions (`checkout@v2`, `setup-python@v2`). It is not part of the gate. | - |
@@ -93,9 +92,7 @@ Each run starts with an empty tool cache. `scripts/act.sh` first removes the sha
 |---|---|
 | `python_lint.yml` | Works. |
 | `python_tests.yml` | Works. |
-| `cpp_lint.yml` | Works. |
 | `end_to_end_tests.yml` | Works. |
-| `feeder_tests.yml` | Fails. `apt install` asks for a confirmation, and `act` has no terminal. The GitHub runner image sets apt to answer yes. The `act` image does not. |
 | `codeql.yml`, `cla.yml` | Not run. They need GitHub services. |
 | Any other workflow | Not tested. |
 
