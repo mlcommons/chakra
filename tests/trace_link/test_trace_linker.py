@@ -1,6 +1,8 @@
+import logging
 from unittest.mock import MagicMock, patch
 
 import pytest
+from chakra.src.host_trace.errors import HostTraceError
 from chakra.src.host_trace.names import PROCESS_ANNOTATION, THREAD_ANNOTATION
 from chakra.src.host_trace.node import HostNode
 from chakra.src.host_trace.trace import HostTrace
@@ -731,3 +733,31 @@ def test_collect_host_ops_are_the_nodes_under_the_process_root_sorted_by_id(trac
     result = trace_linker.collect_host_ops(trace)
 
     assert [op.id for op in result] == [1, 2, 3, 4]
+
+
+@pytest.mark.parametrize("rf_id", ["missing", None], ids=["missing", "null"])
+def test_collect_host_ops_requires_rf_id(rf_id, trace_linker, make_trace_data) -> None:
+    data = make_trace_data()
+    attrs = data["nodes"][3]["attrs"]
+    if rf_id == "missing":
+        attrs[:] = [a for a in attrs if a["name"] != "rf_id"]
+    else:
+        next(a for a in attrs if a["name"] == "rf_id")["value"] = None
+    with pytest.raises(HostTraceError, match="node 4 \\(addmm\\): rf_id is missing or null"):
+        trace_linker.collect_host_ops(HostTrace(data))
+
+
+def test_collect_host_ops_warns_about_the_nodes_it_leaves_out(trace_linker, make_trace_data, make_node, caplog) -> None:
+    data = make_trace_data()
+    data["nodes"] += [make_node(7, "orphan", 999), make_node(8, "in_cycle", 9), make_node(9, "in_cycle", 8)]
+    with caplog.at_level(logging.WARNING):
+        ops = trace_linker.collect_host_ops(HostTrace(data))
+    assert [op.id for op in ops] == [1, 2, 3, 4, 5]
+    assert "3 of 8 nodes are not under the process root" in caplog.text
+    assert "ids 7, 8, 9" in caplog.text
+
+
+def test_collect_host_ops_gives_no_warning_for_a_clean_trace(trace_linker, make_trace_data, caplog) -> None:
+    with caplog.at_level(logging.WARNING):
+        trace_linker.collect_host_ops(HostTrace(make_trace_data()))
+    assert not caplog.records
