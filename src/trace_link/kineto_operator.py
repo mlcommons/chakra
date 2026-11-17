@@ -23,10 +23,16 @@ class KinetoOperator:
         parent_host_op_id (Optional[int]): ID of the parent PyTorch operator.
         inter_thread_dep (Optional[int]): Identifier for inter-thread dependencies.
         sync_dep (List[KinetoOperator]): List of KinetoOperator objects that have dependencies on this operator.
+        stream_wait_dep (List[KinetoOperator]): GPU operators on other streams that this GPU operator waits for
+            through cudaStreamWaitEvent.
+        et_id (Optional[int]): ID of the node this GPU operator becomes in the linked trace.
         stream (Optional[int]): CUDA stream identifier associated with the operator.
         rf_id (Optional[int]): Record function identifier.
         correlation (int): Identifier used to correlate CUDA runtime and GPU operations.
         pg_name (Optional[str]): Process Group name for the collective communication.
+        wait_on_stream (Optional[int]): For CUDA sync events, the stream on which the awaited event was recorded.
+        wait_on_event_record_correlation (Optional[int]): For CUDA sync events, the correlation ID of the
+            cudaEventRecord call that recorded the awaited event.
     """
 
     def __init__(self, kineto_op: Dict[str, Any]) -> None:
@@ -51,10 +57,16 @@ class KinetoOperator:
         self.parent_host_op_id: Optional[int] = None
         self.inter_thread_dep: Optional[int] = None
         self.sync_dep: List[KinetoOperator] = []
+        self.stream_wait_dep: List[KinetoOperator] = []
+        self.et_id: Optional[int] = None
         self.stream: Optional[int] = kineto_op.get("args", {}).get("stream", None)
         self.rf_id: Optional[int] = kineto_op.get("args", {}).get("Record function id", None)
         self.correlation: int = kineto_op.get("args", {}).get("correlation", -1)
         self.pg_name: Optional[str] = kineto_op.get("args", {}).get("Process Group Name", None)
+        self.wait_on_stream: Optional[int] = kineto_op.get("args", {}).get("wait_on_stream")
+        self.wait_on_event_record_correlation: Optional[int] = kineto_op.get("args", {}).get(
+            "wait_on_cuda_event_record_corr_id"
+        )
 
     def __repr__(self) -> str:
         """
@@ -167,6 +179,17 @@ class KinetoOperator:
         """
         gpu_categories = {"kernel", "gpu_memcpy"}
         return self.category in gpu_categories
+
+    def is_stream_wait_event(self) -> bool:
+        """
+        Check if the operator is the GPU-side record of a cudaStreamWaitEvent call.
+
+        Kineto records these events when profiling with `_ExperimentalConfig(enable_cuda_sync_events=True)`.
+
+        Returns
+            bool: True if it's a stream wait event, otherwise False.
+        """
+        return self.category == "cuda_sync" and self.name == "Stream Wait Event"
 
     def is_inter_gpu_comms_op(self) -> bool:
         """
