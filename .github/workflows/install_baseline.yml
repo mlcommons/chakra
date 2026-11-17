@@ -262,7 +262,7 @@ jobs:
     - name: Write the results tables to the run summary
       run: |
         python -I - results >> "${GITHUB_STEP_SUMMARY}" <<'EOF'
-        import math, pathlib, statistics, sys
+        import math, os, pathlib, statistics, sys
 
         STEPS = ["venv", "chakra", "param", "hta"]  # USER_GUIDE.md steps 1-4; their sum is the wall time
         LABELS = {
@@ -281,6 +281,20 @@ jobs:
         def sec(value):
             return "-" if math.isnan(value) else f"{value:.2f}"
 
+        def table(headers, aligns, rows):
+            # Markdown table padded to equal column widths, so it also lines up as plain text. aligns: l, c or r per
+            # column; headers follow the alignment of their column.
+            rows = [[str(c) for c in r] for r in rows]
+            widths = [max(3, len(h), *(len(r[i]) for r in rows)) for i, h in enumerate(headers)]
+            def pad(text, width, align):
+                return text.rjust(width) if align == "r" else text.center(width) if align == "c" else text.ljust(width)
+            def line(cells):
+                return "| " + " | ".join(cells) + " |"
+            rule = {"l": lambda w: ":" + "-" * (w - 1), "c": lambda w: ":" + "-" * (w - 2) + ":", "r": lambda w: "-" * (w - 1) + ":"}
+            out = [line(pad(h, w, a) for h, w, a in zip(headers, widths, aligns)), line(rule[a](w) for w, a in zip(widths, aligns))]
+            out += [line(pad(c, w, a) for c, w, a in zip(r, widths, aligns)) for r in rows]
+            return "\n".join(out)
+
         runs = []
         for d in sorted(pathlib.Path(sys.argv[1]).glob("baseline-*")):
             m = kv(d / "metrics.txt")
@@ -297,31 +311,42 @@ jobs:
                 "same_key": ((d / "downloads.txt").read_text(), comparable(d / "freeze.txt")),
             })
 
+        env = os.environ
         print("## Clean-install baseline: main before #233\n")
-        print("Install = USER_GUIDE.md steps 1-4 at 2ee864f (venv, Chakra, PARAM, HTA). Times in seconds.  ")
-        print(f"Runner image: {', '.join(sorted({r['image'] for r in runs}))}\n")
+        print(table(["", ""], ["l", "l"], [
+            ["Chakra commit", f"`{env.get('BASELINE_COMMIT', '?')[:7]}` (main before #233)"],
+            ["Install", "`USER_GUIDE.md` steps 1-4: venv, Chakra, PARAM, HTA"],
+            ["PyPI cutoff", env.get("CUTOFF", "?")],
+            ["pip", f"{env.get('PIP_VERSION', '?')}, {'no cache' if env.get('PIP_NO_CACHE_DIR') == '1' else 'cache on'}"],
+            ["Runner image", ", ".join(sorted({r["image"] for r in runs})) or "unknown"],
+        ]))
 
-        print("| Python | Run | Wall time (s) | Downloads | Failures | Counted |")
-        print("|---|---|---|---|---|---|")
-        for r in runs:
-            print(f"| {r['python']} | {r['run']} | {sec(r['wall'])} | {r['downloads']} | {', '.join(r['failures']) or 'none'} "
-                  f"| {'yes' if r['counted'] else 'no'} |")
+        print("\n### Runs\n")
+        print(table(
+            ["Python", "Run", "Wall time (s)", "Downloads", "Failures", "Counted"], ["l", "c", "r", "r", "l", "c"],
+            [[r["python"], r["run"], sec(r["wall"]), r["downloads"], ", ".join(r["failures"]) or "none",
+              "yes" if r["counted"] else "no"] for r in runs]))
 
-        print("\n| Python | Counted runs | Median (s) | Min (s) | Max (s) | Same packages in all runs |")
-        print("|---|---|---|---|---|---|")
+        rows = []
         for py in sorted({r["python"] for r in runs}):
             group = [r for r in runs if r["python"] == py]
             walls = [r["wall"] for r in group if r["counted"]]
             same = "yes" if len({r["same_key"] for r in group}) == 1 else "no"
             if walls:
-                print(f"| {py} | {len(walls)} | {sec(statistics.median(walls))} | {sec(min(walls))} | {sec(max(walls))} | {same} |")
+                rows.append([py, len(walls), sec(statistics.median(walls)), sec(min(walls)), sec(max(walls)), same])
             else:
-                print(f"| {py} | 0 | - | - | - | {same} |")
+                rows.append([py, 0, "-", "-", "-", same])
+        print("\n### Per Python version\n")
+        print(table(["Python", "Counted runs", "Median (s)", "Min (s)", "Max (s)", "Same packages in all runs"],
+                    ["l", "c", "r", "r", "r", "c"], rows))
 
-        print("\n**Wall time**: steps 1-4 back to back; the pip upgrade between steps 1 and 2 is not timed. "
-              "**Downloads**: files pip downloaded; a file a later step needs again (setuptools for each build) is downloaded "
-              "again, as there is no cache, and counts again. **Counted**: every step exited with 0 and pip made no network "
-              "retries. **Same packages**: all runs of the version downloaded the same files and installed the same "
-              "versions. The time of each step is in `metrics.txt` in each run's artifact.")
+        print("\n<details>\n<summary>Definitions</summary>\n")
+        print("- **Wall time**: steps 1-4 back to back. The pip upgrade between steps 1 and 2 is not timed.")
+        print("- **Downloads**: files pip downloaded. With no cache, a file a later step needs again (setuptools for each "
+              "build) is downloaded again and counts again.")
+        print("- **Counted**: every step exited with 0 and pip made no network retries.")
+        print("- **Same packages**: all runs of the version downloaded the same files and installed the same versions.")
+        print("- The time of each step is in `metrics.txt` in each run's artifact.")
+        print("\n</details>")
         EOF
         cat "${GITHUB_STEP_SUMMARY}"
