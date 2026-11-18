@@ -80,7 +80,8 @@ def test_editable_install_builds_and_imports(tmp_path: Path) -> None:
     venv = tmp_path / "venv"
     python = venv / "bin" / "python"
     subprocess.run(["uv", "venv", "-q", "--python", "3.11", str(venv)], check=True)
-    subprocess.run(["uv", "pip", "install", "-q", "--python", str(python), "-e", str(ROOT)], check=True)
+    # cwd=ROOT: `uv pip` takes config-settings (editable_mode) from the pyproject.toml of the working directory
+    subprocess.run(["uv", "pip", "install", "-q", "--python", str(python), "-e", str(ROOT)], check=True, cwd=ROOT)
     subprocess.run([str(python), "-c", "import chakra.schema.protobuf.et_def_pb2"], check=True)
 
 

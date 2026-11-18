@@ -29,9 +29,12 @@ wheel=$(echo "$work"/dist/*.whl)
 uv venv --quiet "$work/venv"
 uv pip install --quiet --python "$python" "$wheel"
 
-# 1. The wheel holds the generated protobuf modules and the .proto files.
-listing=$("$python" -m zipfile -l "$wheel")
-for file in chakra/schema/protobuf/et_def_pb2.py chakra/schema/protobuf/storage_pb2.py \
+# Every python call below uses -I (isolated): without it Python also looks for packages and metadata in the current
+# directory, and a stale *.egg-info in the repository root would win over the wheel that is being checked.
+
+# 1. The wheel holds the package __init__, the generated protobuf modules and the .proto files.
+listing=$("$python" -I -m zipfile -l "$wheel")
+for file in chakra/__init__.py chakra/schema/protobuf/et_def_pb2.py chakra/schema/protobuf/storage_pb2.py \
     chakra/schema/protobuf/et_def.proto chakra/schema/protobuf/storage.proto; do
     if ! grep -q "$file" <<<"$listing"; then
         echo "wheel_check: $file is missing from the wheel" >&2
@@ -39,12 +42,21 @@ for file in chakra/schema/protobuf/et_def_pb2.py chakra/schema/protobuf/storage_
     fi
 done
 
+# 1b. The version in the wheel METADATA and in chakra.__version__ is the one in the VERSION file.
+expected=$(tr -d '[:space:]' <"$source/VERSION")
+metadata_version=$("$python" -I -c "from importlib.metadata import version; print(version('mlc-chakra'))")
+module_version=$("$python" -I -c "import chakra; print(chakra.__version__)")
+if [ "$metadata_version" != "$expected" ] || [ "$module_version" != "$expected" ]; then
+    echo "wheel_check: VERSION is $expected, METADATA says $metadata_version, chakra.__version__ is $module_version" >&2
+    exit 1
+fi
+
 # 2. Import the generated modules with the newest protobuf, then with the lowest one that pyproject.toml allows.
 check='import chakra.schema.protobuf.et_def_pb2, chakra.schema.protobuf.storage_pb2'
-"$python" -c "$check"
-floor=$("$python" -c "import re; from importlib.metadata import requires; print(next(re.search(r'>=([0-9.]+)', r).group(1) for r in requires('mlc-chakra') if r.startswith('protobuf')))")
+"$python" -I -c "$check"
+floor=$("$python" -I -c "import re; from importlib.metadata import requires; print(next(re.search(r'>=([0-9.]+)', r).group(1) for r in requires('mlc-chakra') if r.startswith('protobuf')))")
 uv pip install --quiet --python "$python" "protobuf==$floor"
-"$python" -c "$check"
+"$python" -I -c "$check"
 
 # 3. The commands start. With no arguments, argparse exits with 2, as in the CI end-to-end workflow.
 # chakra_trace_link is not tried here: it needs PARAM (et_replay).
