@@ -8,7 +8,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "mlc-chakra"
 requires-python = ">=3.11,<3.15"
-version = "1.0.0"
+dynamic = ["version"]
 readme = "README.md"
 license = {file = "LICENSE.md"}
 authors = [
@@ -27,7 +27,11 @@ Homepage = "https://github.com/mlcommons/chakra"
 Documentation = "https://github.com/mlcommons/chakra/README.md"
 Repository = "https://github.com/mlcommons/chakra.git"
 
+[tool.setuptools.dynamic]
+version = {file = "VERSION"}
+
 [tool.setuptools.package-dir]
+"chakra" = "src/chakra_pkg"
 "chakra.schema.protobuf" = "schema/protobuf"
 "chakra.src.converter" = "src/converter"
 "chakra.src.generator" = "src/generator"
@@ -108,12 +112,18 @@ param = ["et-replay"]
 
 [tool.uv]
 default-groups = ["dev", "param"]
-# Rebuild the package, and so the generated *_pb2.py files, when a .proto file changes. The default keys miss it.
+# chakra is a real package (it holds __version__), and the default editable finder cannot resolve chakra.src.* under it.
+# strict links the files into a tree that has the same layout as the wheel.
+config-settings = { editable_mode = "strict" }
+# Rebuild the package, and so the generated *_pb2.py files, when a .proto file changes, and so that a new module is
+# linked into the strict editable tree. The default keys miss both.
 cache-keys = [
     { file = "pyproject.toml" },
     { file = "setup.py" },
     { file = "setup.cfg" },
     { file = "schema/protobuf/*.proto" },
+    { file = "src/**/*.py" },
+    { file = "VERSION" },
 ]
 
 [tool.uv.sources]

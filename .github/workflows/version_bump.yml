@@ -1,0 +1,120 @@
+name: Version bump
+
+# Gives main a new version and a tag each time a change enters it.
+# Contributors work on forks, so the bump cannot happen in the pull request. It happens after the merge.
+#
+# A run works on the tip of main, not on the commit that started it, and GitHub keeps only the newest run that is
+# waiting. Merges that land close together can therefore share one version. No change is lost: a tag always holds
+# everything that was in main when it was made.
+#
+# The newest tag vX.Y.Z is the reference, not the content of VERSION, so a stale VERSION (for example the wrong side of
+# a merge conflict) cannot move the version backwards or repeat one.
+#
+#   VERSION is above the newest tag -> a maintainer set it (for example 1.1.0). The commit is tagged as it is.
+#   otherwise                       -> the patch number of the newest tag goes up by one (1.0.9 -> 1.0.10). VERSION is
+#                                      rewritten in a commit pushed to main.
+#
+# A minor or major step is a pull request by a maintainer that sets VERSION to the new version.
+#
+# The bump commit goes straight to main, which needs a token that may bypass the rule that asks for pull requests.
+# Add a repository secret VERSION_BUMP_TOKEN (a GitHub App token or a PAT with contents:write) and let it bypass.
+# With the default GITHUB_TOKEN the push is refused while main is protected.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: version-bump
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    # [skip ci] already stops the bump commit from starting this workflow again. The actor check is a second guard.
+    if: github.actor != 'github-actions[bot]' && !contains(github.event.head_commit.message, '[skip ci]')
+    runs-on: ubuntu-latest
+    steps:
+    - name: Warn when the bump token is missing
+      env:
+        HAS_TOKEN: ${{ secrets.VERSION_BUMP_TOKEN != '' }}
+      run: |
+        if [ "$HAS_TOKEN" != "true" ]; then
+          echo "::warning::VERSION_BUMP_TOKEN is not set. The push to main fails while main is protected."
+        fi
+
+    # The tip of main, not the commit that started this run: a merge may have landed since.
+    - uses: actions/checkout@v4
+      with:
+        ref: main
+        token: ${{ secrets.VERSION_BUMP_TOKEN || github.token }}
+
+    - name: Bump VERSION above the newest tag, or tag a version a maintainer set
+      run: |
+        set -euo pipefail
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+        for attempt in 1 2 3; do
+          git fetch -q origin main
+          git reset -q --hard origin/main
+
+          current=$(tr -d '[:space:]' < VERSION)
+          tags=$(git ls-remote --tags --refs origin 'refs/tags/v*' | sed 's#.*refs/tags/##')
+          # shellcheck disable=SC2086  # one word per tag
+          decision=$(python3 - "$current" $tags <<'PY'
+        import re, sys
+
+        current, *tags = sys.argv[1:]
+        number = r"(0|[1-9]\d*)"
+        version = rf"{number}\.{number}\.{number}"
+        if not re.fullmatch(version, current):
+            sys.exit(f"VERSION must look like X.Y.Z, got {current!r}")
+
+
+        def key(text):
+            return tuple(map(int, text.split(".")))
+
+
+        released = [tag[1:] for tag in tags if re.fullmatch(f"v{version}", tag)]
+        if not released or key(current) > key(max(released, key=key)):
+            print("tag", current)
+        else:
+            newest = max(released, key=key)
+            if key(current) < key(newest):
+                print(f"::warning::VERSION {current} is below the newest tag v{newest}, counting from the tag", file=sys.stderr)
+            major, minor, patch = key(newest)
+            print("bump", f"{major}.{minor}.{patch + 1}")
+        PY
+          ) || { echo "::error::Could not work out the next version."; exit 1; }
+          action=${decision%% *}
+          new=${decision#* }
+          if [ -z "$new" ] || [ "$new" = "$decision" ]; then
+            echo "::error::Unexpected result: '$decision'"
+            exit 1
+          fi
+
+          if [ "$action" = bump ]; then
+            echo "VERSION $current -> $new"
+            echo "$new" > VERSION
+            git add VERSION
+            git commit -q -m "chore: bump version to $new [skip ci]"
+            refs=(HEAD:main "v$new")
+          else
+            echo "VERSION $new is above every tag: releasing it as it is"
+            refs=("v$new")
+          fi
+
+          # One atomic push: the bump commit and its tag both land, or neither does. A rejected push means main moved
+          # or the tag appeared meanwhile, so start again from the new state.
+          git tag "v$new"
+          if git push --atomic origin "${refs[@]}"; then
+            exit 0
+          fi
+          echo "push rejected, main moved (attempt $attempt), trying again"
+          git tag -d "v$new" > /dev/null
+        done
+        echo "::error::Could not push the version bump after 3 attempts."
+        exit 1
