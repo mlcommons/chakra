@@ -92,8 +92,11 @@ class PyTorchNode:
             node_data (Dict[str, Any]): The node data to be parsed.
         """
         if self.schema in self.SUPPORTED_VERSIONS:
-            if self.schema in ["1.0.2-chakra.0.0.4", "1.0.3-chakra.0.0.4", "1.1.0-chakra.0.0.4", "1.1.1-chakra.0.0.4"]:
-                self._parse_data_1_0_3_chakra_0_0_4(node_data)
+            # Every supported version shares the same node-data layout, so they all use the same parser. Routing off
+            # self.SUPPORTED_VERSIONS directly (rather than a second, hand-maintained list) keeps a newly supported
+            # version from silently falling through here and leaving the node's fields unset. The chakra tooling
+            # version in the schema string (e.g. -chakra.1.0.0) tracks the generator, not the PyTorch ET layout.
+            self._parse_data_1_0_3_chakra_0_0_4(node_data)
         else:
             raise ValueError(
                 f"Unsupported schema version '{self.schema}'. Please check if the schema version is in the list of "
