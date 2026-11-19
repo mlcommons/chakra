@@ -4,6 +4,8 @@ Both tools on the committed fixtures produce exactly the reference outputs in te
 The references were recorded with the code before the shared host-trace parser (see the archive's README.txt), so these
 tests check that valid output never changes. They are regenerated only on purpose:
     python tests/test_pipeline_outputs.py --regenerate
+which prints what changed, for the pull request. Regenerated references must be approved by a reviewer in the pull
+request that regenerates them.
 """
 
 import json
@@ -300,6 +302,7 @@ The tests compare the outputs of the current code with these. They are never reg
 deliberate change of output regenerates them with
   python tests/test_pipeline_outputs.py --regenerate
 which prints what changed, to paste into the pull request.
+Regenerated references must be approved by a reviewer in the pull request that regenerates them.
 
 SHA-256:
 {sums}

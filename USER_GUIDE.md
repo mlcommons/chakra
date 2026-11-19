@@ -75,12 +75,6 @@ $ chakra_converter PyTorch \
 * --output: Path to the output file where the converted Chakra trace will be saved in protobuf format.
 * --simulate: (Optional) Enable simulation of operators after the conversion for validation and debugging purposes. This option allows simulation of traces without running them through a simulator. Users can validate the converter or simulator against actual measured values using tools like chrome://tracing or https://perfetto.dev/. Read the duration of the timeline and compare the total execution time against the final simulation time of a trace. Disabled by default because it takes a long time.
 
-<<<<<<< HEAD
-### Running Execution Traces on ASTRA-sim
-Chakra execution traces in the protobuf format can be run on ASTRA-sim, which reads them with its own built-in feeder.
-* ASTRA-sim repository: https://github.com/astra-sim/astra-sim
-* ASTRA-sim setup instructions: https://astra-sim.github.io/astra-sim-docs/getting-started/setup.html
-=======
 ### Host traces read by chakra_trace_link and chakra_converter
 Both tools read Chakra host traces (PyTorch execution traces) with the same parser, whether the trace comes straight from PyTorch or from `chakra_trace_link`.
 * **PyTorch versions:** traces from PyTorch 2.2 or later (schema `1.0.2` and later, for example `1.1.1-chakra.0.0.4`). PyTorch 2.0 and 2.1 wrote an older format, which both tools reject with an error. A schema newer than the newest one Chakra knows is read with the newest known rules, after a warning.
@@ -98,18 +92,10 @@ Changes from earlier versions of Chakra:
 * A trace file is read as gzip when its name ends in `gz`. A name that doesn't match the content is an error that says so.
 * For valid traces, the output of both tools is unchanged.
 
-### Execution Trace Feeder (et_feeder)
-The Execution Trace Feeder (et_feeder) is a C++ library designed to feed Chakra traces into any compatible C++ simulator. This library specifically provides dependency-free nodes to a simulator, which must import the feeder as a library. Currently, ASTRA-sim is the only simulator that supports this trace feeder. Below are the commands to run execution traces on ASTRA-sim:
-```bash
-$ git clone --recurse-submodules git@github.com:astra-sim/astra-sim.git
-$ cd astra-sim
-$ git checkout Chakra
-$ git submodule update --init --recursive
-$ cd extern/graph_frontend/chakra/
-$ git checkout main
-$ cd -
-$ ./build/astra_analytical/build.sh -c
->>>>>>> de1c5f4 (Clean-up)
+### Running Execution Traces on ASTRA-sim
+Chakra execution traces in the protobuf format can be run on ASTRA-sim, which reads them with its own built-in feeder.
+* ASTRA-sim repository: https://github.com/astra-sim/astra-sim
+* ASTRA-sim setup instructions: https://astra-sim.github.io/astra-sim-docs/getting-started/setup.html
 
 The C++ feeder that was previously part of this repository has been removed.
 

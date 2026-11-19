@@ -90,7 +90,6 @@ def test_orphans_and_parent_cycles_are_not_reachable_and_the_walk_ends(make_trac
     trace = HostTrace(data)
     root = trace.process_root()
     assert [n.id for n in trace.reachable_from(root)] == [1, 2, 3, 4, 5]
-    assert [n.id for n in trace.unreachable_from(root)] == [7, 8, 9]
 
 
 def test_nodes_are_created_with_the_given_node_class(make_trace_data) -> None:

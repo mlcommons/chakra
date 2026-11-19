@@ -115,11 +115,14 @@ class TraceLinker:
                 raise HostTraceError(
                     f"{op.where()}rf_id is missing or null; chakra_trace_link matches host ops to Kineto ops by rf_id"
                 )
-        left_out = trace.unreachable_from(root)
+
+        left_out = len(trace.nodes) - len(ops)
         if left_out:
-            ids = ", ".join(str(n.id) for n in left_out[:5]) + (", ..." if len(left_out) > 5 else "")
+            reachable = {op.id for op in ops}
+            first = sorted(i for i in trace.nodes if i not in reachable)[:5]
+            ids = ", ".join(str(i) for i in first) + (", ..." if left_out > 5 else "")
             logging.warning(
-                f"{trace.source}: {len(left_out)} of {len(trace.nodes)} nodes are not under the process root (orphans, "
+                f"{trace.source}: {left_out} of {len(trace.nodes)} nodes are not under the process root (orphans, "
                 f"or nodes in a parent cycle; ids {ids}). They get no Kineto durations and no GPU nodes."
             )
         logging.debug(f"Extracted {len(ops)} operators from Chakra host execution trace.")
