@@ -1,6 +1,6 @@
 from typing import Any, Dict, List, Optional
 
-from et_replay.execution_trace import Node as PyTorchOperator
+from ..host_trace.node import HostNode
 
 
 class KinetoOperator:
@@ -19,7 +19,7 @@ class KinetoOperator:
         external_id (int): An external identifier associated with the operator.
         ev_idx (int): Event index of the operator.
         tid (int): Thread identifier where the operator was executed.
-        host_op (Optional[PyTorchOperator]): Corresponding PyTorch operator object.
+        host_op (Optional[HostNode]): Corresponding PyTorch operator object.
         parent_host_op_id (Optional[int]): ID of the parent PyTorch operator.
         inter_thread_dep (Optional[int]): Identifier for inter-thread dependencies.
         sync_dep (List[KinetoOperator]): List of KinetoOperator objects that have dependencies on this operator.
@@ -47,7 +47,7 @@ class KinetoOperator:
         self.external_id: int = int(kineto_op.get("args", {}).get("External id", -1))
         self.ev_idx: int = int(kineto_op.get("args", {}).get("Ev Idx", -1))
         self.tid: int = kineto_op.get("tid", 0)
-        self.host_op: Optional[PyTorchOperator] = None
+        self.host_op: Optional[HostNode] = None
         self.parent_host_op_id: Optional[int] = None
         self.inter_thread_dep: Optional[int] = None
         self.sync_dep: List[KinetoOperator] = []

@@ -19,13 +19,6 @@ jobs:
       run: |
         pip install .
 
-    - name: Install PARAM
-      run: |
-        git clone https://github.com/facebookresearch/param.git
-        cd param/et_replay
-        git checkout 7b19f586dd8b267333114992833a0d7e0d601630
-        pip install .
-
     - name: Test chakra_trace_link Without Arguments
       run: |
         chakra_trace_link || [ $? -eq 2 ]

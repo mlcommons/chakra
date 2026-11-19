@@ -3,8 +3,7 @@ import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Tuple
 
-from et_replay.utils import read_dictionary_from_json_file
-
+from ..host_trace.reader import read_trace_json
 from .kineto_operator import KinetoOperator
 
 
@@ -39,7 +38,7 @@ class ChakraDeviceTraceLoader:
             Tuple containing various data structures needed for linking traces.
         """
         logging.debug(f"Starting to load Chakra device trace from file: {chakra_device_trace}.")
-        chakra_trace_data = read_dictionary_from_json_file(chakra_device_trace)
+        chakra_trace_data = read_trace_json(chakra_device_trace)
         sorted_kineto_ops = sorted(
             [KinetoOperator(op) for op in chakra_trace_data["traceEvents"]],
             key=lambda op: op.timestamp,

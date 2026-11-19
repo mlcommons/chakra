@@ -6,7 +6,7 @@ export UV_PYTHON := "3.11"
 default:
     @just --list
 
-# Install the environment: Python 3.11, the dev tools and PARAM (uv sync)
+# Install the environment: Python 3.11 and the dev tools (uv sync)
 setup:
     uv sync
 

@@ -3,7 +3,7 @@
 # Prove that a fresh install of Chakra works on the current Python.
 #
 # Steps:
-#   1. build the wheel and install it in a fresh venv, plus the PARAM et_replay package
+#   1. build the wheel and install it in a fresh venv
 #   2. run all six tools with --help (exit code 0)
 #   3. import the generated protobuf modules in a fresh interpreter
 #   4. run chakra_trace_link and chakra_converter on the simple_onerank fixture (traces collected on a GPU)
@@ -13,7 +13,6 @@
 #
 # Usage:   scripts/check_clean_install.sh
 # Env:     PYTHON          interpreter used to create the venvs (default: python3)
-#          PARAM_REF       git ref of facebookresearch/param to install (default: pinned below)
 #          TRACE_SETS      space-separated fixture sets to run (default: every directory in the fixture)
 #          KEEP_WORKDIR=1  do not delete the temporary work directory on exit (default: 0)
 #          FAILURE_ARTIFACTS_DIR  if the run fails, copy the logs and trace outputs into this directory
@@ -21,8 +20,6 @@
 set -euo pipefail
 
 PYTHON="${PYTHON:-python3}"
-PARAM_REF="${PARAM_REF:-7b19f586dd8b267333114992833a0d7e0d601630}"
-PARAM_SPEC="git+https://github.com/facebookresearch/param.git@${PARAM_REF}#subdirectory=et_replay"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 FIXTURE="${REPO_ROOT}/tests/data/simple_onerank_traces.tar.gz"
@@ -108,13 +105,12 @@ mkdir "${WORK}/src"
 WHEEL="$(ls "${WORK}"/dist/*.whl)"
 echo "Built ${WHEEL}"
 
-step "Install the wheel and PARAM et_replay in a fresh venv"
+step "Install the wheel in a fresh venv"
 "${PYTHON}" -m venv "${WORK}/venv"
 VPY="${WORK}/venv/bin/python"
 BIN="${WORK}/venv/bin"
 "${VPY}" -m pip install --quiet --upgrade pip
 "${VPY}" -m pip install "${WHEEL}"
-"${VPY}" -m pip install "${PARAM_SPEC}"
 "${VPY}" -m pip list
 
 # ---------------------------------------------------------------------------------------------------------------------

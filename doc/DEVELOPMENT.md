@@ -39,7 +39,7 @@ just setup
 just gate
 ```
 
-`just setup` installs Python 3.11, the development tools, and PARAM. `just gate` must pass before you start to change code.
+`just setup` installs Python 3.11 and the development tools. `just gate` must pass before you start to change code.
 
 ## Daily steps
 
@@ -77,6 +77,8 @@ Run `just` to see the list.
 | Change a `.proto` file | `just test` rebuilds the generated code. With pip, run `pip install .` again. |
 | Add a runtime dependency | Add it to `dependencies` in `pyproject.toml`. |
 | Add or change a development tool | Change `[dependency-groups]` in `pyproject.toml` and `requirements-dev.txt`. `just test` fails when they differ. |
+| Read a host trace in Python | Use `HostTrace.from_file` in `src/host_trace/trace.py`. `chakra_trace_link` and `chakra_converter` both use it. |
+| Support a new PyTorch trace format | Add an entry to `FORMAT_CHANGES` in `src/host_trace/versions.py`: the version, the PyTorch release and the keys that each node gains. A new schema number without a format change needs no change. |
 
 ## Run the CI workflows on your computer
 
@@ -110,13 +112,12 @@ The `pip` setup still works. Use Python 3.11, the version that CI uses.
 python3.11 -m venv .venv
 source .venv/bin/activate
 pip install .
-pip install "git+https://github.com/facebookresearch/param.git@7b19f586dd8b267333114992833a0d7e0d601630#subdirectory=et_replay"
 pip install -r requirements-dev.txt
 python -m pytest tests
 ruff format --check . && ruff check . && pyright && vulture src/ tests/
 ```
 
-The second `pip install` line installs PARAM, which Chakra needs. `pip install .` is not an editable install. Run it again after you change code.
+`pip install .` is not an editable install. Run it again after you change code.
 
 ## Python version
 

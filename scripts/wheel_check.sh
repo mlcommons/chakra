@@ -47,8 +47,7 @@ uv pip install --quiet --python "$python" "protobuf==$floor"
 "$python" -c "$check"
 
 # 3. The commands start. With no arguments, argparse exits with 2, as in the CI end-to-end workflow.
-# chakra_trace_link is not tried here: it needs PARAM (et_replay).
-for command in chakra_converter chakra_jsonizer chakra_timeline_visualizer chakra_visualizer; do
+for command in chakra_trace_link chakra_converter chakra_jsonizer chakra_timeline_visualizer chakra_visualizer; do
     "$work/venv/bin/$command" >/dev/null 2>&1 || [ $? -eq 2 ] || {
         echo "wheel_check: $command does not start" >&2
         exit 1

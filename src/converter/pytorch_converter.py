@@ -1,4 +1,3 @@
-import json
 import logging
 from typing import IO, Dict, List, Optional, Set, Tuple
 
@@ -14,11 +13,18 @@ from ...schema.protobuf.et_def_pb2 import (
     METADATA_NODE,
     REDUCE_SCATTER,
     GlobalMetadata,
+    NodeType,
 )
 from ...schema.protobuf.et_def_pb2 import AttributeProto as ChakraAttr
 from ...schema.protobuf.et_def_pb2 import Node as ChakraNode
+from ..host_trace.errors import HostTraceError
+from ..host_trace.names import CORE_ATTRS, TENSOR_KEYS, THREAD_ANNOTATION
+from ..host_trace.trace import HostTrace
 from ..third_party.utils.protolib import encodeMessage as encode_message
-from .pytorch_node import PyTorchNode, PyTorchNodeType
+from .converter_node import ConverterNode, ConverterNodeType
+
+# Top-level keys of a host trace that the converter writes into the .et metadata.
+METADATA_KEYS = ("schema", "pid", "time", "start_ts", "finish_ts")
 
 
 class PyTorchConverter:
@@ -41,12 +47,19 @@ class PyTorchConverter:
             simulate (bool): Flag to indicate whether to simulate the execution of the converted trace. If True,
                 the method will simulate the execution after writing the protobuf trace to the output file.
         """
-        json_trace = self.load_json_execution_traces(input_filename)
-        json_metadata, json_node_map = self.parse_json_trace(json_trace)
+        trace = HostTrace.from_file(input_filename, node_class=ConverterNode)
+        json_metadata = self.read_metadata(trace)
+        json_node_map = trace.nodes
+        self.register_converter_links(json_node_map)
 
         protobuf_node_map = {}
         self.convert_json_to_protobuf_nodes(json_node_map, protobuf_node_map)
         root_node_list = [node for node in protobuf_node_map.values() if self.is_root_node(node.name)]
+        if not root_node_list:
+            logging.warning(
+                f"{input_filename}: no thread root (a node named {THREAD_ANNOTATION}). The conversion starts from the "
+                "thread roots, so no node gets a dependency and the .et will contain no nodes."
+            )
         for root_node in root_node_list:
             self.convert_ctrl_dep_to_data_dep(json_node_map, protobuf_node_map, root_node)
 
@@ -61,70 +74,36 @@ class PyTorchConverter:
         if simulate:
             self.simulate_execution(json_node_map, protobuf_node_map, parent_to_children_map)
 
-    def load_json_execution_traces(self, input_filename: str) -> Dict:
+    def read_metadata(self, trace: HostTrace) -> Dict:
         """
-        Load Chakra host + device execution traces in JSON format from a file.
+        Return the five top-level keys of the trace that the converter writes into the .et (METADATA_KEYS).
 
         Args:
-            input_filename (str): Input Chakra host + device execution trace in the JSON format.
+            trace (HostTrace): The parsed trace.
 
         Returns:
-            Dict: The loaded Chakra host + device execution trace data.
-        """
-        logging.debug(f"Loading Chakra host + device execution traces in JSON format from file: {input_filename}")
-        with open(input_filename, "r") as json_file:
-            return json.load(json_file)
+            Dict: The keys and their values.
 
-    def parse_json_trace(self, json_trace: Dict) -> Tuple[Dict, Dict[int, PyTorchNode]]:
+        Raises:
+            HostTraceError: If one is missing.
         """
-        Parse and instantiate PyTorch nodes from execution trace data.
+        missing = [key for key in METADATA_KEYS if key not in trace.raw]
+        if missing:
+            raise HostTraceError(
+                f"{trace.source}: missing top-level key(s) {', '.join(missing)}, which chakra_converter writes into "
+                "the .et metadata"
+            )
+        return {key: trace.raw[key] for key in METADATA_KEYS}
+
+    def register_converter_links(self, json_node_map: Dict[int, ConverterNode]) -> None:
+        """
+        Register on each parent the children the conversion looks up: GPU children, record_param_comms and NCCL nodes.
+
+        The tree itself (children) is built by host_trace when the trace is read; this adds the converter's own links on
+        top of it, with the same rule: a node is linked to its parent if the parent is in the trace and is not itself.
 
         Args:
-            json_trace (Dict): The execution trace data.
-
-        Extract node information, sort nodes by timestamp, and establish parent-child relationships among them.
-
-        Returns:
-            Tuple: A tuple containing JSON metadata and dictionary of PyTorch node objects.
-        """
-        logging.debug("Extracting and processing node data from execution trace.")
-
-        json_metadata = {
-            "schema": json_trace["schema"],
-            "pid": json_trace["pid"],
-            "time": json_trace["time"],
-            "start_ts": json_trace["start_ts"],
-            "finish_ts": json_trace["finish_ts"],
-        }
-
-        logging.debug(f"Parsed JSON metadata: {json_metadata}")
-
-        json_nodes = json_trace["nodes"]
-        node_count = len(json_nodes)
-        logging.debug(f"Number of nodes in JSON trace: {node_count}")
-
-        json_node_map = {node_data["id"]: PyTorchNode(json_trace["schema"], node_data) for node_data in json_nodes}
-        json_node_root_nids = []
-        json_node_map = self.establish_parent_child_relationships(json_node_map, json_node_root_nids)
-        return json_metadata, json_node_map
-
-    def establish_parent_child_relationships(
-        self, json_node_map: Dict[int, PyTorchNode], json_node_root_nids: List[int]
-    ) -> Dict[int, PyTorchNode]:
-        """
-        Establish parent-child relationships among JSON nodes and count the node types.
-
-        In Chakra host execution traces, the parent-child relationship is represented in the ctrl dep or parent field.
-        The name of the field is determined by the schema version of the Chakra host execution traces. When a function
-        calls multiple functions, the callee functions appear as children nodes in the control dependency. This method
-        is responsible for reading such dependencies and updating the field accordingly.
-
-        Args:
-            json_node_map (Dict[int, PyTorchNode]): Dictionary of JSON node objects.
-            json_node_root_nids (List[int]): List to store root node IDs.
-
-        Returns:
-            Dict[int, PyTorchNode]: Dictionary of JSON nodes with established relationships.
+            json_node_map (Dict[int, ConverterNode]): The trace's nodes by id, with the tree built.
         """
         node_type_counts = {
             "total_op": 0,
@@ -137,13 +116,11 @@ class PyTorchConverter:
 
         for json_node in json_node_map.values():
             parent_id = json_node.parent
-            if parent_id in json_node_map:
-                self.process_parent_child_relationships(json_node_map, json_node, parent_id)
+            if parent_id in json_node_map and parent_id != json_node.id:
+                self.register_child(json_node_map[parent_id], json_node)
 
             if self.is_root_node(json_node.name):
-                json_node_root_nids.append(json_node.id)
                 node_type_counts["root_op"] += 1
-
             node_type_counts["total_op"] += 1
             if json_node.is_cpu_op():
                 node_type_counts["cpu_op"] += 1
@@ -157,46 +134,14 @@ class PyTorchConverter:
         for node_type, count in node_type_counts.items():
             logging.debug(f"{node_type}: {count}")
 
-        return json_node_map
-
-    def is_root_node(self, node_name: str) -> bool:
+    def register_child(self, parent_node: ConverterNode, json_node: ConverterNode) -> None:
         """
-        Check if a given node name corresponds to a root node in the Chakra host execution trace.
-
-        In the context of Chakra host execution traces, root nodes are the starting points of execution traces.
-        These nodes typically do not have parent nodes and act as the original sources of execution flow.
-        The execution trace has a call-stack-like structure in the ctrl-dep field (or parent field), and root
-        nodes should be identified during the process of conversion.
-
-        Chakra host execution traces may have multiple root nodes. These root nodes can be identified with specific
-        keywords as shown in this method. Identifying root nodes is essential for correctly converting and representing
-        the execution trace in the Chakra protobuf format.
+        Register one child on its parent, if it is a node the conversion looks up through the parent.
 
         Args:
-            node_name (str): The name of the node to check.
-
-        Returns:
-            bool: True if the node name corresponds to a root node, False otherwise.
+            parent_node (ConverterNode): The parent node.
+            json_node (ConverterNode): Its child.
         """
-        return node_name in [
-            "[pytorch|profiler|execution_graph|thread]",
-            "[pytorch|profiler|execution_trace|thread]",
-        ]
-
-    def process_parent_child_relationships(
-        self, json_node_map: Dict[int, PyTorchNode], json_node: PyTorchNode, parent_id: int
-    ) -> None:
-        """
-        Process the parent-child relationships for Chakra JSON nodes.
-
-        Args:
-            json_node_map (Dict[int, PyTorchNode]): Dictionary of JSON node objects.
-            json_node (PyTorchNode): The current JSON node being processed.
-            parent_id (int): The ID of the parent node.
-        """
-        parent_node = json_node_map[parent_id]
-        parent_node.add_child(json_node)
-
         if json_node.is_gpu_op():
             parent_node.add_gpu_child(json_node)
 
@@ -212,8 +157,20 @@ class PyTorchConverter:
             # This registration allows the converter to easily identify the communication operator to use.
             parent_node.nccl_node = json_node
 
+    def is_root_node(self, node_name: str) -> bool:
+        """
+        Check if a node name is the name of a thread root, the node the converter starts each thread's conversion from.
+
+        Args:
+            node_name (str): The name of the node to check.
+
+        Returns:
+            bool: True if the node name is a thread root's name, False otherwise.
+        """
+        return node_name == THREAD_ANNOTATION
+
     def convert_json_to_protobuf_nodes(
-        self, json_node_map: Dict[int, PyTorchNode], protobuf_node_map: Dict[int, ChakraNode]
+        self, json_node_map: Dict[int, ConverterNode], protobuf_node_map: Dict[int, ChakraNode]
     ) -> None:
         """
         Convert JSON nodes to Protobuf nodes.
@@ -222,15 +179,11 @@ class PyTorchConverter:
         will be handled by the convert_ctrl_dep_to_data_dep method.
 
         Args:
-            json_node_map (Dict[int, PyTorchNode]): Dictionary of JSON nodes to be converted.
+            json_node_map (Dict[int, ConverterNode]): Dictionary of JSON nodes to be converted.
             protobuf_node_map (Dict[int, ChakraNode]): Dictionary where the converted Protobuf nodes will be stored.
         """
         for _, json_node in json_node_map.items():
-            if (
-                (json_node.get_op_type() == PyTorchNodeType.CPU_OP)
-                or (json_node.get_op_type() == PyTorchNodeType.LABEL)
-                or (json_node.get_op_type() == PyTorchNodeType.METADATA)
-            ):
+            if json_node.op_type in (ConverterNodeType.CPU_OP, ConverterNodeType.METADATA):
                 chakra_node = self.convert_json_to_protobuf_node(json_node_map, protobuf_node_map, json_node)
                 protobuf_node_map[chakra_node.id] = chakra_node
 
@@ -246,8 +199,8 @@ class PyTorchConverter:
                                 ChakraAttr(name="comm_type", int64_val=collective_comm_type),
                                 ChakraAttr(name="comm_size", int64_val=pytorch_gpu_node.comm_size),
                                 *(
-                                    [ChakraAttr(name="pg_name", string_val=pytorch_gpu_node.pg_name)]
-                                    if pytorch_gpu_node.pg_name != ""
+                                    [ChakraAttr(name="pg_name", string_val=pytorch_gpu_node.comm_pg_name)]
+                                    if pytorch_gpu_node.comm_pg_name != ""
                                     else []
                                 ),
                             ]
@@ -258,8 +211,8 @@ class PyTorchConverter:
                             [
                                 ChakraAttr(name="comm_size", int64_val=pytorch_gpu_node.comm_size),
                                 *(
-                                    [ChakraAttr(name="pg_name", string_val=pytorch_gpu_node.pg_name)]
-                                    if pytorch_gpu_node.pg_name != ""
+                                    [ChakraAttr(name="pg_name", string_val=pytorch_gpu_node.comm_pg_name)]
+                                    if pytorch_gpu_node.comm_pg_name != ""
                                     else []
                                 ),
                             ]
@@ -269,12 +222,12 @@ class PyTorchConverter:
 
     def convert_json_to_protobuf_node(
         self,
-        json_node_map: Dict[int, PyTorchNode],
+        json_node_map: Dict[int, ConverterNode],
         protobuf_node_map: Dict[int, ChakraNode],
-        json_node: PyTorchNode,
+        json_node: ConverterNode,
     ) -> ChakraNode:
         """
-        Convert a JSON node (PyTorchNode) to a protobuf node (ChakraNode).
+        Convert a JSON node (ConverterNode) to a protobuf node (ChakraNode).
 
         This method takes a JSON node from the Chakra host + device execution trace and converts it to a protobuf node.
         The conversion includes transferring attributes, types, and dependencies from the JSON node to the protobuf
@@ -282,14 +235,16 @@ class PyTorchConverter:
         to filter them out.
 
         Args:
-            json_node_map (Dict[int, PyTorchNode]): Dictionary of JSON nodes.
+            json_node_map (Dict[int, ConverterNode]): Dictionary of JSON nodes.
             protobuf_node_map (Dict[int, ChakraNode]): Dictionary of protobuf nodes.
-            json_node (PyTorchNode): The JSON node to convert.
+            json_node (ConverterNode): The JSON node to convert.
 
         Returns:
             ChakraNode: The converted protobuf node.
         """
         logging.debug(f"Converting JSON node ID {json_node.id} to protobuf node.")
+        json_node.require_attrs(CORE_ATTRS, "chakra_converter")
+        json_node.require_tensor_keys(TENSOR_KEYS, "chakra_converter")
 
         protobuf_node = ChakraNode()
         protobuf_node.id = json_node.id
@@ -327,17 +282,17 @@ class PyTorchConverter:
         return protobuf_node
 
     def get_protobuf_node_type_from_json_node(
-        self, json_node_map: Dict[int, PyTorchNode], json_node: PyTorchNode
-    ) -> int:
+        self, json_node_map: Dict[int, ConverterNode], json_node: ConverterNode
+    ) -> NodeType:
         """
         Determine the Protobuf node type from a Chakra node.
 
         Args:
-            json_node_map (Dict[int, PyTorchNode]): Dictionary of JSON nodes.
-            json_node (PyTorchNode): The JSON node to determine the type of.
+            json_node_map (Dict[int, ConverterNode]): Dictionary of JSON nodes.
+            json_node (ConverterNode): The JSON node to determine the type of.
 
         Returns:
-            int: The corresponding Chakra node type.
+            NodeType: The corresponding Chakra node type.
         """
         if json_node.is_metadata_op():
             return METADATA_NODE
@@ -350,7 +305,7 @@ class PyTorchConverter:
                     else parent_node.name
                 )
                 if parent_node.name == "record_param_comms" and parent_node.pg_name != "":
-                    json_node.pg_name = parent_node.pg_name
+                    json_node.comm_pg_name = parent_node.pg_name
                 if "send" in keyword:
                     return COMM_SEND_NODE
                 if "recv" in keyword:
@@ -404,7 +359,7 @@ class PyTorchConverter:
 
     def convert_ctrl_dep_to_data_dep(
         self,
-        json_node_map: Dict[int, PyTorchNode],
+        json_node_map: Dict[int, ConverterNode],
         protobuf_node_map: Dict[int, ChakraNode],
         chakra_node: ChakraNode,
     ) -> None:
@@ -425,7 +380,7 @@ class PyTorchConverter:
         ensure that the execution flow across multiple threads is correctly represented.
 
         Args:
-            json_node_map (Dict[int, PyTorchNode]): Dictionary of PyTorch nodes.
+            json_node_map (Dict[int, ConverterNode]): Dictionary of PyTorch nodes.
             protobuf_node_map (Dict[int, ChakraNode]): Dictionary of Chakra nodes.
             chakra_node (ChakraNode): The starting node for the traversal and dependency processing.
         """
@@ -444,9 +399,9 @@ class PyTorchConverter:
             if not json_node:
                 continue
 
-            node_op_type = json_node.get_op_type()
+            node_op_type = json_node.op_type
 
-            if node_op_type == PyTorchNodeType.GPU_OP:
+            if node_op_type == ConverterNodeType.GPU_OP:
                 if last_visited_any and last_visited_any.id not in current_node.data_deps:
                     current_node.data_deps.append(last_visited_any.id)
                     logging.debug(
@@ -676,7 +631,7 @@ class PyTorchConverter:
     # ruff: noqa: C901
     def simulate_execution(
         self,
-        json_node_map: Dict[int, PyTorchNode],
+        json_node_map: Dict[int, ConverterNode],
         protobuf_node_map: Dict[int, ChakraNode],
         parent_to_children_map: Dict[int, List[int]],
     ) -> None:
@@ -687,7 +642,7 @@ class PyTorchConverter:
         by dependency resolution. A simplistic global clock is used to model the execution time.
 
         Args:
-            json_node_map (Dict[int, PyTorchNode]): The PyTorch nodes to reference for additional debugrmation.
+            json_node_map (Dict[int, ConverterNode]): The PyTorch nodes to reference for additional debugrmation.
             protobuf_node_map (Dict[int, ChakraNode]): The Chakra nodes to be simulated.
             parent_to_children_map (Dict[int, List[int]]): Mapping from parent node IDs to their child node IDs.
         """

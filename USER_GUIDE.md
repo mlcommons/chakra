@@ -31,14 +31,7 @@ $ pip install https://github.com/mlcommons/chakra/archive/refs/heads/main.zip
 $ pip install https://github.com/mlcommons/chakra/archive/ae7c671db702eb1384015bb2618dc753eed787f2.zip
 ```
 
-### Step 3: Install PARAM
-Installing PARAM is necessary for Chakra to function properly as it imports essential components from it.
-
-```bash
-$ pip install "git+https://github.com/facebookresearch/param.git@7b19f586dd8b267333114992833a0d7e0d601630#subdirectory=et_replay"
-```
-
-### Step 4: Uninstalling Chakra
+### Step 3: Uninstalling Chakra
 To uninstall Chakra, use the following command within the virtual environment.
 
 ```bash
@@ -53,7 +46,6 @@ $ pip uninstall mlc-chakra
 $ uv venv --python 3.11
 $ source .venv/bin/activate
 $ uv pip install mlc-chakra
-$ uv pip install "git+https://github.com/facebookresearch/param.git@7b19f586dd8b267333114992833a0d7e0d601630#subdirectory=et_replay"
 ```
 
 To uninstall Chakra, run `uv pip uninstall mlc-chakra`.
@@ -66,8 +58,10 @@ $ chakra_trace_link \
     --chakra-host-trace /path/to/chakra_host_trace \
     --chakra-device-trace /path/to/chakra_device_trace \
     --rank [RANK] \
-    --output-file /path/to/chakra_host_device_trace.json
+    --output-file /path/to/chakra_host_device_trace.json \
+    [--log-level LEVEL]
 ```
+* --log-level: (Optional) Log verbosity: DEBUG, INFO (the default), WARNING or ERROR.
 
 ### Execution Trace Converter (chakra_converter)
 Converts the execution traces from `chakra_trace_link` into traces in the protobuf format. It is responsible for identifying and encoding dependencies for simulation as well. The converter is designed for any downstream simulators that take Chakra execution traces in the protobuf format. It takes an input file in another format and generates a Chakra execution trace output in the protobuf format.
@@ -80,6 +74,24 @@ $ chakra_converter PyTorch \
 * --input: Path to the input file containing the merged Chakra host and device traces in JSON format.
 * --output: Path to the output file where the converted Chakra trace will be saved in protobuf format.
 * --simulate: (Optional) Enable simulation of operators after the conversion for validation and debugging purposes. This option allows simulation of traces without running them through a simulator. Users can validate the converter or simulator against actual measured values using tools like chrome://tracing or https://perfetto.dev/. Read the duration of the timeline and compare the total execution time against the final simulation time of a trace. Disabled by default because it takes a long time.
+
+### Host traces read by chakra_trace_link and chakra_converter
+Both tools read Chakra host traces (PyTorch execution traces) with the same parser, whether the trace comes straight from PyTorch or from `chakra_trace_link`.
+* **PyTorch versions:** traces from PyTorch 2.2 or later (schema `1.0.2` and later, for example `1.1.1-chakra.0.0.4`). PyTorch 2.0 and 2.1 wrote an older format, which both tools reject with an error. A schema newer than the newest one Chakra knows is read with the newest known rules, after a warning.
+* **Compressed traces:** a path ending in `gz` is read as gzip-compressed JSON, by both tools. `chakra_trace_link` also writes gzip-compressed JSON when `--output-file` ends in `gz`.
+* **Errors** name the file, the node id and what is missing, for example `node 13 (aten::normal_): missing attribute(s) tid, which chakra_converter needs`.
+* **A trace without a thread root** (a node named `[pytorch|profiler|execution_trace|thread]`) converts to an `.et` without nodes; the converter warns about it.
+
+Changes from earlier versions of Chakra:
+* `pip install` alone is enough: the separate PARAM install is no longer needed.
+* `chakra_trace_link --log-level` works; it had no effect before. The linker logs in Python's default format.
+* The converter reads schemas `1.0.4` and `1.1.1-chakra.1.0.0`, and newer schemas with a warning. `chakra_trace_link` rejects PyTorch 2.0 and 2.1 traces, as the converter already did.
+* `chakra_trace_link` no longer rejects a trace that lacks node attributes it does not use (such as `tid`), and no longer hangs on a node that is its own ancestor.
+* A trace with two nodes of the same id is rejected; before, the later node silently replaced the earlier one.
+* The PyTorch 2.0 thread-root name `[pytorch|profiler|execution_graph|thread]` is no longer recognised; such traces (schema 1.0.1) are rejected anyway.
+* A trace file is read as gzip when its name ends in `gz`. A name that doesn't match the content is an error that says so.
+* `chakra_trace_link --output-file` ending in `gz` writes gzip-compressed JSON; before, it wrote plain JSON under that name.
+* For valid traces, the output of both tools is unchanged.
 
 ### Running Execution Traces on ASTRA-sim
 Chakra execution traces in the protobuf format can be run on ASTRA-sim, which reads them with its own built-in feeder.

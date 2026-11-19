@@ -12,7 +12,7 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 
 
-# These tests read files that other branches also change: requirements-dev.txt, the workflows, the PARAM pin.
+# These tests read files that other branches also change: requirements-dev.txt and the workflows.
 # `just test` and `just gate` set CHAKRA_TOOLING_TESTS=1, so they run these tests. The existing CI job does not set it,
 # so it does not fail an open branch. Phase 3 makes CI call `just`, and then they run there too.
 COUPLED = pytest.mark.skipif(
@@ -125,16 +125,6 @@ def test_gitignore_covers_uv_environment_and_lock() -> None:
     # Phase 1 does not commit uv.lock (issues #237 and #254 still change the dependencies). Phase 2 removes this line.
     lines = {line.strip() for line in (ROOT / ".gitignore").read_text().splitlines()}
     assert {".venv/", "uv.lock"} <= lines
-
-
-@COUPLED
-def test_param_pin_in_pyproject_equals_the_one_in_ci() -> None:
-    # Temporary: PARAM (et_replay) is installed from git at one commit. Issue #237 vendors it and removes all of this.
-    source = _pyproject()["tool"]["uv"]["sources"]["et-replay"]
-    assert "et-replay" in "".join(_pyproject()["dependency-groups"]["param"])
-    ci_commits = {c for text in _workflow_texts().values() for c in re.findall(r"git checkout ([0-9a-f]{40})", text)}
-    assert ci_commits <= {source["rev"]}
-    assert ci_commits, "CI no longer pins PARAM: delete the param group and this test"
 
 
 REQUIRED_RECIPES = {
@@ -346,14 +336,10 @@ def test_developer_guide_says_what_to_use_on_windows() -> None:
     assert "Ubuntu" not in section  # nobody tested Ubuntu
 
 
-@COUPLED
-def test_docs_use_the_same_param_commit_as_pyproject() -> None:
-    commit = _pyproject()["tool"]["uv"]["sources"]["et-replay"]["rev"]
+def test_user_guide_shows_the_uv_install() -> None:
     user_guide = _section((ROOT / "USER_GUIDE.md").read_text(), "### Alternative: install with uv")
     for command in ("uv venv", "uv pip install mlc-chakra"):
         assert command in user_guide
-    assert commit in user_guide
-    assert commit in _section((ROOT / "doc" / "DEVELOPMENT.md").read_text(), "## The classic setup")
 
 
 def test_uv_rebuilds_the_package_when_a_proto_file_changes() -> None:
@@ -386,11 +372,9 @@ def test_section_ignores_comment_lines_in_code_blocks() -> None:
     assert "other" not in section
 
 
-def test_classic_setup_installs_param_before_it_runs_the_tests() -> None:
-    # The tests import et_replay (PARAM). Without it, pytest cannot collect them. The setup also uses Python 3.11 and
-    # runs the lint commands that the Python Lint workflow runs.
+def test_classic_setup_uses_python_3_11_and_the_lint_commands() -> None:
+    # The setup uses Python 3.11 and runs the lint commands that the Python Lint workflow runs.
     section = _section((ROOT / "doc" / "DEVELOPMENT.md").read_text(), "## The classic setup")
-    assert section.index("facebookresearch/param") < section.index("python -m pytest")
     assert "python3.11 -m venv" in section
     for command in ("ruff check .", "pyright", "vulture src/ tests/"):
         assert command in section

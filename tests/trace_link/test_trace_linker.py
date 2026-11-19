@@ -1,14 +1,15 @@
+import logging
 from unittest.mock import MagicMock, patch
 
 import pytest
+from chakra.src.host_trace.errors import HostTraceError
+from chakra.src.host_trace.names import PROCESS_ANNOTATION, THREAD_ANNOTATION
+from chakra.src.host_trace.node import HostNode
+from chakra.src.host_trace.reader import GZIP_MAGIC, read_trace_json
+from chakra.src.host_trace.trace import HostTrace
 from chakra.src.trace_link.kineto_operator import KinetoOperator
 from chakra.src.trace_link.trace_linker import TraceLinker
 from chakra.src.trace_link.unique_id_assigner import UniqueIdAssigner
-from et_replay.execution_trace import (
-    EXECUTION_TRACE_PROCESS_ANNOTATION,
-    EXECUTION_TRACE_THREAD_ANNOTATION,
-)
-from et_replay.execution_trace import Node as PyTorchOperator
 from hta.analyzers.critical_path_analysis import CPEdgeType, CPGraph
 
 
@@ -29,7 +30,7 @@ def test_link_traces(mock_map_ops, mock_add_annotations, mock_construct_et_plus,
     mock_map_ops.return_value = ({}, {}, {}, {}, {})
     mock_construct_et_plus.return_value = {}
 
-    host_ops = [MagicMock(spec=PyTorchOperator)]
+    host_ops = [MagicMock(spec=HostNode)]
     kineto_cpu_ops = [MagicMock(spec=KinetoOperator)]
     sorted_kineto_cpu_ops = [MagicMock(spec=KinetoOperator)]
     sorted_kineto_cpu_op_ts = [100]
@@ -42,7 +43,7 @@ def test_link_traces(mock_map_ops, mock_add_annotations, mock_construct_et_plus,
     kineto_external_id_to_kineto_op_map = {1: MagicMock(spec=KinetoOperator)}
 
     trace_linker.link_traces(
-        "pytorch_et_file",
+        {"nodes": []},
         host_ops,
         kineto_cpu_ops,
         sorted_kineto_cpu_ops,
@@ -352,9 +353,9 @@ def test_add_thread_and_process_annotations(trace_linker):
     )
 
     assert len(kineto_cpu_ops) == 3
-    assert kineto_cpu_ops[0].name == EXECUTION_TRACE_PROCESS_ANNOTATION
-    assert kineto_cpu_ops[1].name == EXECUTION_TRACE_THREAD_ANNOTATION
-    assert kineto_cpu_ops[2].name == EXECUTION_TRACE_THREAD_ANNOTATION
+    assert kineto_cpu_ops[0].name == PROCESS_ANNOTATION
+    assert kineto_cpu_ops[1].name == THREAD_ANNOTATION
+    assert kineto_cpu_ops[2].name == THREAD_ANNOTATION
 
     assert len(sorted_kineto_cpu_ops) == 3
     assert sorted_kineto_cpu_ops[0].timestamp == kineto_cpu_ops[0].timestamp
@@ -442,7 +443,7 @@ def test_find_parent_cpu_op(mock_find_closest_op, trace_linker):
     "expected_timestamp, expected_inter_thread_dep",
     [
         (
-            MagicMock(spec=PyTorchOperator, id=1),
+            MagicMock(spec=HostNode, id=1),
             MagicMock(
                 spec=KinetoOperator,
                 external_id="1",
@@ -458,7 +459,7 @@ def test_find_parent_cpu_op(mock_find_closest_op, trace_linker):
             None,
         ),
         (
-            MagicMock(spec=PyTorchOperator, id=2),
+            MagicMock(spec=HostNode, id=2),
             MagicMock(
                 spec=KinetoOperator,
                 external_id="2",
@@ -517,7 +518,7 @@ def test_link_ops(
 
 
 def test_link_ops_with_no_gpu_ops(trace_linker):
-    host_op = MagicMock(spec=PyTorchOperator, id=1)
+    host_op = MagicMock(spec=HostNode, id=1)
     kineto_op = MagicMock(
         spec=KinetoOperator,
         external_id="1",
@@ -568,7 +569,7 @@ def test_get_inter_thread_dep_none(trace_linker):
 
 def test_link_gpu_ops(trace_linker):
     # Create a mock PyTorch operator
-    host_op = MagicMock(spec=PyTorchOperator)
+    host_op = MagicMock(spec=HostNode)
     host_op.id = 123
 
     # Create mock Kineto GPU operators
@@ -581,10 +582,8 @@ def test_link_gpu_ops(trace_linker):
 
 
 @patch("chakra.src.trace_link.trace_linker.TraceLinker.process_op_and_dependents")
-@patch("builtins.open", new_callable=MagicMock)
-@patch("json.load")
-def test_construct_et_plus_data(mock_json_load, mock_open, mock_process_op_and_dependents, trace_linker):
-    mock_json_load.return_value = {"nodes": [{"id": 1}, {"id": 2}]}
+def test_construct_et_plus_data(mock_process_op_and_dependents, trace_linker):
+    host_trace_data = {"nodes": [{"id": 1}, {"id": 2}]}
     mock_process_op_and_dependents.side_effect = lambda x, *args: [{"id": x["id"] + 2}]
 
     host_op_id_to_kineto_ops_map = {1: [], 2: []}
@@ -594,7 +593,7 @@ def test_construct_et_plus_data(mock_json_load, mock_open, mock_process_op_and_d
     host_op_id_to_inter_thread_dep_map = {1: None, 2: None}
 
     pytorch_et_plus_data = trace_linker.construct_et_plus_data(
-        "path/to/pytorch_et_file",
+        host_trace_data,
         host_op_id_to_kineto_ops_map,
         host_op_id_to_inclusive_dur_map,
         host_op_id_to_exclusive_dur_map,
@@ -709,3 +708,66 @@ def test_dump_chakra_execution_trace_plus(mock_json_dump, mock_open, trace_linke
     mock_json_dump.assert_called_once_with(
         {"nodes": [{"id": 1}, {"id": 2}]}, mock_open.return_value.__enter__(), indent=4
     )
+
+
+@pytest.mark.parametrize("name", ["linked.json", "linked.json.gz"])
+def test_dumped_trace_is_read_back_by_the_reader(name, trace_linker, tmp_path) -> None:
+    data = {"schema": "1.1.1-chakra.0.0.4", "nodes": [{"id": 2}, {"id": 1}]}
+    path = tmp_path / name
+    trace_linker.dump_chakra_execution_trace_plus(data, str(path))
+    assert (path.read_bytes()[:2] == GZIP_MAGIC) is name.endswith("gz")
+    assert read_trace_json(str(path)) == {"schema": "1.1.1-chakra.0.0.4", "nodes": [{"id": 1}, {"id": 2}]}
+
+
+def _host_node(node_id: int, name: str, parent: int) -> dict:
+    io = {"values": [], "shapes": [], "types": []}
+    return {
+        "id": node_id,
+        "name": name,
+        "ctrl_deps": parent,
+        "inputs": io,
+        "outputs": io,
+        "attrs": [{"name": "rf_id", "type": "uint64", "value": node_id}],
+    }
+
+
+def test_collect_host_ops_are_the_nodes_under_the_process_root_sorted_by_id(trace_linker) -> None:
+    nodes = [
+        _host_node(3, "op_b", 2),
+        _host_node(1, PROCESS_ANNOTATION, 1),
+        _host_node(2, THREAD_ANNOTATION, 1),
+        _host_node(4, "op_a", 2),
+    ]
+    trace = HostTrace({"schema": "1.0.2-chakra.0.0.4", "nodes": nodes})
+
+    result = trace_linker.collect_host_ops(trace)
+
+    assert [op.id for op in result] == [1, 2, 3, 4]
+
+
+@pytest.mark.parametrize("rf_id", ["missing", None], ids=["missing", "null"])
+def test_collect_host_ops_requires_rf_id(rf_id, trace_linker, make_trace_data) -> None:
+    data = make_trace_data()
+    attrs = data["nodes"][3]["attrs"]
+    if rf_id == "missing":
+        attrs[:] = [a for a in attrs if a["name"] != "rf_id"]
+    else:
+        next(a for a in attrs if a["name"] == "rf_id")["value"] = None
+    with pytest.raises(HostTraceError, match="node 4 \\(addmm\\): rf_id is missing or null"):
+        trace_linker.collect_host_ops(HostTrace(data))
+
+
+def test_collect_host_ops_warns_about_the_nodes_it_leaves_out(trace_linker, make_trace_data, make_node, caplog) -> None:
+    data = make_trace_data()
+    data["nodes"] += [make_node(7, "orphan", 999), make_node(8, "in_cycle", 9), make_node(9, "in_cycle", 8)]
+    with caplog.at_level(logging.WARNING):
+        ops = trace_linker.collect_host_ops(HostTrace(data))
+    assert [op.id for op in ops] == [1, 2, 3, 4, 5]
+    assert "3 of 8 nodes are not under the process root" in caplog.text
+    assert "ids 7, 8, 9" in caplog.text
+
+
+def test_collect_host_ops_gives_no_warning_for_a_clean_trace(trace_linker, make_trace_data, caplog) -> None:
+    with caplog.at_level(logging.WARNING):
+        trace_linker.collect_host_ops(HostTrace(make_trace_data()))
+    assert not caplog.records

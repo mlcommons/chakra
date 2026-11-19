@@ -31,6 +31,7 @@ Repository = "https://github.com/mlcommons/chakra.git"
 "chakra.schema.protobuf" = "schema/protobuf"
 "chakra.src.converter" = "src/converter"
 "chakra.src.generator" = "src/generator"
+"chakra.src.host_trace" = "src/host_trace"
 "chakra.src.jsonizer" = "src/jsonizer"
 "chakra.src.third_party" = "src/third_party"
 "chakra.src.timeline_visualizer" = "src/timeline_visualizer"
@@ -84,10 +85,9 @@ exclude = [
     "**/__pycache__",
     "**/build/",
     "setup.py",
-    "src/third_party/utils/protolib.py"
+    "src/third_party/utils/protolib.py",
 ]
 reportMissingImports = false
-reportAttributeAccessIssue = false
 
 [tool.vulture]
 ignore_names = ["mock_process_thread"]
@@ -103,11 +103,9 @@ dev = [
     "build==1.6.1",
     "twine==7.0.0",
 ]
-# Temporary. PARAM (et_replay) from git. Delete this group and the source below when issue #237 is merged.
-param = ["et-replay"]
 
 [tool.uv]
-default-groups = ["dev", "param"]
+default-groups = ["dev"]
 # Rebuild the package, and so the generated *_pb2.py files, when a .proto file changes. The default keys miss it.
 cache-keys = [
     { file = "pyproject.toml" },
@@ -115,6 +113,3 @@ cache-keys = [
     { file = "setup.cfg" },
     { file = "schema/protobuf/*.proto" },
 ]
-
-[tool.uv.sources]
-et-replay = { git = "https://github.com/facebookresearch/param.git", rev = "7b19f586dd8b267333114992833a0d7e0d601630", subdirectory = "et_replay" }
