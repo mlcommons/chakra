@@ -12,7 +12,6 @@ logger = logging.getLogger(__name__)
 # The node class of a trace: HostNode, or a tool's subclass of it (the converter's ConverterNode).
 N = TypeVar("N", bound=HostNode)
 M = TypeVar("M", bound=HostNode)
-_HOST_NODE: Any = HostNode  # the default node_class, typed Any so that it fits every N
 
 
 class HostTrace(Generic[N]):
@@ -36,7 +35,7 @@ class HostTrace(Generic[N]):
     @overload
     def __init__(self, raw: Dict[str, Any], source: str = ..., *, node_class: Type[N]) -> None: ...
 
-    def __init__(self, raw: Dict[str, Any], source: str = "host trace", node_class: Type[N] = _HOST_NODE) -> None:
+    def __init__(self, raw: Dict[str, Any], source: str = "host trace", node_class: Type[N] = HostNode) -> None:
         self.raw = raw
         self.source = source
         for key in ("schema", "nodes"):
