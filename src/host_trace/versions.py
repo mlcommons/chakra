@@ -2,7 +2,8 @@
 Host trace schema versions: which PyTorch releases changed the node format, and what each version requires.
 
 PyTorch writes the schema as "<format>-chakra.<suffix>", for example "1.1.1-chakra.0.0.4". Only the format version
-decides how a trace is read; the suffix is kept as information (PyTorch has always written "chakra.0.0.4"). Versions are
+decides how a trace is read; the suffix is kept as information. PyTorch has always written "chakra.0.0.4"; the
+"chakra.1.0.0" suffix, read the same way, came from Chakra's own version bump (34f95f9), not from PyTorch. Versions are
 compared as numbers, so a version between two listed ones (the nightly-only 1.0.3 and 1.0.4) gets the rules of the
 older one, and a version newer than the newest listed one is read with the newest rules, after one warning.
 """
@@ -31,7 +32,8 @@ class FormatChange:
     tensor_keys: Tuple[str, ...] = ()
 
 
-# Oldest first. Add an entry only when a PyTorch release changes the node format.
+# Oldest first. Add an entry only when a PyTorch release changes the node format. Every change so far only added keys,
+# and the table can express only that: a release that renames or removes a key needs a per-version rule here.
 FORMAT_CHANGES = (
     FormatChange(
         (1, 0, 2),

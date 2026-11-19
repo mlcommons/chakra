@@ -12,13 +12,11 @@ class ConverterNodeType(Enum):
     Attributes
         CPU_OP (int): Represents a CPU operation.
         GPU_OP (int): Represents a GPU operation (a node chakra_trace_link added for a kernel: it has a category).
-        LABEL (int): Represents a non-operator node (e.g., labels). Never produced at present: see _classify.
         METADATA (int): Represents a metadata node (e.g., process group initialization).
     """
 
     CPU_OP = 1
     GPU_OP = 2
-    LABEL = 3  # Non-operator nodes
     METADATA = 4  # Metadata nodes
 
 
@@ -51,8 +49,6 @@ class ConverterNode(HostNode):
         Return the node's type. Called once, when the node is read: name and category don't change afterwards.
 
         METADATA if the name contains "process_group:init", else GPU_OP if the node has a category, else CPU_OP.
-        LABEL is never returned: every node has outputs (a required key), which has always made a node that is not
-        METADATA or GPU_OP a CPU_OP. The .et output depends on this; a rule for LABEL is a separate decision.
         """
         if "process_group:init" in self.name:
             return ConverterNodeType.METADATA

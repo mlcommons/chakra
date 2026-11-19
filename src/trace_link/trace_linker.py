@@ -1,5 +1,6 @@
 import bisect
 import copy
+import gzip
 import json
 import logging
 import os
@@ -12,6 +13,7 @@ from hta.trace_analysis import TraceAnalysis
 from ..host_trace.errors import HostTraceError
 from ..host_trace.names import PROCESS_ANNOTATION, THREAD_ANNOTATION
 from ..host_trace.node import HostNode
+from ..host_trace.reader import named_gz
 from ..host_trace.trace import HostTrace
 from .chakra_device_trace_loader import ChakraDeviceTraceLoader
 from .kineto_operator import KinetoOperator
@@ -593,7 +595,7 @@ class TraceLinker:
         host_op_id_to_inter_thread_dep_map = {}
 
         for _, host_op in enumerate(host_ops):
-            if (host_op.rf_id is not None) and (host_op.rf_id in kineto_rf_id_to_device_op_map):
+            if host_op.rf_id in kineto_rf_id_to_device_op_map:
                 kineto_op = kineto_rf_id_to_device_op_map[host_op.rf_id]
                 if kineto_op is None:
                     logging.warning(
@@ -1032,6 +1034,8 @@ class TraceLinker:
                 chakra_execution_trace_plus_data["nodes"], key=lambda x: x["id"]
             )
 
-        with open(output_file, "w") as file:
+        with (
+            gzip.open(output_file, "wt", encoding="utf-8") if named_gz(output_file) else open(output_file, "w")
+        ) as file:
             json.dump(chakra_execution_trace_plus_data, file, indent=4)
         logging.debug(f"ET+ data dumped to {output_file}.")

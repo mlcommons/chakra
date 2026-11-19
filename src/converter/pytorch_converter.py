@@ -183,11 +183,7 @@ class PyTorchConverter:
             protobuf_node_map (Dict[int, ChakraNode]): Dictionary where the converted Protobuf nodes will be stored.
         """
         for _, json_node in json_node_map.items():
-            if (
-                (json_node.op_type == ConverterNodeType.CPU_OP)
-                or (json_node.op_type == ConverterNodeType.LABEL)
-                or (json_node.op_type == ConverterNodeType.METADATA)
-            ):
+            if json_node.op_type in (ConverterNodeType.CPU_OP, ConverterNodeType.METADATA):
                 chakra_node = self.convert_json_to_protobuf_node(json_node_map, protobuf_node_map, json_node)
                 protobuf_node_map[chakra_node.id] = chakra_node
 

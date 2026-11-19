@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict, Generic, List, Mapping, Tuple, Type, TypeVar, cast
+from typing import Any, Dict, Generic, List, Mapping, Tuple, Type, TypeVar, cast, overload
 
 from . import versions
 from .errors import HostTraceError
@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 # The node class of a trace: HostNode, or a tool's subclass of it (the converter's ConverterNode).
 N = TypeVar("N", bound=HostNode)
+M = TypeVar("M", bound=HostNode)
 _HOST_NODE: Any = HostNode  # the default node_class, typed Any so that it fits every N
 
 
@@ -29,6 +30,11 @@ class HostTrace(Generic[N]):
         nodes (Dict[int, N]): Every node by id, in file order. Ids are unique: PyTorch assigns them from a
             counter, so a duplicate means a broken file and is an error.
     """
+
+    @overload
+    def __init__(self: "HostTrace[HostNode]", raw: Dict[str, Any], source: str = ...) -> None: ...
+    @overload
+    def __init__(self, raw: Dict[str, Any], source: str = ..., *, node_class: Type[N]) -> None: ...
 
     def __init__(self, raw: Dict[str, Any], source: str = "host trace", node_class: Type[N] = _HOST_NODE) -> None:
         self.raw = raw
@@ -63,10 +69,17 @@ class HostTrace(Generic[N]):
             )
         _attach_children(self.nodes)
 
+    @overload
     @classmethod
-    def from_file(cls, path: str, node_class: Type[N] = _HOST_NODE) -> "HostTrace[N]":
+    def from_file(cls, path: str) -> "HostTrace[HostNode]": ...
+    @overload
+    @classmethod
+    def from_file(cls, path: str, node_class: Type[M]) -> "HostTrace[M]": ...
+
+    @classmethod
+    def from_file(cls, path: str, node_class: Any = HostNode) -> "HostTrace[Any]":
         """Read and parse a host trace file (plain or gzip-compressed JSON)."""
-        return cls(read_trace_json(path), str(path), node_class)
+        return cls(read_trace_json(path), str(path), node_class=node_class)
 
     def process_root(self) -> N:
         """

@@ -78,7 +78,7 @@ $ chakra_converter PyTorch \
 ### Host traces read by chakra_trace_link and chakra_converter
 Both tools read Chakra host traces (PyTorch execution traces) with the same parser, whether the trace comes straight from PyTorch or from `chakra_trace_link`.
 * **PyTorch versions:** traces from PyTorch 2.2 or later (schema `1.0.2` and later, for example `1.1.1-chakra.0.0.4`). PyTorch 2.0 and 2.1 wrote an older format, which both tools reject with an error. A schema newer than the newest one Chakra knows is read with the newest known rules, after a warning.
-* **Compressed traces:** a path ending in `gz` is read as gzip-compressed JSON, by both tools.
+* **Compressed traces:** a path ending in `gz` is read as gzip-compressed JSON, by both tools. `chakra_trace_link` also writes gzip-compressed JSON when `--output-file` ends in `gz`.
 * **Errors** name the file, the node id and what is missing, for example `node 13 (aten::normal_): missing attribute(s) tid, which chakra_converter needs`.
 * **A trace without a thread root** (a node named `[pytorch|profiler|execution_trace|thread]`) converts to an `.et` without nodes; the converter warns about it.
 
@@ -90,6 +90,7 @@ Changes from earlier versions of Chakra:
 * A trace with two nodes of the same id is rejected; before, the later node silently replaced the earlier one.
 * The PyTorch 2.0 thread-root name `[pytorch|profiler|execution_graph|thread]` is no longer recognised; such traces (schema 1.0.1) are rejected anyway.
 * A trace file is read as gzip when its name ends in `gz`. A name that doesn't match the content is an error that says so.
+* `chakra_trace_link --output-file` ending in `gz` writes gzip-compressed JSON; before, it wrote plain JSON under that name.
 * For valid traces, the output of both tools is unchanged.
 
 ### Running Execution Traces on ASTRA-sim

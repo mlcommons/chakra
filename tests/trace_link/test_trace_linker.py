@@ -5,6 +5,7 @@ import pytest
 from chakra.src.host_trace.errors import HostTraceError
 from chakra.src.host_trace.names import PROCESS_ANNOTATION, THREAD_ANNOTATION
 from chakra.src.host_trace.node import HostNode
+from chakra.src.host_trace.reader import GZIP_MAGIC, read_trace_json
 from chakra.src.host_trace.trace import HostTrace
 from chakra.src.trace_link.kineto_operator import KinetoOperator
 from chakra.src.trace_link.trace_linker import TraceLinker
@@ -707,6 +708,15 @@ def test_dump_chakra_execution_trace_plus(mock_json_dump, mock_open, trace_linke
     mock_json_dump.assert_called_once_with(
         {"nodes": [{"id": 1}, {"id": 2}]}, mock_open.return_value.__enter__(), indent=4
     )
+
+
+@pytest.mark.parametrize("name", ["linked.json", "linked.json.gz"])
+def test_dumped_trace_is_read_back_by_the_reader(name, trace_linker, tmp_path) -> None:
+    data = {"schema": "1.1.1-chakra.0.0.4", "nodes": [{"id": 2}, {"id": 1}]}
+    path = tmp_path / name
+    trace_linker.dump_chakra_execution_trace_plus(data, str(path))
+    assert (path.read_bytes()[:2] == GZIP_MAGIC) is name.endswith("gz")
+    assert read_trace_json(str(path)) == {"schema": "1.1.1-chakra.0.0.4", "nodes": [{"id": 1}, {"id": 2}]}
 
 
 def _host_node(node_id: int, name: str, parent: int) -> dict:
