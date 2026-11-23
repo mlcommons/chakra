@@ -9,6 +9,7 @@ cd "$(dirname "$0")/.."
 
 GRPCIO_TOOLS="grpcio-tools==1.80.0"
 PROTO_DIR="schema/protobuf"
+IMPORT_DIR="chakra/schema/protobuf"
 PYTHON="${PYTHON:-python3}"
 
 check=0
@@ -38,13 +39,19 @@ trap 'rm -rf "$work"' EXIT
     exit 1
 }
 
-# --proto_path sets the descriptor names and the imports between the modules.
-mkdir "$work/out"
-"$work/venv/bin/python" -m grpc_tools.protoc --proto_path="$PROTO_DIR" \
-    --python_out="$work/out" --pyi_out="$work/out" "${protos[@]}"
+# The .proto files import each other by package path, so protoc emits package imports. Map that path onto $PROTO_DIR.
+mkdir "$work/gen"
+inputs=()
+for proto in "${protos[@]}"; do
+    inputs+=("$IMPORT_DIR/$(basename "$proto")")
+done
+"$work/venv/bin/python" -m grpc_tools.protoc --proto_path="$IMPORT_DIR=$PROTO_DIR" \
+    --python_out="$work/gen" --pyi_out="$work/gen" "${inputs[@]}"
+# protoc writes the files under the import path.
+out="$work/gen/$IMPORT_DIR"
 
 # The files are committed, so drop protoc's marker that says they are not. No sed -i: it differs on macOS.
-for file in "$work/out"/*_pb2.py; do
+for file in "$out"/*_pb2.py; do
     sed '/^# NO CHECKED-IN PROTOBUF GENCODE$/d' "$file" >"$file.tmp"
     mv "$file.tmp" "$file"
 done
@@ -56,7 +63,7 @@ if [ "$check" -eq 1 ]; then
     if [ "${#current[@]}" -gt 0 ]; then
         cp "${current[@]}" "$work/current/"
     fi
-    if ! diff -ru "$work/current" "$work/out"; then
+    if ! diff -ru "$work/current" "$out"; then
         echo "gen_proto: $PROTO_DIR is out of date. Run scripts/gen_proto.sh and commit the result." >&2
         exit 1
     fi
@@ -68,5 +75,5 @@ fi
 if [ "${#current[@]}" -gt 0 ]; then
     rm -f "${current[@]}"
 fi
-cp "$work/out"/* "$PROTO_DIR/"
-echo "gen_proto: wrote $(cd "$work/out" && echo *) to $PROTO_DIR"
+cp "$out"/* "$PROTO_DIR/"
+echo "gen_proto: wrote $(cd "$out" && echo *) to $PROTO_DIR"
