@@ -134,10 +134,11 @@ def test_pytest_puts_the_repository_folder_on_the_import_path() -> None:
     assert _pyproject()["tool"]["pytest"]["ini_options"]["pythonpath"] == ["."]
 
 
-def test_gitignore_covers_uv_environment_and_lock() -> None:
-    # Phase 1 does not commit uv.lock (issues #237 and #254 still change the dependencies). Phase 2 removes this line.
+def test_gitignore_covers_the_uv_environment_but_not_the_lock() -> None:
+    # uv.lock is committed. It records every package of the environment, so that two people get the same one.
     lines = {line.strip() for line in (ROOT / ".gitignore").read_text().splitlines()}
-    assert {".venv/", "uv.lock"} <= lines
+    assert ".venv/" in lines
+    assert "uv.lock" not in lines
 
 
 REQUIRED_RECIPES = {

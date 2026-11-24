@@ -12,7 +12,6 @@ trace_collection/post_execution/traces
 
 # uv
 .venv/
-uv.lock
 
 # act reads these files. They can hold secrets: never commit them.
 .secrets
