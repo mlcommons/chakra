@@ -1,0 +1,6 @@
+# Commits that `git blame` skips. They changed only the format of the code.
+# Local git: git config blame.ignoreRevsFile .git-blame-ignore-revs
+# GitHub reads this file by its name.
+
+# style: format with ruff 0.17.6 (issue #262)
+c7d613ce04a0637ecc71969f6fb840dc9c8e351a

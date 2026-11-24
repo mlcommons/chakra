@@ -163,6 +163,30 @@ def test_gate_runs_every_check() -> None:
     assert {"lock-check", "lint", "lint-scripts", "types", "test"} <= set(_recipes()["gate"])
 
 
+def _blame_ignored_commits() -> list[str]:
+    lines = (ROOT / ".git-blame-ignore-revs").read_text().splitlines()
+    return [line.strip() for line in lines if line.strip() and not line.startswith("#")]
+
+
+def test_blame_ignore_file_lists_full_commit_hashes() -> None:
+    # GitHub reads this file by its name. A short hash does not work in it. Keep one line for each mass-format commit.
+    commits = _blame_ignored_commits()
+    assert commits
+    for commit in commits:
+        assert re.fullmatch(r"[0-9a-f]{40}", commit), commit
+
+
+@pytest.mark.skipif(shutil.which("git") is None, reason="needs git")
+def test_blame_ignored_commits_are_in_the_history() -> None:
+    # A rebase or a squash merge changes a hash, and the line then points at nothing.
+    shallow = subprocess.run(["git", "rev-parse", "--is-shallow-repository"], cwd=ROOT, capture_output=True, text=True)
+    if shallow.returncode != 0 or shallow.stdout.strip() != "false":
+        pytest.skip("needs a git checkout with the full history")
+    for commit in _blame_ignored_commits():
+        found = subprocess.run(["git", "cat-file", "-e", f"{commit}^{{commit}}"], cwd=ROOT, capture_output=True)
+        assert found.returncode == 0, f"{commit} is not in the history"
+
+
 def test_gate_checks_the_lock_before_any_recipe_that_runs_uv() -> None:
     # `uv run` and `uv sync` rewrite a stale uv.lock without a warning. So the check must come first.
     assert _recipes()["gate"][0] == "lock-check"
