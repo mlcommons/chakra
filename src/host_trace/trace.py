@@ -35,7 +35,7 @@ class HostTrace(Generic[N]):
     @overload
     def __init__(self, raw: Dict[str, Any], source: str = ..., *, node_class: Type[N]) -> None: ...
 
-    def __init__(self, raw: Dict[str, Any], source: str = "host trace", node_class: Type[N] = HostNode) -> None:
+    def __init__(self, raw: Dict[str, Any], source: str = "host trace", node_class: Type[Any] = HostNode) -> None:
         self.raw = raw
         self.source = source
         for key in ("schema", "nodes"):

@@ -74,6 +74,13 @@ def test_is_cpu_op(category, expected):
     assert operator.is_cpu_op() == expected
 
 
+@pytest.mark.parametrize("name, expected", [("ProfilerStep#3", False), ("aten::add", True)])
+def test_is_cpu_op_ignores_profiler_steps_by_name(name, expected):
+    """A CPU operator whose name holds 'ProfilerStep' is not simulatable."""
+    operator = KinetoOperator({"cat": "cpu_op", "name": name, "ph": "X", "dur": 1, "ts": 1, "tid": 1, "args": {}})
+    assert operator.is_cpu_op() is expected
+
+
 @pytest.mark.parametrize(
     "category, expected",
     [

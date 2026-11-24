@@ -414,8 +414,7 @@ class PyTorchConverter:
                     if dep_id not in current_node.data_deps:
                         current_node.data_deps.append(dep_id)
                         logging.debug(
-                            f"CPU Node ID {current_node.id} now has an inter-thread data dependency on Node ID "
-                            f"{dep_id}"
+                            f"CPU Node ID {current_node.id} now has an inter-thread data dependency on Node ID {dep_id}"
                         )
                 if last_visited_non_gpu and last_visited_non_gpu.id not in current_node.data_deps:
                     current_node.data_deps.append(last_visited_non_gpu.id)
@@ -435,8 +434,7 @@ class PyTorchConverter:
                         if prior_node is not None and prior_node.start_time_micros < current_node.start_time_micros:
                             current_node.data_deps.append(sync_dep)
                             logging.debug(
-                                f"Node ID {current_node.id} now has an synchonization dependency on Node ID "
-                                f"{sync_dep}"
+                                f"Node ID {current_node.id} now has an synchonization dependency on Node ID {sync_dep}"
                             )
             # Add children to the stack
             children_chakra_ids = [child.id for child in json_node.children]

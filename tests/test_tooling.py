@@ -121,10 +121,24 @@ def test_uv_installs_the_dev_group_by_default() -> None:
     assert "dev" in _pyproject()["tool"]["uv"]["default-groups"]
 
 
-def test_gitignore_covers_uv_environment_and_lock() -> None:
-    # Phase 1 does not commit uv.lock (issues #237 and #254 still change the dependencies). Phase 2 removes this line.
+def test_pytest_runs_the_tests_folder_and_rejects_unknown_markers() -> None:
+    # A typo in a marker name must fail at once. Without this option, pytest only warns, and the test runs unmarked.
+    options = _pyproject()["tool"]["pytest"]["ini_options"]
+    assert options["testpaths"] == ["tests"]
+    assert "--strict-markers" in options["addopts"]
+
+
+def test_pytest_puts_the_repository_folder_on_the_import_path() -> None:
+    # Some tests import `src.…`. `python -m pytest` finds them, because it adds the current folder to the path.
+    # Bare `pytest` does not, and then it cannot collect those tests.
+    assert _pyproject()["tool"]["pytest"]["ini_options"]["pythonpath"] == ["."]
+
+
+def test_gitignore_covers_the_uv_environment_but_not_the_lock() -> None:
+    # uv.lock is committed. It records every package of the environment, so that two people get the same one.
     lines = {line.strip() for line in (ROOT / ".gitignore").read_text().splitlines()}
-    assert {".venv/", "uv.lock"} <= lines
+    assert ".venv/" in lines
+    assert "uv.lock" not in lines
 
 
 REQUIRED_RECIPES = {
@@ -135,6 +149,7 @@ REQUIRED_RECIPES = {
     "test",
     "gate",
     "lint-scripts",
+    "lock-check",
     "wheel-check",
     "ci-github-lint",
 }
@@ -145,7 +160,38 @@ def test_justfile_has_the_required_recipes() -> None:
 
 
 def test_gate_runs_every_check() -> None:
-    assert {"lint", "lint-scripts", "types", "test"} <= set(_recipes()["gate"])
+    assert {"lock-check", "lint", "lint-scripts", "types", "test"} <= set(_recipes()["gate"])
+
+
+def _blame_ignored_commits() -> list[str]:
+    lines = (ROOT / ".git-blame-ignore-revs").read_text().splitlines()
+    return [line.strip() for line in lines if line.strip() and not line.startswith("#")]
+
+
+def test_blame_ignore_file_lists_full_commit_hashes() -> None:
+    # GitHub reads this file by its name. A short hash does not work in it. Keep one line for each mass-format commit.
+    commits = _blame_ignored_commits()
+    assert commits
+    for commit in commits:
+        assert re.fullmatch(r"[0-9a-f]{40}", commit), commit
+
+
+@pytest.mark.skipif(shutil.which("git") is None, reason="needs git")
+def test_blame_ignored_commits_are_ancestors_of_head() -> None:
+    # A rebase or a squash merge changes a hash. The old commit can stay in the local object store, but HEAD no longer
+    # reaches it, and the line then points at nothing. So check the history of HEAD, not only that the object exists.
+    shallow = subprocess.run(["git", "rev-parse", "--is-shallow-repository"], cwd=ROOT, capture_output=True, text=True)
+    if shallow.returncode != 0 or shallow.stdout.strip() != "false":
+        pytest.skip("needs a git checkout with the full history")
+    for commit in _blame_ignored_commits():
+        found = subprocess.run(["git", "merge-base", "--is-ancestor", commit, "HEAD"], cwd=ROOT, capture_output=True)
+        assert found.returncode == 0, f"{commit} is not in the history of HEAD"
+
+
+def test_gate_checks_the_lock_before_any_recipe_that_runs_uv() -> None:
+    # `uv run` and `uv sync` rewrite a stale uv.lock without a warning. So the check must come first.
+    assert _recipes()["gate"][0] == "lock-check"
+    assert "uv lock --check" in _recipe_body("lock-check")
 
 
 def test_every_recipe_has_a_comment() -> None:
@@ -165,7 +211,7 @@ def test_every_recipe_has_a_comment() -> None:
 
 
 def test_test_recipe_uses_python_dash_m_pytest() -> None:
-    # Three test files import `src.*`. Plain pytest cannot find it: it needs the repo root on sys.path.
+    # CI runs `python -m pytest tests`. The recipe runs the same command.
     assert "python -m pytest" in _recipe_body("test")
 
 
@@ -384,6 +430,23 @@ def test_docs_do_not_promise_the_end_of_the_pip_setup() -> None:
     # The owner decides when the pip setup ends, and says so in the repository. A guide must not announce it.
     for name in ("README.md", "doc/DEVELOPMENT.md"):
         assert "retire" not in (ROOT / name).read_text().lower(), f"{name} announces the end of the pip setup"
+
+
+def test_developer_guide_explains_the_lock_file() -> None:
+    guide = (ROOT / "doc" / "DEVELOPMENT.md").read_text()
+    section = _section(guide, "## The lock file")
+    for text in ("uv.lock", "uv lock", "just lock-check"):
+        assert text in section
+    tasks = _section(guide, "## Common tasks")
+    assert tasks.count("uv lock") >= 3  # new dependency, new tool, and a conflict in uv.lock
+    assert "by hand" in tasks
+    assert "uv.lock" in _section(guide, "## The classic setup")  # pip does not read it
+
+
+def test_developer_guide_explains_the_blame_ignore_file() -> None:
+    section = _section((ROOT / "doc" / "DEVELOPMENT.md").read_text(), "## Git blame")
+    for text in (".git-blame-ignore-revs", "git config blame.ignoreRevsFile"):
+        assert text in section
 
 
 def test_developer_guide_uses_one_word_for_one_meaning() -> None:
