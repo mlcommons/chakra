@@ -128,6 +128,12 @@ def test_pytest_runs_the_tests_folder_and_rejects_unknown_markers() -> None:
     assert "--strict-markers" in options["addopts"]
 
 
+def test_pytest_puts_the_repository_folder_on_the_import_path() -> None:
+    # Some tests import `src.…`. `python -m pytest` finds them, because it adds the current folder to the path.
+    # Bare `pytest` does not, and then it cannot collect those tests.
+    assert _pyproject()["tool"]["pytest"]["ini_options"]["pythonpath"] == ["."]
+
+
 def test_gitignore_covers_uv_environment_and_lock() -> None:
     # Phase 1 does not commit uv.lock (issues #237 and #254 still change the dependencies). Phase 2 removes this line.
     lines = {line.strip() for line in (ROOT / ".gitignore").read_text().splitlines()}

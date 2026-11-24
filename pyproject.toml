@@ -91,6 +91,7 @@ reportMissingImports = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 addopts = "--strict-markers"
 
 [tool.vulture]
