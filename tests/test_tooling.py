@@ -121,6 +121,13 @@ def test_uv_installs_the_dev_group_by_default() -> None:
     assert "dev" in _pyproject()["tool"]["uv"]["default-groups"]
 
 
+def test_pytest_runs_the_tests_folder_and_rejects_unknown_markers() -> None:
+    # A typo in a marker name must fail at once. Without this option, pytest only warns, and the test runs unmarked.
+    options = _pyproject()["tool"]["pytest"]["ini_options"]
+    assert options["testpaths"] == ["tests"]
+    assert "--strict-markers" in options["addopts"]
+
+
 def test_gitignore_covers_uv_environment_and_lock() -> None:
     # Phase 1 does not commit uv.lock (issues #237 and #254 still change the dependencies). Phase 2 removes this line.
     lines = {line.strip() for line in (ROOT / ".gitignore").read_text().splitlines()}
