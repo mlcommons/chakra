@@ -599,8 +599,7 @@ class TraceLinker:
                 kineto_op = kineto_rf_id_to_device_op_map[host_op.rf_id]
                 if kineto_op is None:
                     logging.warning(
-                        f"No corresponding Kineto op found for Chakra host op ID: {host_op.id}, Name: "
-                        f"'{host_op.name}'."
+                        f"No corresponding Kineto op found for Chakra host op ID: {host_op.id}, Name: '{host_op.name}'."
                     )
                     continue
                 (
