@@ -31,7 +31,7 @@ lint-scripts:
 types:
     scripts/run_on_git_files.sh '*.py' -- uv run --isolated --only-group dev pyright
 
-# Unit tests. Use `python -m pytest`, not `pytest`: 3 test files import `src.*`, which needs the repo root on sys.path
+# Unit tests, with `python -m pytest` as CI does. Add pytest options after the name, for example `just test -k trace_link`
 [positional-arguments]
 test *args:
     CHAKRA_TOOLING_TESTS=1 uv run python -m pytest -vv tests "$@"

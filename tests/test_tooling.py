@@ -210,7 +210,7 @@ def test_every_recipe_has_a_comment() -> None:
 
 
 def test_test_recipe_uses_python_dash_m_pytest() -> None:
-    # Three test files import `src.*`. Plain pytest cannot find it: it needs the repo root on sys.path.
+    # CI runs `python -m pytest tests`. The recipe runs the same command.
     assert "python -m pytest" in _recipe_body("test")
 
 
@@ -429,6 +429,28 @@ def test_docs_do_not_promise_the_end_of_the_pip_setup() -> None:
     # The owner decides when the pip setup ends, and says so in the repository. A guide must not announce it.
     for name in ("README.md", "doc/DEVELOPMENT.md"):
         assert "retire" not in (ROOT / name).read_text().lower(), f"{name} announces the end of the pip setup"
+
+
+def test_developer_guide_explains_the_lock_file() -> None:
+    guide = (ROOT / "doc" / "DEVELOPMENT.md").read_text()
+    section = _section(guide, "## The lock file")
+    for text in ("uv.lock", "uv lock", "just lock-check"):
+        assert text in section
+    tasks = _section(guide, "## Common tasks")
+    assert tasks.count("uv lock") >= 3  # new dependency, new tool, and a conflict in uv.lock
+    assert "by hand" in tasks
+    assert "uv.lock" in _section(guide, "## The classic setup")  # pip does not read it
+
+
+def test_developer_guide_explains_the_blame_ignore_file() -> None:
+    section = _section((ROOT / "doc" / "DEVELOPMENT.md").read_text(), "## Git blame")
+    for text in (".git-blame-ignore-revs", "git config blame.ignoreRevsFile"):
+        assert text in section
+
+
+def test_justfile_does_not_say_that_bare_pytest_fails() -> None:
+    # It did until pyproject.toml set pythonpath. The comment of the test recipe said so.
+    assert "not `pytest`" not in (ROOT / "justfile").read_text()
 
 
 def test_developer_guide_uses_one_word_for_one_meaning() -> None:
