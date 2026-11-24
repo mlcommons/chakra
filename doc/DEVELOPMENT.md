@@ -66,6 +66,7 @@ Run `just` to see the list.
 | `just test-slow` | Runs the slow tests. They need a network. They build the package as an editable install, and as a wheel that has a file left out. | - |
 | `just proto-smoke` | Imports the generated protobuf modules with the newest and the oldest allowed protobuf. | `python_tests.yml` |
 | `just wheel-check` | Builds the wheel from a clean copy and installs it (not editable) in a new temporary virtual environment. Checks the wheel files, imports the protobuf modules with two protobuf versions, and starts the commands. The other checks use the editable install. | `python_tests.yml`, `end_to_end_tests.yml` |
+| `just lock-check` | Checks that `uv.lock` matches `pyproject.toml`. It fails when they differ. `uv run` and `uv sync` would change an old `uv.lock` without a warning. | - |
 | `just gate` | Runs all the checks above. | - |
 | `just act` | Runs one workflow in Docker. Add a file name from `.github/workflows/`. The default is `python_lint.yml`. | - |
 | `just ci-github-lint` | Lints the workflow files with actionlint in Docker. It fails today, because the workflows use old actions (`checkout@v2`, `setup-python@v2`). It is not part of the gate. | - |

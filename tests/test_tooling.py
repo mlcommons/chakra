@@ -149,6 +149,7 @@ REQUIRED_RECIPES = {
     "test",
     "gate",
     "lint-scripts",
+    "lock-check",
     "wheel-check",
     "ci-github-lint",
 }
@@ -159,7 +160,13 @@ def test_justfile_has_the_required_recipes() -> None:
 
 
 def test_gate_runs_every_check() -> None:
-    assert {"lint", "lint-scripts", "types", "test"} <= set(_recipes()["gate"])
+    assert {"lock-check", "lint", "lint-scripts", "types", "test"} <= set(_recipes()["gate"])
+
+
+def test_gate_checks_the_lock_before_any_recipe_that_runs_uv() -> None:
+    # `uv run` and `uv sync` rewrite a stale uv.lock without a warning. So the check must come first.
+    assert _recipes()["gate"][0] == "lock-check"
+    assert "uv lock --check" in _recipe_body("lock-check")
 
 
 def test_every_recipe_has_a_comment() -> None:

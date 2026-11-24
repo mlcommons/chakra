@@ -50,8 +50,13 @@ proto-smoke:
 wheel-check:
     scripts/wheel_check.sh
 
+# `uv run` and `uv sync` rewrite a stale uv.lock without a warning. This check fails instead. The gate runs it first.
+# Check that uv.lock matches pyproject.toml
+lock-check:
+    uv lock --check
+
 # The full check. Run it before you open a pull request.
-gate: lint lint-scripts types test test-slow proto-smoke wheel-check
+gate: lock-check lint lint-scripts types test test-slow proto-smoke wheel-check
 
 # It fails now: the workflows use old actions (checkout@v2, setup-python@v2). It is not part of `gate`.
 # Lint the GitHub workflow files with actionlint (needs Docker)
