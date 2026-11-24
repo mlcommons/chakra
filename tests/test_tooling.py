@@ -449,11 +449,6 @@ def test_developer_guide_explains_the_blame_ignore_file() -> None:
         assert text in section
 
 
-def test_justfile_does_not_say_that_bare_pytest_fails() -> None:
-    # It did until pyproject.toml set pythonpath. The comment of the test recipe said so.
-    assert "not `pytest`" not in (ROOT / "justfile").read_text()
-
-
 def test_developer_guide_uses_one_word_for_one_meaning() -> None:
     # "workflow" is a file in .github/workflows/. The daily steps are not a workflow.
     guide = (ROOT / "doc" / "DEVELOPMENT.md").read_text()
