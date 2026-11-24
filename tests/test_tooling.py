@@ -63,12 +63,29 @@ def _requirements_dev() -> dict[str, str]:
     return pins
 
 
-def test_setup_py_does_not_override_build_grpc() -> None:
-    # setuptools-grpc adds build_grpc to build by itself. A second copy in setup.py breaks editable installs
-    # ("command 'build_grpc' has no such option 'proto_files'").
-    text = (ROOT / "setup.py").read_text()
-    assert "cmdclass" not in text
-    assert "sub_commands" not in text
+def test_the_build_does_not_compile_the_proto_files() -> None:
+    requires = " ".join(_pyproject()["build-system"]["requires"])
+    assert "grpc" not in requires
+    for name in ("setup.py", "setup.cfg"):
+        path = ROOT / name
+        assert not path.exists() or "build_grpc" not in path.read_text(), f"{name} configures build_grpc"
+
+
+def test_the_generated_protobuf_modules_are_in_git_and_the_grpc_modules_are_not() -> None:
+    listed = subprocess.run(
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard", "schema/protobuf"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.split()
+    for name in ("et_def_pb2.py", "et_def_pb2.pyi", "storage_pb2.py", "storage_pb2.pyi"):
+        assert f"schema/protobuf/{name}" in listed, f"git ignores or misses schema/protobuf/{name}"
+    assert not [path for path in listed if path.endswith("_pb2_grpc.py")]
+
+
+def test_requires_python_has_no_upper_bound() -> None:
+    assert "<" not in _pyproject()["project"]["requires-python"]
 
 
 # Slow: builds the package. It needs uv and network. Run it with CHAKRA_TEST_SLOW=1.
@@ -228,6 +245,7 @@ def test_justfile_runs_the_commands_that_ci_runs() -> None:
         "vulture src/ tests/": "lint",
         "pyright": "types",
         "python -m pytest -vv tests": "test",
+        "scripts/gen_proto.sh --check": "proto-check",
     }
     for command, recipe in recipe_for.items():
         assert command in ci, f"CI no longer runs: {command}"
@@ -277,10 +295,14 @@ def test_test_recipe_passes_arguments_with_spaces_through() -> None:
 def test_gate_includes_the_editable_install_and_protobuf_checks() -> None:
     # The gate checks both ways to install the package: editable (what `uv sync` does) and the built wheel (what
     # `pip install .` and CI use).
-    assert {"test-slow", "proto-smoke", "wheel-check"} <= set(_recipes()["gate"])
+    assert {"test-slow", "proto-check", "proto-smoke", "wheel-check"} <= set(_recipes()["gate"])
     assert "test_editable_install_builds_and_imports" in _recipe_body("test-slow")
     assert "test_wheel_check_catches_a_file_that_is_missing_from_the_wheel" in _recipe_body("test-slow")
+    assert "test_gen_proto_check_catches_a_proto_change_without_the_generated_files" in _recipe_body("test-slow")
     assert _recipe_body("proto-smoke") == "scripts/proto_smoke.sh"
+    # A bare `uv python find` ignores UV_PYTHON.
+    assert _recipe_body("gen-proto") == 'PYTHON="$(uv python find "$UV_PYTHON")" scripts/gen_proto.sh'
+    assert _recipe_body("proto-check") == 'PYTHON="$(uv python find "$UV_PYTHON")" scripts/gen_proto.sh --check'
     assert _recipe_body("wheel-check") == "scripts/wheel_check.sh"
 
 
@@ -386,13 +408,6 @@ def test_user_guide_shows_the_uv_install() -> None:
     user_guide = _section((ROOT / "USER_GUIDE.md").read_text(), "### Alternative: install with uv")
     for command in ("uv venv", "uv pip install mlc-chakra"):
         assert command in user_guide
-
-
-def test_uv_rebuilds_the_package_when_a_proto_file_changes() -> None:
-    # The generated *_pb2.py files are built into the source tree. By default uv rebuilds the package only when
-    # pyproject.toml, setup.py or setup.cfg change, so after an edit of a .proto file the generated code stays old.
-    keys = [key.get("file") for key in _pyproject()["tool"]["uv"]["cache-keys"]]
-    assert "schema/protobuf/*.proto" in keys
 
 
 def test_test_recipe_enables_the_tooling_tests() -> None:

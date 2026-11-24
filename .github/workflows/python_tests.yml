@@ -15,6 +15,10 @@ jobs:
       with:
         python-version: '3.11'
 
+    - name: Protobuf Gencode Drift Check
+      run: |
+        PYTHON=python scripts/gen_proto.sh --check
+
     - name: Install Chakra
       run: |
         pip install .

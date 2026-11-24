@@ -3,7 +3,7 @@
 # Prove that a fresh install of Chakra works on the current Python.
 #
 # Steps:
-#   1. build the wheel and install it in a fresh venv
+#   1. build the sdist and the wheel from it, and install the wheel in a fresh venv
 #   2. run all six tools with --help (exit code 0)
 #   3. import the generated protobuf modules in a fresh interpreter
 #   4. run chakra_trace_link and chakra_converter on the simple_onerank fixture (traces collected on a GPU)
@@ -95,13 +95,13 @@ check_logs() {
 }
 
 # ---------------------------------------------------------------------------------------------------------------------
-step "Build the wheel (python -m build) in a throwaway venv"
+step "Build the sdist and the wheel from it (python -m build) in a throwaway venv"
 "${PYTHON}" -m venv "${WORK}/build-venv"
 "${WORK}/build-venv/bin/python" -m pip install --quiet --upgrade pip build
 # Build from a copy so the build never writes build/ or *.egg-info into the working tree.
 mkdir "${WORK}/src"
 (cd "${REPO_ROOT}" && git ls-files --cached --others --exclude-standard -z | tar --null -T - -cf -) | tar -xf - -C "${WORK}/src"
-"${WORK}/build-venv/bin/python" -m build --wheel --outdir "${WORK}/dist" "${WORK}/src"
+"${WORK}/build-venv/bin/python" -m build --outdir "${WORK}/dist" "${WORK}/src"
 WHEEL="$(ls "${WORK}"/dist/*.whl)"
 echo "Built ${WHEEL}"
 
@@ -135,9 +135,12 @@ for module in ("chakra.schema.protobuf.et_def_pb2", "chakra.schema.protobuf.stor
     print("imported", module)
 
 package_files = resources.files("chakra.schema.protobuf")
-for proto in ("et_def.proto", "storage.proto"):
-    assert package_files.joinpath(proto).is_file(), f"{proto} is missing from the installed package"
-    print("packaged", proto)
+for name in ("et_def.proto", "storage.proto", "et_def_pb2.pyi", "storage_pb2.pyi"):
+    assert package_files.joinpath(name).is_file(), f"{name} is missing from the installed package"
+    print("packaged", name)
+
+grpc_modules = [f.name for f in package_files.iterdir() if f.name.endswith("_pb2_grpc.py")]
+assert not grpc_modules, f"gRPC modules are in the installed package: {grpc_modules}"
 EOF
 ) || fail "protobuf import check failed"
 
