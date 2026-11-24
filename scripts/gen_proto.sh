@@ -43,6 +43,12 @@ mkdir "$work/out"
 "$work/venv/bin/python" -m grpc_tools.protoc --proto_path="$PROTO_DIR" \
     --python_out="$work/out" --pyi_out="$work/out" "${protos[@]}"
 
+# The files are committed, so drop protoc's marker that says they are not. No sed -i: it differs on macOS.
+for file in "$work/out"/*_pb2.py; do
+    sed '/^# NO CHECKED-IN PROTOBUF GENCODE$/d' "$file" >"$file.tmp"
+    mv "$file.tmp" "$file"
+done
+
 current=("$PROTO_DIR"/*_pb2.py "$PROTO_DIR"/*_pb2.pyi)
 
 if [ "$check" -eq 1 ]; then

@@ -214,6 +214,7 @@ def test_gen_proto_check_catches_a_proto_change_without_the_generated_files(tmp_
 
     assert run().returncode == 0
     assert b"DriftProbe" in (protos / "storage_pb2.py").read_bytes()
+    assert b"NO CHECKED-IN PROTOBUF GENCODE" not in (protos / "storage_pb2.py").read_bytes()
     assert run("--check").returncode == 0
 
 
