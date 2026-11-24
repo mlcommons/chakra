@@ -177,14 +177,15 @@ def test_blame_ignore_file_lists_full_commit_hashes() -> None:
 
 
 @pytest.mark.skipif(shutil.which("git") is None, reason="needs git")
-def test_blame_ignored_commits_are_in_the_history() -> None:
-    # A rebase or a squash merge changes a hash, and the line then points at nothing.
+def test_blame_ignored_commits_are_ancestors_of_head() -> None:
+    # A rebase or a squash merge changes a hash. The old commit can stay in the local object store, but HEAD no longer
+    # reaches it, and the line then points at nothing. So check the history of HEAD, not only that the object exists.
     shallow = subprocess.run(["git", "rev-parse", "--is-shallow-repository"], cwd=ROOT, capture_output=True, text=True)
     if shallow.returncode != 0 or shallow.stdout.strip() != "false":
         pytest.skip("needs a git checkout with the full history")
     for commit in _blame_ignored_commits():
-        found = subprocess.run(["git", "cat-file", "-e", f"{commit}^{{commit}}"], cwd=ROOT, capture_output=True)
-        assert found.returncode == 0, f"{commit} is not in the history"
+        found = subprocess.run(["git", "merge-base", "--is-ancestor", commit, "HEAD"], cwd=ROOT, capture_output=True)
+        assert found.returncode == 0, f"{commit} is not in the history of HEAD"
 
 
 def test_gate_checks_the_lock_before_any_recipe_that_runs_uv() -> None:
