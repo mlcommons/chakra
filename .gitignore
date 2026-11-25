@@ -7,8 +7,13 @@ __pycache__/
 *.et
 *.dot
 .pyre
-*et_def.pb.cc
-*et_def.pb.h
 
 trace_collection/post_execution/traces
 
+# uv
+.venv/
+
+# act reads these files. They can hold secrets: never commit them.
+.secrets
+.env
+.vars

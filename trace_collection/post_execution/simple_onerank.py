@@ -11,6 +11,7 @@ from torch.profiler import ExecutionTraceObserver, profile
    python simple_onerank.py
 """
 
+
 def main() -> None:
     """Run 10 iterations of forward and backward passes."""
     batch_size = 64

@@ -7,3 +7,5 @@ Generally we encourage people to become a MLCommons member if they wish to contr
 Regardless of if you are a member, your organization needs to sign the MLCommons CLA. Please fill out this [CLA sign up form](https://forms.gle/Ew1KkBVpyeJDuRw67) form to get started.
 
 MLCommons project work is tracked with issue trackers and pull requests. Modify the project in your own fork and issue a pull request once you want other developers to take a look at what you have done and discuss the proposed changes. Ensure that cla-bot and other checks pass for your Pull requests.
+
+To set up a development environment and run the checks, see the [development guide](doc/DEVELOPMENT.md). Run `just gate` before you open a pull request.
