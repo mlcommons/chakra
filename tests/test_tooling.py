@@ -4,6 +4,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tomllib
 from pathlib import Path
 
@@ -86,6 +87,33 @@ def test_the_generated_protobuf_modules_are_in_git_and_the_grpc_modules_are_not(
 
 def test_requires_python_has_no_upper_bound() -> None:
     assert "<" not in _pyproject()["project"]["requires-python"]
+
+
+def test_proto_files_import_each_other_by_package_path() -> None:
+    # A flat import ("storage.proto") makes protoc emit `import storage_pb2`, which only resolves with the
+    # package folder on sys.path. See issue #230.
+    for proto in sorted((ROOT / "schema" / "protobuf").glob("*.proto")):
+        for target in re.findall(r'^import\s+"([^"]+)";', proto.read_text(), re.MULTILINE):
+            assert target.startswith("chakra/schema/protobuf/"), f'{proto.name}: import "{target}"'
+
+
+def test_generated_modules_use_package_imports() -> None:
+    # The modules are committed (scripts/gen_proto.sh). They must be generated from the package-path imports.
+    text = (ROOT / "schema" / "protobuf" / "et_def_pb2.py").read_text()
+    assert "from chakra.schema.protobuf import storage_pb2" in text
+    assert not re.search(r"^import storage_pb2", text, re.MULTILINE)
+
+
+def test_importing_the_schema_does_not_change_sys_path(tmp_path: Path) -> None:
+    # The package used to put its own folder on sys.path, where other *_pb2 modules could shadow Chakra ones.
+    code = (
+        "import sys; before = list(sys.path); "
+        "import chakra.schema.protobuf.et_def_pb2 as m; "
+        "assert sys.path == before, set(sys.path) ^ set(before); "
+        "assert 'storage_pb2' not in sys.modules; "
+        "assert m.Node.DESCRIPTOR.fields_by_name['storage'].message_type.full_name == 'ChakraProtoMsg.StorageInfo'"
+    )
+    subprocess.run([sys.executable, "-c", code], check=True, cwd=tmp_path)
 
 
 # Slow: builds the package. It needs uv and network. Run it with CHAKRA_TEST_SLOW=1.

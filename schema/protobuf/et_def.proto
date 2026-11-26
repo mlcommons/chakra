@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package ChakraProtoMsg;
 
-import "storage.proto";
+import "chakra/schema/protobuf/storage.proto";
 
 message AttributeProto {
   string name = 1;
