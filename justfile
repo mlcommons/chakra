@@ -36,14 +36,22 @@ types:
 test *args:
     CHAKRA_TOOLING_TESTS=1 uv run python -m pytest -vv tests "$@"
 
-# The slow tests build the package: as an editable install, and as a wheel that has a file left out. They need a network.
+# The slow tests build the package and run gen_proto. They need a network.
 test-slow:
-    CHAKRA_TEST_SLOW=1 uv run python -m pytest tests/test_tooling.py tests/test_scripts.py -k "test_editable_install_builds_and_imports or test_wheel_check_catches_a_file_that_is_missing_from_the_wheel"
+    CHAKRA_TEST_SLOW=1 uv run python -m pytest tests/test_tooling.py tests/test_scripts.py -k "test_editable_install_builds_and_imports or test_wheel_check_catches_a_file_that_is_missing_from_the_wheel or test_gen_proto_check_catches_a_proto_change_without_the_generated_files"
 
 # It imports the generated modules with the newest protobuf, then with the lowest one that pyproject.toml allows.
 # The CI "Protobuf Gencode/Runtime Smoke Test"
 proto-smoke:
     scripts/proto_smoke.sh
+
+# Generate the protobuf modules from the .proto files (run it after a .proto change, then commit)
+gen-proto:
+    PYTHON="$(uv python find "$UV_PYTHON")" scripts/gen_proto.sh
+
+# The CI "Protobuf Gencode Drift Check": the committed protobuf modules match the .proto files
+proto-check:
+    PYTHON="$(uv python find "$UV_PYTHON")" scripts/gen_proto.sh --check
 
 # The other checks use the editable install that `uv sync` makes. It can hide a file that the wheel does not hold.
 # Build the wheel from a clean copy, install it (not editable) into a new environment, and test it there, as CI does
@@ -56,7 +64,7 @@ lock-check:
     uv lock --check
 
 # The full check. Run it before you open a pull request.
-gate: lock-check lint lint-scripts types test test-slow proto-smoke wheel-check
+gate: lock-check lint lint-scripts types test test-slow proto-check proto-smoke wheel-check
 
 # It fails now: the workflows use old actions (checkout@v2, setup-python@v2). It is not part of `gate`.
 # Lint the GitHub workflow files with actionlint (needs Docker)

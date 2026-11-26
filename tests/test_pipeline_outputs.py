@@ -180,7 +180,7 @@ def _stale_modules() -> List[str]:
     stale = []
     for package, source in package_dir.items():
         for path in sorted((REPO / source).rglob("*.py")):
-            if "__pycache__" in path.parts or path.name.endswith(("_pb2.py", "_pb2_grpc.py")):
+            if "__pycache__" in path.parts or path.name.endswith("_pb2_grpc.py"):
                 continue
             parts = path.relative_to(REPO / source).with_suffix("").parts
             module = ".".join([package, *parts[:-1]] + ([] if parts[-1] == "__init__" else [parts[-1]]))

@@ -1,6 +1,7 @@
 *.egg-info/
 build/
-*_pb2*.py*
+# Chakra uses no gRPC
+*_pb2_grpc.py
 *.pyc
 __pycache__/
 *.egg

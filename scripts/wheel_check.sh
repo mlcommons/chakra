@@ -29,15 +29,20 @@ wheel=$(echo "$work"/dist/*.whl)
 uv venv --quiet "$work/venv"
 uv pip install --quiet --python "$python" "$wheel"
 
-# 1. The wheel holds the generated protobuf modules and the .proto files.
+# 1. The wheel holds the protobuf modules, their stubs and the .proto files, and no gRPC modules.
 listing=$("$python" -m zipfile -l "$wheel")
 for file in chakra/schema/protobuf/et_def_pb2.py chakra/schema/protobuf/storage_pb2.py \
+    chakra/schema/protobuf/et_def_pb2.pyi chakra/schema/protobuf/storage_pb2.pyi \
     chakra/schema/protobuf/et_def.proto chakra/schema/protobuf/storage.proto; do
     if ! grep -q "$file" <<<"$listing"; then
         echo "wheel_check: $file is missing from the wheel" >&2
         exit 1
     fi
 done
+if grep -q "_pb2_grpc.py" <<<"$listing"; then
+    echo "wheel_check: the wheel holds a *_pb2_grpc.py module" >&2
+    exit 1
+fi
 
 # 2. Import the generated modules with the newest protobuf, then with the lowest one that pyproject.toml allows.
 check='import chakra.schema.protobuf.et_def_pb2, chakra.schema.protobuf.storage_pb2'

@@ -64,7 +64,9 @@ Run `just` to see the list.
 | `just lint-scripts` | Lints the shell scripts in `scripts/` with shellcheck. | - |
 | `just types` | Type checks with pyright. | `python_lint.yml` |
 | `just test` | Runs the unit tests. Add pytest options after the name, for example `just test -k trace_link`. | `python_tests.yml` |
-| `just test-slow` | Runs the slow tests. They need a network. They build the package as an editable install, and as a wheel that has a file left out. | - |
+| `just test-slow` | Runs the slow tests. They need a network. They build the package as an editable install, and as a wheel that has a file left out. They also check that `just proto-check` catches a changed `.proto` file. | - |
+| `just gen-proto` | Generates the protobuf modules in `schema/protobuf/` from the `.proto` files. It needs a network. | - |
+| `just proto-check` | Generates the protobuf modules in a temporary folder and compares them with the committed ones. It writes nothing. | `python_tests.yml` |
 | `just proto-smoke` | Imports the generated protobuf modules with the newest and the oldest allowed protobuf. | `python_tests.yml` |
 | `just wheel-check` | Builds the wheel from a clean copy and installs it (not editable) in a new temporary virtual environment. Checks the wheel files, imports the protobuf modules with two protobuf versions, and starts the commands. The other checks use the editable install. | `python_tests.yml`, `end_to_end_tests.yml` |
 | `just lock-check` | Checks that `uv.lock` matches `pyproject.toml`. It fails when they differ. `uv run` and `uv sync` would change an old `uv.lock` without a warning. | - |
@@ -74,7 +76,7 @@ Run `just` to see the list.
 
 ## The lock file
 
-`uv.lock` is in the repository. It records the exact version of every package, for Python 3.11 to 3.14 on all systems. `just setup` and `uv run` use it, so everyone gets the same packages.
+`uv.lock` is in the repository. It records the exact version of every package, for Python 3.11 and later on all systems. `just setup` and `uv run` use it, so everyone gets the same packages.
 
 When you change `dependencies` or `[dependency-groups]`, run `uv lock` and commit the new `uv.lock`. `just lock-check` shows if you forgot.
 
@@ -92,7 +94,7 @@ After a commit that formats many files, add its full hash to the file.
 
 | Task | How |
 |---|---|
-| Change a `.proto` file | `just test` rebuilds the generated code. With pip, run `pip install .` again. |
+| Change a `.proto` file | Run `just gen-proto`, then commit the changed `*_pb2.py` and `*_pb2.pyi` files. Without `just`, run `scripts/gen_proto.sh`. CI fails when you forget. |
 | Add a runtime dependency | Add it to `dependencies` in `pyproject.toml`. Run `uv lock`, and commit `uv.lock`. |
 | Add or change a development tool | Change `[dependency-groups]` in `pyproject.toml` and `requirements-dev.txt`. Run `uv lock`, and commit `uv.lock`. `just test` fails when the two files differ. |
 | Fix a conflict in `uv.lock` | Do not merge it by hand. Take the file from `main`, for example with `git checkout origin/main -- uv.lock`. Then run `uv lock`. |
@@ -121,7 +123,7 @@ Tested with OrbStack on an Apple silicon Mac (November 2026). Docker Desktop is 
 
 ## Shell scripts
 
-Shell scripts live in `scripts/`. `just lint-scripts` checks them with shellcheck. The tests in `tests/test_scripts.py` run each script with fake `docker`, `act`, and `uv` programs. They need neither Docker nor a network, except one slow test.
+Shell scripts live in `scripts/`. `just lint-scripts` checks them with shellcheck. The tests in `tests/test_scripts.py` run each script with fake `docker`, `act`, and `uv` programs. They need neither Docker nor a network, except the slow tests.
 
 ## The classic setup
 
@@ -137,6 +139,8 @@ ruff format --check . && ruff check . && pyright && vulture src/ tests/
 ```
 
 `pip install .` is not an editable install. Run it again after you change code. `pip` does not read `uv.lock`.
+
+After you change a `.proto` file, run `scripts/gen_proto.sh` and commit the result. It needs only Python and a network. `scripts/gen_proto.sh --check` compares without writing. The script uses `python3`. To use another Python, set `PYTHON`, for example `PYTHON=python3.11 scripts/gen_proto.sh`.
 
 ## Python version
 

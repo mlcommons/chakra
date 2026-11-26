@@ -174,9 +174,10 @@ def test_wheel_check_catches_a_file_that_is_missing_from_the_wheel(tmp_path: Pat
     subprocess.run(["git", "init", "-q"], cwd=copy, check=True, env=_clean_env())
     subprocess.run(["git", "add", "-A"], cwd=copy, check=True, env=_clean_env())
     pyproject = copy / "pyproject.toml"
-    package_data = '"chakra.schema.protobuf" = ["et_def.proto", "storage.proto"]'
+    package_data = '"chakra.schema.protobuf" = ["et_def.proto", "storage.proto", "et_def_pb2.pyi", "storage_pb2.pyi"]'
     assert package_data in pyproject.read_text()
-    pyproject.write_text(pyproject.read_text().replace(package_data, '"chakra.schema.protobuf" = []'))
+    without_protos = '"chakra.schema.protobuf" = ["et_def_pb2.pyi", "storage_pb2.pyi"]'
+    pyproject.write_text(pyproject.read_text().replace(package_data, without_protos))
     result = subprocess.run(
         [str(copy / "scripts" / "wheel_check.sh")], capture_output=True, text=True, check=False, env=_clean_env()
     )
@@ -184,6 +185,37 @@ def test_wheel_check_catches_a_file_that_is_missing_from_the_wheel(tmp_path: Pat
     assert "et_def.proto" in result.stdout + result.stderr
     # The wheel is built from a clean copy, as in CI. A stale build/ folder cannot leak in, and the repo stays clean.
     assert not (copy / "build").exists()
+
+
+# Slow: it needs a network.
+@pytest.mark.skipif(os.environ.get("CHAKRA_TEST_SLOW") != "1", reason="set CHAKRA_TEST_SLOW=1 to run")
+def test_gen_proto_check_catches_a_proto_change_without_the_generated_files(tmp_path: Path) -> None:
+    copy = tmp_path / "copy"  # never write into the repository
+    (copy / "scripts").mkdir(parents=True)
+    shutil.copy2(SCRIPTS / "gen_proto.sh", copy / "scripts" / "gen_proto.sh")
+    protos = copy / "schema" / "protobuf"
+    shutil.copytree(ROOT / "schema" / "protobuf", protos, ignore=shutil.ignore_patterns("__pycache__"))
+    script = str(copy / "scripts" / "gen_proto.sh")
+    env = {**_clean_env(), "PYTHON": os.environ.get("PYTHON", "python3")}
+
+    def run(*args: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run([script, *args], capture_output=True, text=True, check=False, env=env)
+
+    result = run("--check")
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    proto = protos / "storage.proto"
+    proto.write_text(proto.read_text() + "\nmessage DriftProbe {\n  uint64 id = 1;\n}\n")
+    generated = (protos / "storage_pb2.py").read_bytes()
+    result = run("--check")
+    assert result.returncode != 0
+    assert "out of date" in result.stderr
+    assert (protos / "storage_pb2.py").read_bytes() == generated  # --check writes nothing
+
+    assert run().returncode == 0
+    assert b"DriftProbe" in (protos / "storage_pb2.py").read_bytes()
+    assert b"NO CHECKED-IN PROTOBUF GENCODE" not in (protos / "storage_pb2.py").read_bytes()
+    assert run("--check").returncode == 0
 
 
 def test_wheel_check_stops_with_a_clear_message_outside_a_git_checkout(tmp_path: Path) -> None:
