@@ -76,7 +76,7 @@ Run `just` to see the list.
 
 ## The lock file
 
-`uv.lock` is in the repository. It records the exact version of every package, for Python 3.11 to 3.14 on all systems. `just setup` and `uv run` use it, so everyone gets the same packages.
+`uv.lock` is in the repository. It records the exact version of every package, for Python 3.11 and later on all systems. `just setup` and `uv run` use it, so everyone gets the same packages.
 
 When you change `dependencies` or `[dependency-groups]`, run `uv lock` and commit the new `uv.lock`. `just lock-check` shows if you forgot.
 
