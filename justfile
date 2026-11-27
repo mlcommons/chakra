@@ -15,7 +15,7 @@ fmt:
     uv run ruff format .
     uv run ruff check --fix .
 
-# Lint: format check, ruff and vulture (the CI "Python Lint" job, plus the format check that CI lacks)
+# Lint: format check, ruff and vulture (the CI "Python Lint" job)
 lint:
     uv run ruff format --check .
     uv run ruff check .
