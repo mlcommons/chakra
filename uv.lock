@@ -1262,7 +1262,6 @@ wheels = [
 
 [[package]]
 name = "mlc-chakra"
-version = "1.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "graphviz" },

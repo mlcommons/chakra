@@ -9,6 +9,8 @@ jobs:
     steps:
     - name: Checkout Code
       uses: actions/checkout@v2
+      with:
+        fetch-depth: 0  # setuptools-scm reads the version from the tags
 
     - name: Setup Python Environment
       uses: actions/setup-python@v2

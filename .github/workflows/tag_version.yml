@@ -1,0 +1,76 @@
+name: Tag version
+
+# Tags each change that enters main with the next version vX.Y.Z. setuptools-scm reads the version from these tags.
+# A pull request labelled "major" or "minor" raises that part of the version; any other change raises the patch number.
+# Every pull request merged since the newest tag counts, so a label is not lost when merges share one run.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: tag-version
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    # Only the main repository tags. Forks keep the tags they fetch from it.
+    if: github.repository == 'mlcommons/chakra'
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Tag the pushed commit with the next version
+      env:
+        GH_TOKEN: ${{ github.token }}
+        REPO: ${{ github.repository }}
+        SHA: ${{ github.sha }}
+      run: |
+        set -euo pipefail
+        pattern='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
+
+        if git tag --points-at "$SHA" | grep -qE "$pattern"; then
+          echo "$SHA already has a version tag"
+          exit 0
+        fi
+
+        newest=$(git tag --merged "$SHA" --list 'v*' --sort=-v:refname | grep -E "$pattern" | head -n 1 || true)
+        if [ -z "$newest" ]; then
+          echo "::error::No vX.Y.Z tag is reachable from $SHA. A maintainer has to create the first one."
+          exit 1
+        fi
+        IFS=. read -r major minor patch <<< "${newest#v}"
+        # PyPI already has 1.0.0, so a version below it must never be tagged.
+        if [ "$major" -lt 1 ]; then
+          echo "::error::The newest tag is $newest, below the 1.0.0 already on PyPI. A maintainer has to tag v1.0.0 first."
+          exit 1
+        fi
+
+        bump="patch"
+        for commit in $(git rev-list --first-parent "$newest..$SHA"); do
+          # Only the pull request that was merged as this commit: the API also lists open ones whose branch contains it.
+          labels=$(gh api "repos/$REPO/commits/$commit/pulls" \
+            --jq "[.[] | select(.merged_at != null and .merge_commit_sha == \"$commit\") | .labels[].name] | join(\" \")")
+          case " $labels " in
+            *" major "*) bump="major" ;;
+            *" minor "*) [ "$bump" = major ] || bump="minor" ;;
+          esac
+        done
+
+        case "$bump" in
+          major) new="$((major + 1)).0.0" ;;
+          minor) new="$major.$((minor + 1)).0" ;;
+          patch) new="$major.$minor.$((patch + 1))" ;;
+        esac
+        echo "$newest -> v$new ($bump)"
+
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git tag -a "v$new" -m "Version $new" "$SHA"
+        git push origin "refs/tags/v$new"
