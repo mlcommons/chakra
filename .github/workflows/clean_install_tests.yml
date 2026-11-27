@@ -20,6 +20,8 @@ jobs:
     steps:
     - name: Checkout Code
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # setuptools-scm reads the version from the tags
 
     - name: Setup Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5

@@ -1,11 +1,11 @@
 [build-system]
-requires = ["setuptools>=61", "wheel"]
+requires = ["setuptools>=61", "setuptools-scm==10.3.4", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "mlc-chakra"
 requires-python = ">=3.11"
-version = "1.0.0"
+dynamic = ["version"]
 readme = "README.md"
 license = {file = "LICENSE.md"}
 authors = [
@@ -24,7 +24,11 @@ Homepage = "https://github.com/mlcommons/chakra"
 Documentation = "https://github.com/mlcommons/chakra/README.md"
 Repository = "https://github.com/mlcommons/chakra.git"
 
+# The version comes from the newest git tag vX.Y.Z (see .github/workflows/tag_version.yml).
+[tool.setuptools_scm]
+
 [tool.setuptools.package-dir]
+"chakra" = "src/chakra_pkg"
 "chakra.schema.protobuf" = "schema/protobuf"
 "chakra.src.converter" = "src/converter"
 "chakra.src.generator" = "src/generator"
@@ -111,3 +115,12 @@ dev = [
 
 [tool.uv]
 default-groups = ["dev"]
+# chakra has an __init__.py (for __version__), and the default editable finder cannot resolve chakra.src.* under it.
+# strict links the files into a tree with the same layout as the wheel.
+config-settings = { editable_mode = "strict" }
+# Rebuild when a module is added, so that it is linked into the strict editable tree. The default keys miss it.
+cache-keys = [
+    { file = "pyproject.toml" },
+    { file = "setup.py" },
+    { file = "src/**/*.py" },
+]

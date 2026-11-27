@@ -24,14 +24,21 @@ if [ ! -f "$source/pyproject.toml" ]; then
     echo "wheel_check: could not copy the files. Run it in a git checkout." >&2
     exit 1
 fi
-uv build --quiet --wheel --out-dir "$work/dist" "$source"
+# The copy has no .git, so setuptools-scm cannot find the version there. Work it out here, in the checkout, with the
+# setuptools-scm that pyproject.toml pins, and hand it to the build.
+pin=$(sed -n 's/.*"setuptools-scm==\([^"]*\)".*/\1/p' pyproject.toml)
+version=$(uv run --quiet --no-project --with "setuptools-scm==$pin" python -I -m setuptools_scm)
+SETUPTOOLS_SCM_PRETEND_VERSION_FOR_MLC_CHAKRA="$version" uv build --quiet --wheel --out-dir "$work/dist" "$source"
 wheel=$(echo "$work"/dist/*.whl)
 uv venv --quiet "$work/venv"
 uv pip install --quiet --python "$python" "$wheel"
 
-# 1. The wheel holds the protobuf modules, their stubs and the .proto files, and no gRPC modules.
-listing=$("$python" -m zipfile -l "$wheel")
-for file in chakra/schema/protobuf/et_def_pb2.py chakra/schema/protobuf/storage_pb2.py \
+# Every python call below uses -I (isolated): without it Python also looks for packages and metadata in the current
+# directory, and a stale *.egg-info in the repository root would win over the wheel that is being checked.
+
+# 1. The wheel holds the package __init__, the protobuf modules, their stubs and the .proto files, and no gRPC modules.
+listing=$("$python" -I -m zipfile -l "$wheel")
+for file in chakra/__init__.py chakra/schema/protobuf/et_def_pb2.py chakra/schema/protobuf/storage_pb2.py \
     chakra/schema/protobuf/et_def_pb2.pyi chakra/schema/protobuf/storage_pb2.pyi \
     chakra/schema/protobuf/et_def.proto chakra/schema/protobuf/storage.proto; do
     if ! grep -q "$file" <<<"$listing"; then
@@ -44,12 +51,20 @@ if grep -q "_pb2_grpc.py" <<<"$listing"; then
     exit 1
 fi
 
+# 1b. The wheel METADATA and chakra.__version__ have the version that setuptools-scm works out for this checkout.
+metadata_version=$("$python" -I -c "from importlib.metadata import version; print(version('mlc-chakra'))")
+module_version=$("$python" -I -c "import chakra; print(chakra.__version__)")
+if [ "$metadata_version" != "$version" ] || [ "$module_version" != "$version" ]; then
+    echo "wheel_check: expected $version, METADATA says $metadata_version, chakra.__version__ is $module_version" >&2
+    exit 1
+fi
+
 # 2. Import the generated modules with the newest protobuf, then with the lowest one that pyproject.toml allows.
 check='import chakra.schema.protobuf.et_def_pb2, chakra.schema.protobuf.storage_pb2'
-"$python" -c "$check"
-floor=$("$python" -c "import re; from importlib.metadata import requires; print(next(re.search(r'>=([0-9.]+)', r).group(1) for r in requires('mlc-chakra') if r.startswith('protobuf')))")
+"$python" -I -c "$check"
+floor=$("$python" -I -c "import re; from importlib.metadata import requires; print(next(re.search(r'>=([0-9.]+)', r).group(1) for r in requires('mlc-chakra') if r.startswith('protobuf')))")
 uv pip install --quiet --python "$python" "protobuf==$floor"
-"$python" -c "$check"
+"$python" -I -c "$check"
 
 # 3. The commands start. With no arguments, argparse exits with 2, as in the CI end-to-end workflow.
 for command in chakra_trace_link chakra_converter chakra_jsonizer chakra_timeline_visualizer chakra_visualizer; do
@@ -58,4 +73,4 @@ for command in chakra_trace_link chakra_converter chakra_jsonizer chakra_timelin
         exit 1
     }
 done
-echo "wheel_check: the wheel is complete and works with protobuf $floor and the newest protobuf"
+echo "wheel_check: the wheel $version is complete and works with protobuf $floor and the newest protobuf"

@@ -4,6 +4,7 @@
 #
 # Steps:
 #   1. build the sdist and the wheel from it, and install the wheel in a fresh venv
+#      check that chakra.__version__ is the version setuptools-scm works out for this checkout
 #   2. run all six tools with --help (exit code 0)
 #   3. import the generated protobuf modules in a fresh interpreter
 #   4. run chakra_trace_link and chakra_converter on the simple_onerank fixture (traces collected on a GPU)
@@ -97,11 +98,17 @@ check_logs() {
 # ---------------------------------------------------------------------------------------------------------------------
 step "Build the sdist and the wheel from it (python -m build) in a throwaway venv"
 "${PYTHON}" -m venv "${WORK}/build-venv"
-"${WORK}/build-venv/bin/python" -m pip install --quiet --upgrade pip build
+SCM_PIN="$(sed -n 's/.*"setuptools-scm==\([^"]*\)".*/\1/p' "${REPO_ROOT}/pyproject.toml")"
+[[ -n "${SCM_PIN}" ]] || fail "no setuptools-scm pin found in pyproject.toml"
+"${WORK}/build-venv/bin/python" -m pip install --quiet --upgrade pip build "setuptools-scm==${SCM_PIN}"
 # Build from a copy so the build never writes build/ or *.egg-info into the working tree.
 mkdir "${WORK}/src"
 (cd "${REPO_ROOT}" && git ls-files --cached --others --exclude-standard -z | tar --null -T - -cf -) | tar -xf - -C "${WORK}/src"
-"${WORK}/build-venv/bin/python" -m build --outdir "${WORK}/dist" "${WORK}/src"
+# The copy has no .git, so setuptools-scm cannot find the version there. Work it out in the checkout instead.
+VERSION="$(cd "${REPO_ROOT}" && "${WORK}/build-venv/bin/python" -I -m setuptools_scm)"
+echo "Version: ${VERSION}"
+SETUPTOOLS_SCM_PRETEND_VERSION_FOR_MLC_CHAKRA="${VERSION}" \
+    "${WORK}/build-venv/bin/python" -m build --outdir "${WORK}/dist" "${WORK}/src"
 WHEEL="$(ls "${WORK}"/dist/*.whl)"
 echo "Built ${WHEEL}"
 
@@ -112,6 +119,12 @@ BIN="${WORK}/venv/bin"
 "${VPY}" -m pip install --quiet --upgrade pip
 "${VPY}" -m pip install "${WHEEL}"
 "${VPY}" -m pip list
+
+# ---------------------------------------------------------------------------------------------------------------------
+step "Check the installed version"
+installed="$(cd "${WORK}" && "${VPY}" -I -c 'import chakra; print(chakra.__version__)')"
+echo "chakra.__version__: ${installed}"
+[[ "${installed}" == "${VERSION}" ]] || fail "chakra.__version__ is ${installed}, expected ${VERSION}"
 
 # ---------------------------------------------------------------------------------------------------------------------
 step "Run every tool with --help"
