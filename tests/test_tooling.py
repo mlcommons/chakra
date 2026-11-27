@@ -233,7 +233,7 @@ def test_test_recipe_uses_python_dash_m_pytest() -> None:
 
 
 def test_lint_recipe_checks_formatting() -> None:
-    # CI runs `ruff format .` without --check, so formatting never fails there. The justfile must check it.
+    # CI checks the format (`ruff format --check`). The justfile must check it too.
     assert "ruff format --check" in _recipe_body("lint")
 
 

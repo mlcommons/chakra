@@ -21,7 +21,7 @@ jobs:
 
     - name: Lint Python Code
       run: |
-        ruff format .
+        ruff format --check --diff .
         ruff check .
 
     - name: Run Pyright
