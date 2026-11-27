@@ -68,7 +68,7 @@ Run `just` to see the list.
 | `just gen-proto` | Generates the protobuf modules in `schema/protobuf/` from the `.proto` files. It needs a network. | - |
 | `just proto-check` | Generates the protobuf modules in a temporary folder and compares them with the committed ones. It writes nothing. | `python_tests.yml` |
 | `just proto-smoke` | Imports the generated protobuf modules with the newest and the oldest allowed protobuf. | `python_tests.yml` |
-| `just wheel-check` | Builds the wheel from a clean copy and installs it (not editable) in a new temporary virtual environment. Checks the wheel files, imports the protobuf modules with two protobuf versions, and starts the commands. The other checks use the editable install. | `python_tests.yml`, `end_to_end_tests.yml` |
+| `just wheel-check` | Builds the wheel from a clean copy and installs it (not editable) in a new temporary virtual environment. Checks the wheel files, imports the protobuf modules with two protobuf versions, and starts the commands. The other checks use the editable install. | `python_tests.yml` |
 | `just lock-check` | Checks that `uv.lock` matches `pyproject.toml`. It fails when they differ. `uv run` and `uv sync` would change an old `uv.lock` without a warning. | - |
 | `just gate` | Runs all the checks above. | - |
 | `just act` | Runs one workflow in Docker. Add a file name from `.github/workflows/`. The default is `python_lint.yml`. | - |
@@ -115,7 +115,6 @@ Each run starts with an empty tool cache. `scripts/act.sh` first removes the sha
 |---|---|
 | `python_lint.yml` | Works. |
 | `python_tests.yml` | Works. |
-| `end_to_end_tests.yml` | Works. |
 | `codeql.yml`, `cla.yml` | Not run. They need GitHub services. |
 | Any other workflow | Not tested. |
 
